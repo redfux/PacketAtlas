@@ -427,6 +427,10 @@ body {
   background: var(--md-secondary-container);
   color: var(--md-on-secondary-container);
 }
+.segmented__option:disabled {
+  color: var(--md-outline-variant);
+  cursor: not-allowed;
+}
 
 .toolbar__menu { position: relative; }
 .menu {

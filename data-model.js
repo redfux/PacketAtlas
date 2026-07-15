@@ -18,6 +18,45 @@ export function deviceLabel(device) {
   return device.hostname ? `${device.ip || device.mac} (${device.hostname})` : device.ip || device.mac;
 }
 
+/** 'ipv4' | 'ipv6' | 'mac' (device known only by MAC address, e.g. from malformed ARP). */
+export function addressFamilyOf(device) {
+  if (device.kind !== 'ip' || !device.ip) return 'mac';
+  return device.ip.includes(':') ? 'ipv6' : 'ipv4';
+}
+
+function ipv4SortKey(ip) {
+  return ip.split('.').map(Number);
+}
+
+function ipv6SortKey(ip) {
+  const [head, tail] = ip.split('::');
+  const headGroups = head ? head.split(':') : [];
+  const tailGroups = tail ? tail.split(':') : [];
+  const missing = 8 - headGroups.length - tailGroups.length;
+  const groups = ip.includes('::')
+    ? [...headGroups, ...Array(Math.max(0, missing)).fill('0'), ...tailGroups]
+    : ip.split(':');
+  return groups.map((g) => parseInt(g, 16));
+}
+
+function compareNumericArrays(a, b) {
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const diff = (a[i] || 0) - (b[i] || 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+/** Ascending comparator for the matrix/graph device order: numeric per address family, MAC devices last (by MAC string). */
+export function compareDevicesByAddress(a, b) {
+  const familyA = addressFamilyOf(a);
+  const familyB = addressFamilyOf(b);
+  if (familyA !== familyB) return familyA === 'mac' ? 1 : familyB === 'mac' ? -1 : familyA.localeCompare(familyB);
+  if (familyA === 'mac') return (a.mac || '').localeCompare(b.mac || '');
+  const keyFn = familyA === 'ipv4' ? ipv4SortKey : ipv6SortKey;
+  return compareNumericArrays(keyFn(a.ip), keyFn(b.ip));
+}
+
 export function protocolGroupOf(protocol) {
   for (const [group, members] of Object.entries(PROTOCOL_GROUPS)) {
     if (members.includes(protocol)) return group;
