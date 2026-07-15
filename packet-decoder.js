@@ -4,7 +4,9 @@
 // thought up by human, created by ai
 
 const LINKTYPE_ETHERNET = 1;
+const LINKTYPE_IEEE802_11 = 105;
 const LINKTYPE_LINUX_SLL = 113;
+const LINKTYPE_IEEE802_11_RADIOTAP = 127;
 
 const ETHERTYPE_IPV4 = 0x0800;
 const ETHERTYPE_IPV6 = 0x86dd;
@@ -59,8 +61,8 @@ function formatIPv6(view, offset) {
   return groups.join(':');
 }
 
-function isMacMulticast(view, offset) {
-  return (view.getUint8(offset) & 0x01) === 1;
+function isMacMulticast(mac) {
+  return (parseInt(mac.slice(0, 2), 16) & 0x01) === 1;
 }
 
 function isIPv4MulticastOrBroadcast(view, offset) {
@@ -107,6 +109,12 @@ function decodeFrame(buffer, offset, length, linkType, timestamp, origLen) {
     if (addrLen === 6) srcMac = formatMac(view, 6);
     ethertype = view.getUint16(14);
     l3Offset = 16;
+  } else if (linkType === LINKTYPE_IEEE802_11_RADIOTAP || linkType === LINKTYPE_IEEE802_11) {
+    const macOffset = linkType === LINKTYPE_IEEE802_11_RADIOTAP ? skipRadiotapHeader(view, length) : 0;
+    if (macOffset == null) return null;
+    const parsed = decode80211DataFrame(view, macOffset, length);
+    if (!parsed) return null; // management/control/null-function frame - no payload to extract
+    ({ srcMac, dstMac, l3Offset, ethertype } = parsed);
   } else {
     return null; // unsupported link type
   }
@@ -127,7 +135,7 @@ function decodeFrame(buffer, offset, length, linkType, timestamp, origLen) {
     srcPort: null,
     dstPort: null,
     protocol: null,
-    multicastOrBroadcast: dstMac === BROADCAST_MAC || (dstMac !== null && isMacMulticast(view, 0)),
+    multicastOrBroadcast: dstMac === BROADCAST_MAC || (dstMac !== null && isMacMulticast(dstMac)),
   };
 
   if (ethertype === ETHERTYPE_ARP) {
@@ -141,6 +149,70 @@ function decodeFrame(buffer, offset, length, linkType, timestamp, origLen) {
   }
 
   return null; // not a protocol we extract device/pair info from
+}
+
+/** Returns the offset of the 802.11 MAC header after the radiotap header, or null if malformed. */
+function skipRadiotapHeader(view, length) {
+  if (length < 8) return null;
+  const radiotapLen = view.getUint16(2, true); // radiotap is always little-endian
+  if (radiotapLen < 8 || radiotapLen > length) return null;
+  return radiotapLen;
+}
+
+/**
+ * Decodes an 802.11 MAC header starting at `offset`. Only Data frames (not
+ * Null/QoS-Null, which carry no payload, and not Management/Control frames,
+ * which carry no IP traffic) are decoded further. Station-to-station traffic
+ * relayed through an access point is attributed to the two stations, not the
+ * AP, so the matrix reflects actual communication partners rather than every
+ * hop being "device <-> AP".
+ */
+function decode80211DataFrame(view, offset, length) {
+  if (length < offset + 24) return null;
+  const frameControl0 = view.getUint8(offset);
+  const type = (frameControl0 >> 2) & 0x03;
+  const subtype = (frameControl0 >> 4) & 0x0f;
+  if (type !== 2) return null; // not a Data frame (0=Management, 1=Control, 2=Data)
+  if (subtype === 4 || subtype === 12 || subtype === 14 || subtype === 15) return null; // Null/QoS-Null: no frame body
+
+  const flags = view.getUint8(offset + 1);
+  const toDs = (flags & 0x01) !== 0;
+  const fromDs = (flags & 0x02) !== 0;
+  const addr1 = formatMac(view, offset + 4);
+  const addr2 = formatMac(view, offset + 10);
+  const addr3 = formatMac(view, offset + 16);
+
+  let srcMac;
+  let dstMac;
+  let headerLen = 24;
+  if (toDs && fromDs) {
+    if (length < offset + 30) return null;
+    srcMac = formatMac(view, offset + 24); // Address 4
+    dstMac = addr3;
+    headerLen = 30;
+  } else if (toDs) {
+    srcMac = addr2;
+    dstMac = addr3;
+  } else if (fromDs) {
+    srcMac = addr3;
+    dstMac = addr1;
+  } else {
+    srcMac = addr2;
+    dstMac = addr1;
+  }
+
+  const hasQos = subtype >= 8;
+  if (hasQos) headerLen += 2;
+
+  // IP traffic over 802.11 is virtually always 802.2 LLC/SNAP-encapsulated (RFC 1042):
+  // AA AA 03 + 3-byte OUI + 2-byte Ethertype, mirroring the Ethernet II payload from here on.
+  if (length < offset + headerLen + 8) return null;
+  const llcOffset = offset + headerLen;
+  if (view.getUint8(llcOffset) !== 0xaa || view.getUint8(llcOffset + 1) !== 0xaa || view.getUint8(llcOffset + 2) !== 0x03) {
+    return null; // not SNAP-encapsulated - nothing we can interpret
+  }
+  const ethertype = view.getUint16(llcOffset + 6);
+  return { srcMac, dstMac, ethertype, l3Offset: llcOffset + 8 };
 }
 
 function decodeArp(view, offset, length, result) {

@@ -30,6 +30,7 @@ Keine Installation, kein Build-Schritt nötig. PacketAtlas ist eine statische We
 - Bei sehr großen Captures (mehrere hunderttausend Pakete) kann das Parsen je nach Rechner einige Sekunden dauern; die UI bleibt dabei responsiv (Web Worker).
 - Beschädigte oder unvollständige Capture-Dateien werden erkannt und mit einer verständlichen Fehlermeldung quittiert, statt die App abstürzen zu lassen.
 - Bei sehr vielen Geräten (> 50) empfiehlt sich eine Filterung, damit Matrix und Graph lesbar bleiben.
+- Unterstützte Link-Layer: Ethernet II, Linux Cooked Capture (SLL) sowie IEEE-802.11-WLAN (mit/ohne Radiotap-Header, nur Datenframes). Andere Link-Layer-Typen werden nicht dekodiert – die App meldet dann „Es konnten keine Geräte erkannt werden".
 
 Weitere technische Details siehe [architecture.md](architecture.md).
 
