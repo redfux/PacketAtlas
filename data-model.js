@@ -1,5 +1,6 @@
-// Communication-matrix data model: aggregation (used in the worker) and
-// filtering/derivation helpers (used on the main thread by the views).
+// Communication-matrix filtering/derivation helpers, used on the main thread
+// by app.js and the views. The aggregation logic that builds this data lives
+// in parser.worker.js (a classic worker, so it cannot import this ES module).
 // thought up by human, created by ai
 
 export const PROTOCOL_GROUPS = {
@@ -11,94 +12,6 @@ export const PROTOCOL_GROUPS = {
 
 export function pairKey(idA, idB) {
   return idA < idB ? `${idA}|${idB}` : `${idB}|${idA}`;
-}
-
-/**
- * Accumulates decoded frames into device and pair aggregates using Map
- * structures, so each frame only costs O(1) lookups/updates regardless of
- * total packet count.
- */
-export class Aggregator {
-  constructor() {
-    this.devices = new Map();
-    this.pairs = new Map();
-    this.hostnames = new Map();
-  }
-
-  #getOrCreateDevice(id, kind, ip, mac) {
-    let device = this.devices.get(id);
-    if (!device) {
-      device = { id, kind, ip: ip || null, mac: mac || null, hostname: this.hostnames.get(ip) || null, packetCount: 0, byteCount: 0 };
-      this.devices.set(id, device);
-    } else if (mac && !device.mac) {
-      device.mac = mac;
-    }
-    return device;
-  }
-
-  addPacket(decoded) {
-    const hasSrc = Boolean(decoded.srcIp || decoded.srcMac);
-    const hasDst = Boolean(decoded.dstIp || decoded.dstMac);
-    if (!hasSrc || !hasDst) return;
-
-    const srcId = decoded.srcIp || decoded.srcMac;
-    const dstId = decoded.dstIp || decoded.dstMac;
-    if (srcId === dstId) return; // ignore loopback/self-talk, not a meaningful "pair"
-
-    const srcDevice = this.#getOrCreateDevice(srcId, decoded.srcIp ? 'ip' : 'mac', decoded.srcIp, decoded.srcMac);
-    const dstDevice = this.#getOrCreateDevice(dstId, decoded.dstIp ? 'ip' : 'mac', decoded.dstIp, decoded.dstMac);
-    srcDevice.packetCount++;
-    srcDevice.byteCount += decoded.frameLength;
-    dstDevice.packetCount++;
-    dstDevice.byteCount += decoded.frameLength;
-
-    const key = pairKey(srcId, dstId);
-    let pair = this.pairs.get(key);
-    if (!pair) {
-      pair = {
-        a: srcId,
-        b: dstId,
-        packets: 0,
-        bytes: 0,
-        protocols: new Set(),
-        ports: new Set(),
-        firstSeen: decoded.timestamp,
-        lastSeen: decoded.timestamp,
-        multicastOrBroadcast: false,
-      };
-      this.pairs.set(key, pair);
-    }
-    pair.packets++;
-    pair.bytes += decoded.frameLength;
-    if (decoded.protocol) pair.protocols.add(decoded.protocol);
-    if (decoded.srcPort != null) pair.ports.add(decoded.srcPort);
-    if (decoded.dstPort != null) pair.ports.add(decoded.dstPort);
-    if (decoded.timestamp < pair.firstSeen) pair.firstSeen = decoded.timestamp;
-    if (decoded.timestamp > pair.lastSeen) pair.lastSeen = decoded.timestamp;
-    if (decoded.multicastOrBroadcast) pair.multicastOrBroadcast = true;
-  }
-
-  addHostname(ip, hostname) {
-    if (!ip || !hostname) return;
-    this.hostnames.set(ip, hostname);
-    const device = this.devices.get(ip);
-    if (device && !device.hostname) device.hostname = hostname;
-  }
-
-  /** Serializes Maps/Sets into plain, structured-clone-friendly data. */
-  toResult() {
-    for (const device of this.devices.values()) {
-      if (!device.hostname && device.ip) device.hostname = this.hostnames.get(device.ip) || null;
-    }
-    return {
-      devices: Array.from(this.devices.values()),
-      pairs: Array.from(this.pairs.values()).map((p) => ({
-        ...p,
-        protocols: Array.from(p.protocols),
-        ports: Array.from(p.ports),
-      })),
-    };
-  }
 }
 
 export function deviceLabel(device) {

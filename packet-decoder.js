@@ -1,8 +1,10 @@
 // Link-layer / L3 / L4 packet decoding shared by the pcap and pcapng parsers.
+// Loaded into the worker via importScripts() as a classic (non-module) script
+// for maximum browser compatibility, so no import/export syntax here.
 // thought up by human, created by ai
 
-export const LINKTYPE_ETHERNET = 1;
-export const LINKTYPE_LINUX_SLL = 113;
+const LINKTYPE_ETHERNET = 1;
+const LINKTYPE_LINUX_SLL = 113;
 
 const ETHERTYPE_IPV4 = 0x0800;
 const ETHERTYPE_IPV6 = 0x86dd;
@@ -85,7 +87,7 @@ function isIPv6MulticastOrLinkLocal(view, offset) {
  * for device/pair aggregation. Returns null if the frame cannot be classified
  * (unsupported link type or truncated data) so the caller can skip it.
  */
-export function decodeFrame(buffer, offset, length, linkType, timestamp, origLen) {
+function decodeFrame(buffer, offset, length, linkType, timestamp, origLen) {
   const view = new DataView(buffer, offset, length);
   const baseOffset = offset;
   let l3Offset;

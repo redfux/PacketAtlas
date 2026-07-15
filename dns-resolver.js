@@ -1,5 +1,7 @@
 // Best-effort DNS response parsing to build an IP -> hostname map for tooltips.
 // This is a nice-to-have: any parsing failure is swallowed, never surfaced to the user.
+// Loaded into the worker via importScripts() as a classic (non-module) script
+// for maximum browser compatibility, so no import/export syntax here.
 // thought up by human, created by ai
 
 const DNS_PORT = 53;
@@ -51,7 +53,7 @@ function readName(view, start) {
  * DNS response containing A/AAAA answers. Returns an empty array on anything
  * unexpected (truncated data, non-DNS payload, query without answers, ...).
  */
-export function extractDnsHostnames(buffer, offset, length) {
+function extractDnsHostnames(buffer, offset, length) {
   if (length < 12) return [];
   const view = new DataView(buffer, offset, length);
   const flags = view.getUint16(2);
@@ -95,5 +97,3 @@ export function extractDnsHostnames(buffer, offset, length) {
     return [];
   }
 }
-
-export { DNS_PORT };

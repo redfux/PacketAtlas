@@ -2,6 +2,10 @@
 
 Bekannte Bugs und deren Lösung. Format: Datum, Beschreibung, Ursache, Fix, betroffene Version.
 
+## Behoben nach Erstveröffentlichung
+
+- **„Fehler beim Parsen: undefined" beim Laden echter Capture-Dateien.** `parser.worker.js` wurde als ES-Modul-Worker (`new Worker(url, { type: 'module' })`) erzeugt. Modul-Worker werden von manchen Browsern nicht oder unzuverlässig unterstützt (z. B. Firefox erst ab Version 114), was beim Erzeugen/Laden des Workers zu einem `ErrorEvent` ohne aussagekräftige `message` führt – unabhängig vom Dateiinhalt. Fix: `parser.worker.js` ist jetzt ein klassischer Worker, der seine Abhängigkeiten per `importScripts()` lädt (siehe [architecture.md](architecture.md#klassischer-worker-statt-modul-worker)); zusätzlich zeigt `app.js` bei einem Worker-Fehler nun auch `filename`/`lineno` als Fallback an, falls `message` doch einmal fehlen sollte.
+
 ## Behoben vor Erstveröffentlichung (0.1.0)
 
 - **pcapng: falsches Byte-Order-Magic gelesen.** `pcapng-parser.js` las das Byte-Order-Magic des Section Header Blocks an Offset 4 statt 8 (Offset 4 ist die Blocklänge). Dadurch schlug das Parsen jeder gültigen pcapng-Datei mit „Ungültiges Byte-Order-Magic" fehl. Fix: Offset auf 8 korrigiert.
