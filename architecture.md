@@ -85,12 +85,23 @@ Beide Formate sind offen spezifiziert und im hier benötigten Umfang (nur die ob
 
 - **Ethernet II** (LinkType 1): 6 Byte Ziel-MAC, 6 Byte Quell-MAC, 2 Byte Ethertype.
 - **Linux Cooked Capture / SLL** (LinkType 113): 16-Byte-Header, Protokollfeld an Offset 14.
+- **IEEE 802.11 mit Radiotap-Header** (LinkType 127) und **reines IEEE 802.11** (LinkType 105): siehe eigener Abschnitt unten.
 - **Ethertype** bestimmt die weitere Verarbeitung: `0x0800` → IPv4, `0x86DD` → IPv6, `0x0806` → ARP.
 - **IPv4**: Header-Länge aus IHL, Protokollfeld (TCP=6, UDP=17, ICMP=1) bestimmt L4-Parsing, Quell-/Ziel-Adresse.
 - **IPv6**: Fixed Header (40 Byte), Next-Header-Feld (vereinfachte Behandlung, keine vollständige Extension-Header-Kette), Quell-/Ziel-Adresse.
 - **ARP**: kein IP-Layer im eigentlichen Sinn, aber Sender-/Target-Protocol-Address (IP) und Sender-/Target-Hardware-Address (MAC) stehen im ARP-Payload und werden für die Geräteerkennung genutzt.
 - **TCP/UDP**: erste 4 Byte des Payloads = Quell-/Zielport.
 - **ICMP/ICMPv6**: keine Ports, nur als Protokoll-Tag in der Aggregation vermerkt.
+
+### WLAN-Captures (IEEE 802.11 / Radiotap)
+
+Reine WLAN-Mitschnitte (z. B. von Access Points) nutzen üblicherweise LinkType 127 (Radiotap-gekapseltes 802.11) oder seltener 105 (rohes 802.11 ohne Radiotap). Verarbeitung in `packet-decoder.js`:
+
+- **Radiotap-Header** (nur bei LinkType 127): Die Gesamtlänge steht bereits explizit im Header selbst (`it_len`, Offset 2–3, immer Little-Endian). Die einzelnen Radio-Metadaten (Signalstärke, Kanal, Datenrate, …) werden nicht ausgewertet – für die Kommunikationsmatrix genügt es, den Header anhand von `it_len` zu überspringen.
+- **802.11-MAC-Header**: Nur **Datenframes** (Type 2) werden weiterverarbeitet; Management-Frames (Beacons, Probe-Requests, …) und Control-Frames (ACK, RTS/CTS) tragen keine IP-Nutzlast und werden ignoriert, ebenso Null-/QoS-Null-Datenframes (Subtype 4/12/14/15), die keinen Frame-Body besitzen.
+- **Adress-Interpretation nach ToDS/FromDS-Flags**: Je nach Übertragungsrichtung (Client→AP, AP→Client, IBSS oder WDS mit 4 Adressen) stehen Quell-/Ziel-MAC an unterschiedlichen der bis zu vier Adressfelder. PacketAtlas ordnet die eigentlichen Endgeräte (Stationen) als Kommunikationspartner zu, nicht den Access Point als Relais – die Matrix zeigt also „Client A ↔ Client B", nicht bei jedem Hop „Client ↔ AP".
+- **QoS-Control-Feld**: Bei QoS-Datenframes (Subtype ≥ 8) liegen zusätzliche 2 Byte zwischen Adressfeldern/Sequenznummer und der Nutzlast, die entsprechend übersprungen werden.
+- **LLC/SNAP-Kapselung**: IP-Verkehr über 802.11 ist praktisch immer per 802.2-LLC/SNAP gekapselt (`AA AA 03` + 3 Byte OUI + 2 Byte Ethertype, RFC 1042). Danach folgt dieselbe IPv4/IPv6/ARP-Verarbeitung wie bei Ethernet. Nicht-SNAP-gekapselte Payloads werden nicht interpretiert.
 
 ### DNS-Hostnamen (optional)
 
