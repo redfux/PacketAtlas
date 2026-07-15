@@ -3,6 +3,8 @@
 
 import {
   PROTOCOL_GROUPS,
+  addressFamilyOf,
+  compareDevicesByAddress,
   computeVisiblePairs,
   deviceLabel,
   formatBytes,
@@ -26,6 +28,7 @@ const state = {
   hideMulticast: false,
   activeTab: 'matrix',
   metric: 'packets',
+  addressFamily: 'ipv4',
   forceCharge: 300,
   forceDistance: 120,
   graphSimulation: null,
@@ -61,6 +64,9 @@ const el = {
   forceDistance: document.getElementById('force-distance'),
   metricPackets: document.getElementById('metric-packets'),
   metricBytes: document.getElementById('metric-bytes'),
+  familyIpv4: document.getElementById('family-ipv4'),
+  familyIpv6: document.getElementById('family-ipv6'),
+  familyMac: document.getElementById('family-mac'),
   largeSelectionWarning: document.getElementById('large-selection-warning'),
   btnExport: document.getElementById('btn-export'),
   exportMenu: document.getElementById('export-menu'),
@@ -120,8 +126,23 @@ function onParseComplete(msg) {
   el.dropZone.hidden = true;
   el.workspace.hidden = false;
 
+  setupAddressFamilyToggle();
   renderDeviceList();
   renderActiveView();
+}
+
+/** Enables/disables the IPv4/IPv6/Sonstige buttons based on what the capture actually contains, and picks a sensible default. */
+function setupAddressFamilyToggle() {
+  const counts = { ipv4: 0, ipv6: 0, mac: 0 };
+  for (const device of state.devices) counts[addressFamilyOf(device)]++;
+
+  el.familyIpv4.disabled = counts.ipv4 === 0;
+  el.familyIpv6.disabled = counts.ipv6 === 0;
+  el.familyMac.disabled = counts.mac === 0;
+
+  const preferredOrder = ['ipv4', 'ipv6', 'mac'];
+  const defaultFamily = preferredOrder.find((f) => counts[f] > 0) || 'ipv4';
+  setAddressFamily(defaultFamily);
 }
 
 function showProgress(percent, label) {
@@ -263,6 +284,20 @@ function setMetric(metric) {
 el.metricPackets.addEventListener('click', () => setMetric('packets'));
 el.metricBytes.addEventListener('click', () => setMetric('bytes'));
 
+function setAddressFamily(family) {
+  state.addressFamily = family;
+  const buttons = { ipv4: el.familyIpv4, ipv6: el.familyIpv6, mac: el.familyMac };
+  for (const [key, button] of Object.entries(buttons)) {
+    button.classList.toggle('is-active', key === family);
+    button.setAttribute('aria-checked', String(key === family));
+  }
+  renderActiveView();
+}
+
+el.familyIpv4.addEventListener('click', () => setAddressFamily('ipv4'));
+el.familyIpv6.addEventListener('click', () => setAddressFamily('ipv6'));
+el.familyMac.addEventListener('click', () => setAddressFamily('mac'));
+
 el.forceCharge.addEventListener('input', () => {
   state.forceCharge = Number(el.forceCharge.value);
   if (state.graphSimulation) updateForces(state.graphSimulation, { charge: state.forceCharge, distance: state.forceDistance });
@@ -274,11 +309,23 @@ el.forceDistance.addEventListener('input', () => {
 
 // --- Rendering -----------------------------------------------------------------
 
+/**
+ * Devices/pairs for the current selection, protocol filter and address-family
+ * toggle, with devices sorted ascending by address - shared by both views and
+ * by the export handlers so they always show/export exactly what's on screen.
+ */
+function getVisibleDevicesAndPairs() {
+  const familyDevices = state.devices.filter((d) => state.selectedIds.has(d.id) && addressFamilyOf(d) === state.addressFamily);
+  const familyIds = new Set(familyDevices.map((d) => d.id));
+  const devices = [...familyDevices].sort(compareDevicesByAddress);
+  const pairs = computeVisiblePairs(state.pairs, familyIds, state.activeGroups, state.hideMulticast);
+  return { devices, pairs };
+}
+
 function renderActiveView() {
   if (state.devices.length === 0) return;
 
-  const selectedDevices = state.devices.filter((d) => state.selectedIds.has(d.id));
-  const visiblePairs = computeVisiblePairs(state.pairs, state.selectedIds, state.activeGroups, state.hideMulticast);
+  const { devices: selectedDevices, pairs: visiblePairs } = getVisibleDevicesAndPairs();
 
   el.largeSelectionWarning.hidden = selectedDevices.length <= LARGE_SELECTION_THRESHOLD;
 
@@ -372,7 +419,6 @@ el.exportSvg.addEventListener('click', () => {
 });
 el.exportXlsx.addEventListener('click', () => {
   el.exportMenu.hidden = true;
-  const selectedDevices = state.devices.filter((d) => state.selectedIds.has(d.id));
-  const visiblePairs = computeVisiblePairs(state.pairs, state.selectedIds, state.activeGroups, state.hideMulticast);
-  exportToExcel({ devices: selectedDevices, pairs: visiblePairs, metric: state.metric, filenameBase: 'packetatlas-kommunikationsmatrix' });
+  const { devices: selectedDevices, pairs: visiblePairs } = getVisibleDevicesAndPairs();
+  exportToExcel({ devices: selectedDevices, pairs: visiblePairs, metric: state.metric, filenameBase: `packetatlas-kommunikationsmatrix-${state.addressFamily}` });
 });
