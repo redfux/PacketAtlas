@@ -1,0 +1,152 @@
+<!-- thought up by human, created by ai -->
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: blob:; connect-src 'none'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';">
+  <title>PacketAtlas</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Zum Hauptinhalt springen</a>
+
+  <header class="app-header">
+    <h1 class="app-header__title">
+      <span class="material-symbols-outlined" aria-hidden="true">lan</span>
+      PacketAtlas
+    </h1>
+    <div class="app-header__actions">
+      <button type="button" id="btn-open-file" class="btn btn--filled">
+        <span class="material-symbols-outlined" aria-hidden="true">folder_open</span>
+        Capture-Datei öffnen
+      </button>
+      <input type="file" id="file-input" accept=".pcap,.pcapng" hidden>
+    </div>
+  </header>
+
+  <div id="progress-banner" class="progress-banner" hidden role="status" aria-live="polite">
+    <span id="progress-label" class="progress-banner__label">Datei wird geparst …</span>
+    <div class="progress-bar">
+      <div id="progress-bar-fill" class="progress-bar__fill" style="width:0%"></div>
+    </div>
+  </div>
+
+  <div id="error-banner" class="error-banner" hidden role="alert">
+    <span class="material-symbols-outlined" aria-hidden="true">error</span>
+    <span id="error-message"></span>
+    <button type="button" id="btn-dismiss-error" class="btn btn--text" aria-label="Fehlermeldung schließen">
+      <span class="material-symbols-outlined" aria-hidden="true">close</span>
+    </button>
+  </div>
+
+  <main id="main-content" class="app-main">
+    <div id="drop-zone" class="drop-zone">
+      <span class="material-symbols-outlined drop-zone__icon" aria-hidden="true">file_upload</span>
+      <p class="drop-zone__text">Wireshark-Capture-Datei (.pcap / .pcapng) hierher ziehen</p>
+      <p class="drop-zone__hint">oder über „Capture-Datei öffnen" auswählen. Die Datei verlässt Ihren Browser zu keinem Zeitpunkt.</p>
+    </div>
+
+    <div id="workspace" class="workspace" hidden>
+      <aside class="sidebar" aria-label="Geräte-Filter">
+        <div class="sidebar__section">
+          <label class="field-label" for="device-search">Suche</label>
+          <input type="search" id="device-search" class="text-input" placeholder="IP-Teilstring …" autocomplete="off">
+        </div>
+
+        <div class="sidebar__section sidebar__section--row">
+          <button type="button" id="btn-select-all" class="btn btn--text">Alle auswählen</button>
+          <button type="button" id="btn-select-none" class="btn btn--text">Alle abwählen</button>
+        </div>
+
+        <div class="sidebar__section">
+          <span class="field-label">Protokoll</span>
+          <div id="protocol-filters" class="chip-group">
+            <button type="button" class="chip is-active" data-protocol="TCP">TCP</button>
+            <button type="button" class="chip is-active" data-protocol="UDP">UDP</button>
+            <button type="button" class="chip is-active" data-protocol="ICMP">ICMP</button>
+            <button type="button" class="chip is-active" data-protocol="OTHER">Sonstige</button>
+          </div>
+        </div>
+
+        <div class="sidebar__section">
+          <label class="switch">
+            <input type="checkbox" id="toggle-hide-broadcast">
+            <span class="switch__track" aria-hidden="true"></span>
+            Multicast/Broadcast ausblenden
+          </label>
+        </div>
+
+        <div class="sidebar__section sidebar__section--grow">
+          <span class="field-label">Geräte (<span id="device-count">0</span>)</span>
+          <ul id="device-list" class="device-list"></ul>
+        </div>
+      </aside>
+
+      <section class="content">
+        <div class="toolbar">
+          <div class="tabs" role="tablist" aria-label="Ansicht">
+            <button type="button" class="tab is-active" id="tab-matrix" role="tab" aria-selected="true" aria-controls="view-matrix">
+              <span class="material-symbols-outlined" aria-hidden="true">grid_on</span>
+              Matrix
+            </button>
+            <button type="button" class="tab" id="tab-graph" role="tab" aria-selected="false" aria-controls="view-graph">
+              <span class="material-symbols-outlined" aria-hidden="true">hub</span>
+              Graph
+            </button>
+          </div>
+
+          <div class="toolbar__spacer"></div>
+
+          <div class="segmented" role="radiogroup" aria-label="Metrik">
+            <button type="button" class="segmented__option is-active" id="metric-packets" role="radio" aria-checked="true">Pakete</button>
+            <button type="button" class="segmented__option" id="metric-bytes" role="radio" aria-checked="false">Bytes</button>
+          </div>
+
+          <div class="toolbar__menu">
+            <button type="button" id="btn-export" class="btn btn--tonal">
+              <span class="material-symbols-outlined" aria-hidden="true">download</span>
+              Export
+            </button>
+            <div id="export-menu" class="menu" hidden>
+              <button type="button" id="export-png" class="menu__item">Als PNG …</button>
+              <button type="button" id="export-svg" class="menu__item">Als SVG …</button>
+              <button type="button" id="export-xlsx" class="menu__item">Als Excel (.xlsx) …</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="graph-controls" class="graph-controls" hidden>
+          <label class="field-label" for="force-charge">Abstoßung</label>
+          <input type="range" id="force-charge" min="50" max="1200" value="300">
+          <label class="field-label" for="force-distance">Kantenlänge</label>
+          <input type="range" id="force-distance" min="20" max="400" value="120">
+        </div>
+
+        <div id="large-selection-warning" class="warning-banner" hidden>
+          <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+          Viele Geräte ausgewählt – für bessere Lesbarkeit Filterung empfohlen.
+        </div>
+
+        <div id="view-matrix" class="view" role="tabpanel" aria-labelledby="tab-matrix">
+          <div id="matrix-container" class="matrix-container"></div>
+        </div>
+
+        <div id="view-graph" class="view" role="tabpanel" aria-labelledby="tab-graph" hidden>
+          <div id="graph-container" class="graph-container"></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div id="tooltip" class="tooltip" hidden role="tooltip"></div>
+
+  <footer class="app-footer">
+    <span>PacketAtlas v0.1.0 — thought up by human, created by ai</span>
+  </footer>
+
+  <script src="vendor/d3.min.js"></script>
+  <script src="vendor/xlsx.full.min.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
