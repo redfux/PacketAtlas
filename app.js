@@ -80,9 +80,12 @@ function startParsing(file) {
   reader.onerror = () => showError('Die Datei konnte nicht gelesen werden.');
   reader.onload = () => {
     if (worker) worker.terminate();
-    worker = new Worker('parser.worker.js', { type: 'module' });
+    worker = new Worker('parser.worker.js');
     worker.onmessage = handleWorkerMessage;
-    worker.onerror = (event) => showError(`Fehler beim Parsen: ${event.message}`);
+    worker.onerror = (event) => {
+      const detail = event.message || (event.filename ? `${event.filename}:${event.lineno}` : null);
+      showError(`Fehler beim Parsen: ${detail || 'Unbekannter Fehler beim Ausführen des Parsers.'}`);
+    };
     showProgress(0, 'Datei wird geparst …');
     worker.postMessage({ buffer: reader.result }, [reader.result]);
   };

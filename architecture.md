@@ -124,6 +124,10 @@ Beide Ansichten lesen denselben abgeleiteten Zustand aus `data-model.js` (gefilt
 
 Der Main-Thread bleibt während des Parsens vollständig responsiv.
 
+### Klassischer Worker statt Modul-Worker
+
+`parser.worker.js` wird bewusst als **klassischer Worker** (`new Worker('parser.worker.js')`, ohne `{ type: 'module' }`) erzeugt und lädt `pcap-parser.js`, `pcapng-parser.js`, `packet-decoder.js` und `dns-resolver.js` per `importScripts()` nach – nicht über ES-`import`. Modul-Worker sind eine vergleichsweise junge Web-Plattform-Funktion (Firefox unterstützt sie erst seit Version 114, Mitte 2023) und schlagen in nicht unterstützten Browsern mit einer kryptischen, inhaltsunabhängigen Fehlermeldung fehl. `importScripts()` wird dagegen seit weit über einem Jahrzehnt von allen Browsern unterstützt. Da klassische Scripts (anders als Module) keinen eigenen Datei-Scope haben, teilen sich alle per `importScripts()` geladenen Dateien denselben globalen Scope wie `parser.worker.js` – die Funktionen aus den vier Parser-Dateien sind dort daher ohne Import direkt als globale Bezeichner nutzbar. Der `Aggregator` (Geräte-/Paar-Aggregation) ist deshalb direkt in `parser.worker.js` definiert statt in `data-model.js`, das als ES-Modul weiterhin ausschließlich vom Main-Thread (`app.js` und die Views) importiert wird.
+
 ## Sicherheit / Datenschutz
 
 - Content-Security-Policy (Meta-Tag in `index.html`) unterbindet jede externe Verbindung: `default-src 'none'` mit gezielten Ausnahmen nur für `'self'` (Skripte, Styles, Fonts, Worker) sowie `data:`/`blob:` bei Bildern (letzteres ausschließlich für den clientseitigen PNG-Export benötigt – eine reine In-Memory-Referenz auf zuvor selbst erzeugte Daten, keine Netzwerkverbindung).

@@ -1,5 +1,7 @@
 // Classic (libpcap) capture file format parser.
 // Spec: https://www.tcpdump.org/manpages/pcap-savefile.5.txt
+// Loaded into the worker via importScripts() as a classic (non-module) script
+// for maximum browser compatibility, so no import/export syntax here.
 // thought up by human, created by ai
 
 const MAGIC_MICRO = 0xa1b2c3d4;
@@ -7,7 +9,7 @@ const MAGIC_NANO = 0xa1b23c4d;
 const GLOBAL_HEADER_LEN = 24;
 const RECORD_HEADER_LEN = 16;
 
-export function isClassicPcap(buffer) {
+function isClassicPcap(buffer) {
   if (buffer.byteLength < 4) return false;
   const view = new DataView(buffer);
   const be = view.getUint32(0, false);
@@ -22,7 +24,7 @@ export function isClassicPcap(buffer) {
  * link-layer encoded - decoding happens separately in packet-decoder.js).
  * Throws a descriptive Error on structural corruption.
  */
-export function* parsePcap(buffer) {
+function* parsePcap(buffer) {
   if (buffer.byteLength < GLOBAL_HEADER_LEN) {
     throw new Error('Datei ist zu klein für einen gültigen pcap-Header.');
   }

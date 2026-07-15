@@ -3,6 +3,8 @@
 // Supports the block types that actually occur in Wireshark-generated captures:
 // Section Header Block, Interface Description Block, Enhanced Packet Block,
 // and the legacy (obsolete) Packet Block.
+// Loaded into the worker via importScripts() as a classic (non-module) script
+// for maximum browser compatibility, so no import/export syntax here.
 // thought up by human, created by ai
 
 const BLOCK_TYPE_SHB = 0x0a0d0d0a;
@@ -13,7 +15,7 @@ const BYTE_ORDER_MAGIC = 0x1a2b3c4d;
 const OPTION_IF_TSRESOL = 9;
 const MIN_BLOCK_LEN = 12;
 
-export function isPcapng(buffer) {
+function isPcapng(buffer) {
   if (buffer.byteLength < 4) return false;
   return new DataView(buffer).getUint32(0, false) === BLOCK_TYPE_SHB;
 }
@@ -41,7 +43,7 @@ function readTsResolFromOptions(view, optionsStart, optionsEnd, littleEndian) {
  * { offset, length, origLen, timestamp, linkType, bytesConsumed }
  * Throws a descriptive Error on structural corruption.
  */
-export function* parsePcapng(buffer) {
+function* parsePcapng(buffer) {
   let offset = 0;
   let littleEndian = true;
   const interfaces = []; // { linkType, tsResol }
