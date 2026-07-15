@@ -6,11 +6,13 @@ PacketAtlas ist eine rein clientseitige Web-App zur Analyse von Wireshark-Captur
 
 ## Setup
 
-Keine Installation, kein Build-Schritt nötig. PacketAtlas ist eine statische Web-App:
+Keine Installation, kein Build-Schritt nötig. PacketAtlas ist eine statische Web-App – **`index.html` darf aber nicht direkt per Doppelklick (`file://`) geöffnet werden**: Browser blockieren aus Sicherheitsgründen ES-Module und Web Worker auf `file://`-Seiten, wodurch Datei-Auswahl und Drag & Drop wirkungslos blieben. Stattdessen über einen lokalen Webserver ausliefern:
 
 1. Repository klonen bzw. Dateien herunterladen.
-2. `index.html` über einen lokalen Webserver ausliefern (z. B. `npx serve .` oder `python3 -m http.server`), da Web Worker und ES-Module bei manchen Browsern nicht direkt von `file://` funktionieren.
-3. Im Browser öffnen (aktuelle Version von Chrome, Firefox, Edge oder Safari).
+2. Lokalen Webserver starten:
+   - **macOS, am einfachsten:** Doppelklick auf [`start-local-server.command`](start-local-server.command) – startet einen Server auf Port 8080 und öffnet PacketAtlas automatisch im Standardbrowser.
+   - **Alternativ per Terminal** (z. B. `npx serve .` oder `python3 -m http.server` im Projektordner), danach `http://localhost:<port>` manuell öffnen.
+3. Aktuelle Version von Chrome, Firefox, Edge oder Safari verwenden.
 
 ## Nutzung
 
