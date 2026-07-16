@@ -371,6 +371,20 @@ body {
 .device-list__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .device-list__meta { margin-left: auto; color: var(--md-on-surface-variant); font-size: 11px; flex-shrink: 0; }
 
+.device-list__item--selected {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.device-list__item--selected:hover { background: color-mix(in srgb, var(--md-secondary-container) 85%, black); }
+.device-list__item--selected .device-list__meta { color: var(--md-on-secondary-container); opacity: 0.8; }
+
+.device-list__divider {
+  height: 1px;
+  margin: var(--space-2) var(--space-1);
+  background: var(--md-outline-variant);
+  list-style: none;
+}
+
 /* Content */
 .content {
   flex: 1;

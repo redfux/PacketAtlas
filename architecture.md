@@ -131,6 +131,12 @@ Innerhalb der aktuell gewählten Familie werden die Geräte für Matrix-Zeilen/-
 
 Beide Ansichten lesen denselben abgeleiteten Zustand aus `data-model.js` (gefilterte Geräteauswahl + gewählte Metrik) und bleiben dadurch synchron.
 
+### Geräteliste: angeheftete Auswahl und automatische Nachbarschaftsauswahl
+
+Die Geräteliste im Seitenpanel (`renderDeviceList()` in `app.js`) ist in zwei Gruppen geteilt, jeweils aufsteigend nach Adresse sortiert (`compareDevicesByAddress`): ausgewählte Geräte oben (optisch abgesetzt durch Hintergrundfarbe und eine Trennlinie), alle übrigen darunter. Wird eine Checkbox deaktiviert, verschwindet das Gerät aus der oberen Gruppe und erscheint einsortiert in der unteren.
+
+Ist die Auswahl leer (`state.selectedIds.size === 0`) und wird ein einzelnes Gerät angehakt, werden zusätzlich automatisch alle Geräte ausgewählt, mit denen dieses Gerät mindestens einmal kommuniziert hat (`relatedDeviceIds()` in `data-model.js`, direkte Nachbarschaft über die Paar-Liste, nicht transitiv). So zeigt die Matrix sofort einen sinnvollen Ausschnitt statt eines isolierten Einzelgeräts. Die automatisch mit ausgewählten Geräte sind danach normale, unabhängig abwählbare Checkboxen – die Kaskade greift nur beim Übergang von „keine Auswahl" zu „eine Auswahl", nicht bei weiteren Klicks auf eine bereits nicht-leere Auswahl.
+
 ## Web Worker
 
 `parser.worker.js` kapselt den gesamten rechenintensiven Teil (Parsing + Decoding + Aggregation) und kommuniziert über `postMessage`:
