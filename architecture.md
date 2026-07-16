@@ -131,6 +131,10 @@ Innerhalb der aktuell gewählten Familie werden die Geräte für Matrix-Zeilen/-
 
 Beide Ansichten lesen denselben abgeleiteten Zustand aus `data-model.js` (gefilterte Geräteauswahl + gewählte Metrik) und bleiben dadurch synchron.
 
+**Sequenz** (`sequence-view.js`): drittes Tab neben Matrix und Graph, ein Ablauf-/Sequenzdiagramm im Stil von Wiresharks „Flow Graph" (bzw. klassischer Anruf-Signalisierungsdiagramme wie bei H.225/H.323): pro ausgewähltem Gerät eine senkrechte Lebenslinie mit Kopfbox, pro Einzelpaket ein waagerechter, chronologisch von oben nach unten angeordneter Pfeil zwischen den beiden beteiligten Lebenslinien, beschriftet mit Protokoll und Ports. Da dies auf Einzelpaket-Ebene statt auf aggregierten Paaren arbeitet, ist die Metrik-Umschaltung (Pakete/Bytes) für dieses Tab ausgeblendet – sie ergibt hier keinen Sinn. Um die Renderzeit und Lesbarkeit auch bei umfangreichen Captures zu begrenzen, werden höchstens `MAX_SEQUENCE_RENDER` (400) Pakete gleichzeitig gezeichnet; wird diese Grenze durch die aktuelle Auswahl/Filterung überschritten, erscheint ein Warnhinweis mit der Empfehlung, weiter zu filtern.
+
+Da eine vollständige Paket-für-Paket-Sequenz für sehr große Captures weder darstellbar noch speicherbar wäre, hält der Worker dafür zusätzlich zur Pair-Aggregation ein **begrenztes** chronologisches Ereignis-Log (`Aggregator.events` in `parser.worker.js`, Obergrenze `MAX_SEQUENCE_EVENTS` = 20.000 Einzelpakete unabhängig von der Gesamtgröße der Datei). Wird die Grenze erreicht, markiert der Worker das Ergebnis als `eventsTruncated`, was zusätzlich zur Auswahl-bedingten Begrenzung im UI kommuniziert wird. Die Aggregation in Devices/Pairs bleibt davon unberührt und weiterhin vollständig, unabhängig von der Paketanzahl.
+
 ### Geräteliste: angeheftete Auswahl und automatische Nachbarschaftsauswahl
 
 Die Geräteliste im Seitenpanel (`renderDeviceList()` in `app.js`) ist in zwei Gruppen geteilt, jeweils aufsteigend nach Adresse sortiert (`compareDevicesByAddress`): ausgewählte Geräte oben (optisch abgesetzt durch Hintergrundfarbe und eine Trennlinie), alle übrigen darunter. Wird eine Checkbox deaktiviert, verschwindet das Gerät aus der oberen Gruppe und erscheint einsortiert in der unteren.
@@ -142,7 +146,7 @@ Ist die Auswahl leer (`state.selectedIds.size === 0`) und wird ein einzelnes Ger
 `parser.worker.js` kapselt den gesamten rechenintensiven Teil (Parsing + Decoding + Aggregation) und kommuniziert über `postMessage`:
 
 - `progress`-Nachrichten (Anteil verarbeiteter Bytes) für die Fortschrittsanzeige.
-- Eine abschließende `result`-Nachricht mit dem aggregierten Datenmodell (Devices + Pairs).
+- Eine abschließende `result`-Nachricht mit dem aggregierten Datenmodell (Devices + Pairs) sowie dem begrenzten Einzelpaket-Log für die Sequenzansicht (Events + `eventsTruncated`-Flag).
 - Eine `error`-Nachricht bei nicht behebbaren Parsing-Fehlern.
 
 Der Main-Thread bleibt während des Parsens vollständig responsiv.

@@ -94,6 +94,10 @@
               <span class="material-symbols-outlined" aria-hidden="true">hub</span>
               Graph
             </button>
+            <button type="button" class="tab" id="tab-sequence" role="tab" aria-selected="false" aria-controls="view-sequence">
+              <span class="material-symbols-outlined" aria-hidden="true">swap_horiz</span>
+              Sequenz
+            </button>
           </div>
 
           <div class="toolbar__spacer"></div>
@@ -104,7 +108,7 @@
             <button type="button" class="segmented__option" id="family-mac" role="radio" aria-checked="false" data-family="mac">Sonstige</button>
           </div>
 
-          <div class="segmented" role="radiogroup" aria-label="Metrik">
+          <div class="segmented" role="radiogroup" aria-label="Metrik" id="metric-group">
             <button type="button" class="segmented__option is-active" id="metric-packets" role="radio" aria-checked="true">Pakete</button>
             <button type="button" class="segmented__option" id="metric-bytes" role="radio" aria-checked="false">Bytes</button>
           </div>
@@ -134,12 +138,21 @@
           Viele Geräte ausgewählt – für bessere Lesbarkeit Filterung empfohlen.
         </div>
 
+        <div id="sequence-truncated-warning" class="warning-banner" hidden>
+          <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+          <span id="sequence-truncated-message"></span>
+        </div>
+
         <div id="view-matrix" class="view" role="tabpanel" aria-labelledby="tab-matrix">
           <div id="matrix-container" class="matrix-container"></div>
         </div>
 
         <div id="view-graph" class="view" role="tabpanel" aria-labelledby="tab-graph" hidden>
           <div id="graph-container" class="graph-container"></div>
+        </div>
+
+        <div id="view-sequence" class="view" role="tabpanel" aria-labelledby="tab-sequence" hidden>
+          <div id="sequence-container" class="sequence-container"></div>
         </div>
       </section>
     </div>
@@ -148,7 +161,7 @@
   <div id="tooltip" class="tooltip" hidden role="tooltip"></div>
 
   <footer class="app-footer">
-    <span>PacketAtlas v0.4.0 — thought up by human, created by ai</span>
+    <span>PacketAtlas v0.5.0 — thought up by human, created by ai</span>
   </footer>
 
   <script src="vendor/d3.min.js"></script>

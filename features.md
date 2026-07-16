@@ -41,6 +41,7 @@ Rein clientseitige Web-App, die Wireshark-Capture-Dateien (`.pcap`/`.pcapng`) im
 - [x] Tooltip bei Hover (Protokolle, Ports, Pakete/Bytes, Zeitraum)
 - [x] Zoom/Pan und einstellbare Kräfte-Parameter für den Graphen (>20–30 Geräte)
 - [x] Getrennte Matrix/Graph je Adressfamilie (IPv4 / IPv6 / Sonstige) mit Umschalter, Geräte aufsteigend nach Adresse sortiert (nachträglich ergänzt, über ursprünglichen Anforderungsumfang hinaus)
+- [x] Ansicht C – Sequenzdiagramm (Ablauf-/Call-Flow-Ansicht je Einzelpaket, chronologisch, im Stil von Wiresharks „Flow Graph") (nachträglich ergänzt, über ursprünglichen Anforderungsumfang hinaus)
 
 ## 5. Filterung / Teilnehmer-Selektion
 

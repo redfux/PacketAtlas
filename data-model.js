@@ -81,6 +81,20 @@ export function computeVisiblePairs(pairs, selectedIds, activeGroups, hideMultic
   });
 }
 
+/**
+ * Derives the filtered, chronologically-ordered packet events visible in the
+ * sequence-diagram view, using the same selection/protocol/multicast filters
+ * as computeVisiblePairs() so all views stay consistent with each other.
+ */
+export function computeVisibleEvents(events, selectedIds, activeGroups, hideMulticast) {
+  return events.filter((event) => {
+    if (!selectedIds.has(event.a) || !selectedIds.has(event.b)) return false;
+    if (hideMulticast && event.multicastOrBroadcast) return false;
+    if (!activeGroups.has(protocolGroupOf(event.protocol))) return false;
+    return true;
+  });
+}
+
 /** IDs of `deviceId` itself plus every device it has at least one pair with (direct communication partners only, not transitive). */
 export function relatedDeviceIds(pairs, deviceId) {
   const related = new Set([deviceId]);
