@@ -5,6 +5,13 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [0.5.0] – 2026-07-15
+
+### Added
+
+- Neues drittes Tab „Sequenz": Ablauf-/Sequenzdiagramm je Einzelpaket im Stil von Wiresharks „Flow Graph" (bzw. klassischer Signalisierungsdiagramme wie bei H.225/H.323) – eine Lebenslinie pro ausgewähltem Gerät, ein chronologisch angeordneter, mit Protokoll/Ports beschrifteter Pfeil pro Paket. Aus Performance-/Lesbarkeitsgründen werden höchstens 400 Pakete gleichzeitig gezeichnet (Warnhinweis bei mehr).
+- Der Worker hält dafür zusätzlich ein begrenztes chronologisches Einzelpaket-Log (max. 20.000 Pakete, unabhängig von der Gesamtgröße der Datei); die Geräte-/Paar-Aggregation bleibt davon unberührt und weiterhin vollständig.
+
 ## [0.4.0] – 2026-07-15
 
 ### Added

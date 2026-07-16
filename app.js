@@ -5,6 +5,7 @@ import {
   PROTOCOL_GROUPS,
   addressFamilyOf,
   compareDevicesByAddress,
+  computeVisibleEvents,
   computeVisiblePairs,
   deviceLabel,
   formatBytes,
@@ -14,14 +15,18 @@ import {
 } from './data-model.js';
 import { renderMatrix } from './matrix-view.js';
 import { renderGraph, updateForces } from './graph-view.js';
+import { renderSequence } from './sequence-view.js';
 import { exportActiveViewAsImage } from './export-image.js';
 import { exportToExcel } from './export-excel.js';
 
 const LARGE_SELECTION_THRESHOLD = 50;
+const MAX_SEQUENCE_RENDER = 400;
 
 const state = {
   devices: [],
   pairs: [],
+  events: [],
+  eventsTruncated: false,
   deviceIndex: new Map(),
   selectedIds: new Set(),
   search: '',
@@ -56,15 +61,21 @@ const el = {
   toggleHideBroadcast: document.getElementById('toggle-hide-broadcast'),
   tabMatrix: document.getElementById('tab-matrix'),
   tabGraph: document.getElementById('tab-graph'),
+  tabSequence: document.getElementById('tab-sequence'),
   viewMatrix: document.getElementById('view-matrix'),
   viewGraph: document.getElementById('view-graph'),
+  viewSequence: document.getElementById('view-sequence'),
   matrixContainer: document.getElementById('matrix-container'),
   graphContainer: document.getElementById('graph-container'),
+  sequenceContainer: document.getElementById('sequence-container'),
   graphControls: document.getElementById('graph-controls'),
   forceCharge: document.getElementById('force-charge'),
   forceDistance: document.getElementById('force-distance'),
+  metricGroup: document.getElementById('metric-group'),
   metricPackets: document.getElementById('metric-packets'),
   metricBytes: document.getElementById('metric-bytes'),
+  sequenceTruncatedWarning: document.getElementById('sequence-truncated-warning'),
+  sequenceTruncatedMessage: document.getElementById('sequence-truncated-message'),
   familyIpv4: document.getElementById('family-ipv4'),
   familyIpv6: document.getElementById('family-ipv6'),
   familyMac: document.getElementById('family-mac'),
@@ -119,6 +130,8 @@ function onParseComplete(msg) {
 
   state.devices = msg.devices;
   state.pairs = msg.pairs;
+  state.events = msg.events;
+  state.eventsTruncated = msg.eventsTruncated;
   state.deviceIndex = new Map(state.devices.map((d) => [d.id, d]));
   state.selectedIds = new Set(state.devices.map((d) => d.id));
   state.search = '';
@@ -274,21 +287,28 @@ el.toggleHideBroadcast.addEventListener('change', () => {
 
 // --- Tabs / metric ------------------------------------------------------------
 
+const TABS = {
+  matrix: { tabButton: () => el.tabMatrix, view: () => el.viewMatrix },
+  graph: { tabButton: () => el.tabGraph, view: () => el.viewGraph },
+  sequence: { tabButton: () => el.tabSequence, view: () => el.viewSequence },
+};
+
 function setActiveTab(tab) {
   state.activeTab = tab;
-  const isMatrix = tab === 'matrix';
-  el.tabMatrix.classList.toggle('is-active', isMatrix);
-  el.tabMatrix.setAttribute('aria-selected', String(isMatrix));
-  el.tabGraph.classList.toggle('is-active', !isMatrix);
-  el.tabGraph.setAttribute('aria-selected', String(!isMatrix));
-  el.viewMatrix.hidden = !isMatrix;
-  el.viewGraph.hidden = isMatrix;
-  el.graphControls.hidden = isMatrix;
+  for (const [key, { tabButton, view }] of Object.entries(TABS)) {
+    const isActive = key === tab;
+    tabButton().classList.toggle('is-active', isActive);
+    tabButton().setAttribute('aria-selected', String(isActive));
+    view().hidden = !isActive;
+  }
+  el.graphControls.hidden = tab !== 'graph';
+  el.metricGroup.hidden = tab === 'sequence';
   renderActiveView();
 }
 
 el.tabMatrix.addEventListener('click', () => setActiveTab('matrix'));
 el.tabGraph.addEventListener('click', () => setActiveTab('graph'));
+el.tabSequence.addEventListener('click', () => setActiveTab('sequence'));
 
 function setMetric(metric) {
   state.metric = metric;
@@ -337,15 +357,22 @@ function getVisibleDevicesAndPairs() {
   const familyIds = new Set(familyDevices.map((d) => d.id));
   const devices = [...familyDevices].sort(compareDevicesByAddress);
   const pairs = computeVisiblePairs(state.pairs, familyIds, state.activeGroups, state.hideMulticast);
-  return { devices, pairs };
+  return { devices, pairs, familyIds };
+}
+
+/** Chronologically-ordered packet events for the sequence view, filtered like getVisibleDevicesAndPairs(). */
+function getVisibleEvents(familyIds) {
+  return computeVisibleEvents(state.events, familyIds, state.activeGroups, state.hideMulticast)
+    .sort((a, b) => a.timestamp - b.timestamp);
 }
 
 function renderActiveView() {
   if (state.devices.length === 0) return;
 
-  const { devices: selectedDevices, pairs: visiblePairs } = getVisibleDevicesAndPairs();
+  const { devices: selectedDevices, pairs: visiblePairs, familyIds } = getVisibleDevicesAndPairs();
 
   el.largeSelectionWarning.hidden = selectedDevices.length <= LARGE_SELECTION_THRESHOLD;
+  el.sequenceTruncatedWarning.hidden = true;
 
   if (state.activeTab === 'matrix') {
     state.activeSvg = renderMatrix(el.matrixContainer, {
@@ -356,7 +383,7 @@ function renderActiveView() {
       onLeave: hideTooltip,
     });
     state.graphSimulation = null;
-  } else {
+  } else if (state.activeTab === 'graph') {
     const { svg, simulation } = renderGraph(el.graphContainer, {
       devices: selectedDevices,
       pairs: visiblePairs,
@@ -369,6 +396,23 @@ function renderActiveView() {
     });
     state.activeSvg = svg;
     state.graphSimulation = simulation;
+  } else {
+    const allEvents = getVisibleEvents(familyIds);
+    const renderedEvents = allEvents.slice(0, MAX_SEQUENCE_RENDER);
+    const isTruncated = state.eventsTruncated || allEvents.length > renderedEvents.length;
+    el.sequenceTruncatedWarning.hidden = !isTruncated;
+    if (isTruncated) {
+      el.sequenceTruncatedMessage.textContent = state.eventsTruncated
+        ? `Das Capture enthält mehr Pakete, als PacketAtlas für die Sequenzansicht erfassen kann; zusätzlich werden hier nur die ersten ${renderedEvents.length.toLocaleString('de-DE')} von ${allEvents.length.toLocaleString('de-DE')} gefilterten Paketen angezeigt. Bitte weiter filtern.`
+        : `Zeige die ersten ${renderedEvents.length.toLocaleString('de-DE')} von ${allEvents.length.toLocaleString('de-DE')} Paketen. Für eine vollständige Ansicht bitte weiter filtern.`;
+    }
+    state.activeSvg = renderSequence(el.sequenceContainer, {
+      devices: selectedDevices,
+      events: renderedEvents,
+      onHover: (event, packetEvent) => showSequenceTooltip(event, packetEvent),
+      onLeave: hideTooltip,
+    });
+    state.graphSimulation = null;
   }
 }
 
@@ -391,6 +435,18 @@ function showDeviceTooltip(event, device) {
   const html = `<div><strong>${deviceLabel(device)}</strong></div>
     <div>MAC: ${device.mac || '–'}</div>
     <div>Pakete: ${device.packetCount.toLocaleString('de-DE')} · Bytes: ${formatBytes(device.byteCount)}</div>`;
+  showTooltip(event, html);
+}
+
+function showSequenceTooltip(event, packetEvent) {
+  const deviceA = state.deviceIndex.get(packetEvent.a);
+  const deviceB = state.deviceIndex.get(packetEvent.b);
+  const ports = packetEvent.srcPort != null ? `<div>Ports: ${packetEvent.srcPort} → ${packetEvent.dstPort}</div>` : '';
+  const html = `<div><strong>${deviceLabel(deviceA)}</strong> → <strong>${deviceLabel(deviceB)}</strong></div>
+    <div>Protokoll: ${packetEvent.protocol || '–'}</div>
+    ${ports}
+    <div>Frame-Länge: ${formatBytes(packetEvent.frameLength)}</div>
+    <div>Zeitpunkt: ${formatTimestamp(packetEvent.timestamp)}</div>`;
   showTooltip(event, html);
 }
 

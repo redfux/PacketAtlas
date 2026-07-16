@@ -15,16 +15,26 @@ function pairKey(idA, idB) {
   return idA < idB ? `${idA}|${idB}` : `${idB}|${idA}`;
 }
 
+// Upper bound on individually-retained packet events (for the sequence-diagram
+// view). Aggregation into devices/pairs above is O(1) per packet regardless of
+// capture size, but a ladder diagram with tens of thousands of arrows would be
+// both unreadable and slow to render, so this cap keeps memory/postMessage
+// size bounded independent of the actual packet count.
+const MAX_SEQUENCE_EVENTS = 20000;
+
 /**
  * Accumulates decoded frames into device and pair aggregates using Map
  * structures, so each frame only costs O(1) lookups/updates regardless of
- * total packet count.
+ * total packet count. Also retains a capped, chronological log of individual
+ * packet events for the sequence-diagram view.
  */
 class Aggregator {
   constructor() {
     this.devices = new Map();
     this.pairs = new Map();
     this.hostnames = new Map();
+    this.events = [];
+    this.eventsTruncated = false;
   }
 
   getOrCreateDevice(id, kind, ip, mac) {
@@ -78,6 +88,21 @@ class Aggregator {
     if (decoded.timestamp < pair.firstSeen) pair.firstSeen = decoded.timestamp;
     if (decoded.timestamp > pair.lastSeen) pair.lastSeen = decoded.timestamp;
     if (decoded.multicastOrBroadcast) pair.multicastOrBroadcast = true;
+
+    if (this.events.length < MAX_SEQUENCE_EVENTS) {
+      this.events.push({
+        timestamp: decoded.timestamp,
+        a: srcId,
+        b: dstId,
+        protocol: decoded.protocol,
+        srcPort: decoded.srcPort,
+        dstPort: decoded.dstPort,
+        frameLength: decoded.frameLength,
+        multicastOrBroadcast: decoded.multicastOrBroadcast,
+      });
+    } else {
+      this.eventsTruncated = true;
+    }
   }
 
   addHostname(ip, hostname) {
@@ -99,6 +124,8 @@ class Aggregator {
         protocols: Array.from(p.protocols),
         ports: Array.from(p.ports),
       })),
+      events: this.events,
+      eventsTruncated: this.eventsTruncated,
     };
   }
 }
@@ -151,5 +178,12 @@ function processBuffer(buffer) {
   }
 
   const result = aggregator.toResult();
-  self.postMessage({ type: 'result', devices: result.devices, pairs: result.pairs, packetCount });
+  self.postMessage({
+    type: 'result',
+    devices: result.devices,
+    pairs: result.pairs,
+    events: result.events,
+    eventsTruncated: result.eventsTruncated,
+    packetCount,
+  });
 }
