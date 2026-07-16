@@ -5,6 +5,13 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [0.6.0] – 2026-07-16
+
+### Changed
+
+- Das „Sequenz"-Tab (chronologisches Ablauf-/Sequenzdiagramm je Einzelpaket) wurde durch ein „Verbindungen"-Tab ersetzt: eine korrelierte, nicht-zeitliche Übersicht mit einem Pfeil pro eindeutiger Kombination aus Geräte-Paar, Protokoll und Port, beschriftet mit Paketanzahl, sortiert nach Paketanzahl absteigend. Der zeitliche Verlauf ist als mögliche spätere Erweiterung im Backlog vorgemerkt (siehe features.md).
+- Der Worker aggregiert dafür jetzt vollständig und unbegrenzt „Connections" (Geräte-Paar + Protokoll + Service-Port) anstelle eines auf 20.000 Einzelpakete begrenzten chronologischen Ereignis-Logs.
+
 ## [0.5.1] – 2026-07-16
 
 ### Fixed

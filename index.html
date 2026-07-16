@@ -94,9 +94,9 @@
               <span class="material-symbols-outlined" aria-hidden="true">hub</span>
               Graph
             </button>
-            <button type="button" class="tab" id="tab-sequence" role="tab" aria-selected="false" aria-controls="view-sequence">
+            <button type="button" class="tab" id="tab-connections" role="tab" aria-selected="false" aria-controls="view-connections">
               <span class="material-symbols-outlined" aria-hidden="true">swap_horiz</span>
-              Sequenz
+              Verbindungen
             </button>
           </div>
 
@@ -138,9 +138,9 @@
           Viele Geräte ausgewählt – für bessere Lesbarkeit Filterung empfohlen.
         </div>
 
-        <div id="sequence-truncated-warning" class="warning-banner" hidden>
+        <div id="connections-truncated-warning" class="warning-banner" hidden>
           <span class="material-symbols-outlined" aria-hidden="true">warning</span>
-          <span id="sequence-truncated-message"></span>
+          <span id="connections-truncated-message"></span>
         </div>
 
         <div id="view-matrix" class="view" role="tabpanel" aria-labelledby="tab-matrix">
@@ -151,8 +151,8 @@
           <div id="graph-container" class="graph-container"></div>
         </div>
 
-        <div id="view-sequence" class="view" role="tabpanel" aria-labelledby="tab-sequence" hidden>
-          <div id="sequence-container" class="sequence-container"></div>
+        <div id="view-connections" class="view" role="tabpanel" aria-labelledby="tab-connections" hidden>
+          <div id="connections-container" class="sequence-container"></div>
         </div>
       </section>
     </div>
@@ -161,7 +161,7 @@
   <div id="tooltip" class="tooltip" hidden role="tooltip"></div>
 
   <footer class="app-footer">
-    <span>PacketAtlas v0.5.1 — thought up by human, created by ai</span>
+    <span>PacketAtlas v0.6.0 — thought up by human, created by ai</span>
   </footer>
 
   <script src="vendor/d3.min.js"></script>
