@@ -5,6 +5,12 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [0.5.1] – 2026-07-16
+
+### Fixed
+
+- Sequenz-Ansicht erschien bei vielen ausgewählten Geräten leer, weil das Diagramm ungebremst in seiner vollen (bei vielen Geräten/Paketen sehr großen) natürlichen Größe gezeichnet wurde und der sichtbare Ausschnitt zufällig keine Linien enthalten konnte. Das Diagramm wird jetzt beim Öffnen automatisch per Zoom-to-Fit vollständig eingepasst; Zoom/Pan sind danach frei nutzbar.
+
 ## [0.5.0] – 2026-07-15
 
 ### Added

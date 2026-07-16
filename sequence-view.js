@@ -1,6 +1,8 @@
 // Sequence-diagram ("call flow" / ladder diagram) view: one lifeline per
 // selected device, one arrow per individual packet, ordered chronologically -
 // the same style Wireshark's "Flow Graph" uses for signaling traces.
+// `d3` (vendor/d3.min.js) is loaded as a classic script before this module and
+// provides d3-zoom for panning/zooming large diagrams.
 // thought up by human, created by ai
 
 import { deviceLabel } from './data-model.js';
@@ -28,13 +30,19 @@ function eventLabel(event) {
 export function renderSequence(container, { devices, events, onHover, onLeave }) {
   const laneX = new Map(devices.map((d, i) => [d.id, MARGIN_X + i * LANE_SPACING]));
 
-  const width = MARGIN_X * 2 + Math.max(0, devices.length - 1) * LANE_SPACING;
-  const height = HEADER_HEIGHT + Math.max(1, events.length) * ROW_HEIGHT + FOOTER_MARGIN;
+  const diagramWidth = MARGIN_X * 2 + Math.max(0, devices.length - 1) * LANE_SPACING;
+  const diagramHeight = HEADER_HEIGHT + Math.max(1, events.length) * ROW_HEIGHT + FOOTER_MARGIN;
+
+  // The SVG element itself is sized to the visible container (like graph-view.js),
+  // not to the full diagram - with many devices/events the diagram easily grows
+  // far larger than the viewport, and without an explicit zoom-to-fit the visible
+  // top-left sliver would very likely show no lifelines/arrows at all, looking
+  // like an empty view even though the data is there.
+  const width = container.clientWidth || 800;
+  const height = Math.max(container.clientHeight || 0, 400);
 
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-  svg.setAttribute('width', width);
-  svg.setAttribute('height', height);
   svg.classList.add('sequence-svg');
 
   const defs = document.createElementNS(SVG_NS, 'defs');
@@ -53,6 +61,9 @@ export function renderSequence(container, { devices, events, onHover, onLeave })
   defs.appendChild(marker);
   svg.appendChild(defs);
 
+  const zoomLayer = document.createElementNS(SVG_NS, 'g');
+  svg.appendChild(zoomLayer);
+
   // Lifelines + device header boxes.
   for (const device of devices) {
     const x = laneX.get(device.id);
@@ -61,9 +72,9 @@ export function renderSequence(container, { devices, events, onHover, onLeave })
     line.setAttribute('x1', x);
     line.setAttribute('y1', HEADER_HEIGHT);
     line.setAttribute('x2', x);
-    line.setAttribute('y2', height - FOOTER_MARGIN / 2);
+    line.setAttribute('y2', diagramHeight - FOOTER_MARGIN / 2);
     line.classList.add('sequence-lifeline');
-    svg.appendChild(line);
+    zoomLayer.appendChild(line);
 
     const label = deviceLabel(device);
     const box = document.createElementNS(SVG_NS, 'rect');
@@ -74,7 +85,7 @@ export function renderSequence(container, { devices, events, onHover, onLeave })
     box.setAttribute('height', 28);
     box.setAttribute('rx', 6);
     box.classList.add('sequence-device-box');
-    svg.appendChild(box);
+    zoomLayer.appendChild(box);
 
     const text = document.createElementNS(SVG_NS, 'text');
     text.setAttribute('x', x);
@@ -85,7 +96,7 @@ export function renderSequence(container, { devices, events, onHover, onLeave })
     const title = document.createElementNS(SVG_NS, 'title');
     title.textContent = label;
     text.appendChild(title);
-    svg.appendChild(text);
+    zoomLayer.appendChild(text);
   }
 
   // One arrow per packet, top to bottom in chronological order.
@@ -126,8 +137,23 @@ export function renderSequence(container, { devices, events, onHover, onLeave })
     hitArea.addEventListener('mouseleave', onLeave);
     group.appendChild(hitArea);
 
-    svg.appendChild(group);
+    zoomLayer.appendChild(group);
   });
+
+  const zoom = d3.zoom()
+    .scaleExtent([0.05, 8])
+    .on('zoom', (zoomEvent) => zoomLayer.setAttribute('transform', zoomEvent.transform));
+  d3.select(svg).call(zoom);
+
+  // Fit the whole diagram into the visible viewport initially - with many
+  // devices/events it easily grows far beyond the container, and the user
+  // would otherwise have to guess which direction to scroll to find any content.
+  const padding = 24;
+  const fitScale = Math.min(1, (width - padding * 2) / diagramWidth, (height - padding * 2) / diagramHeight);
+  const initialTransform = d3.zoomIdentity
+    .translate((width - diagramWidth * fitScale) / 2, padding)
+    .scale(fitScale);
+  d3.select(svg).call(zoom.transform, initialTransform);
 
   container.innerHTML = '';
   container.appendChild(svg);
