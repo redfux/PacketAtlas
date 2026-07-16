@@ -82,15 +82,15 @@ export function computeVisiblePairs(pairs, selectedIds, activeGroups, hideMultic
 }
 
 /**
- * Derives the filtered, chronologically-ordered packet events visible in the
- * sequence-diagram view, using the same selection/protocol/multicast filters
- * as computeVisiblePairs() so all views stay consistent with each other.
+ * Derives the filtered per-connection (device pair + protocol + port) breakdown
+ * visible in the connections view, using the same selection/protocol/multicast
+ * filters as computeVisiblePairs() so all views stay consistent with each other.
  */
-export function computeVisibleEvents(events, selectedIds, activeGroups, hideMulticast) {
-  return events.filter((event) => {
-    if (!selectedIds.has(event.a) || !selectedIds.has(event.b)) return false;
-    if (hideMulticast && event.multicastOrBroadcast) return false;
-    if (!activeGroups.has(protocolGroupOf(event.protocol))) return false;
+export function computeVisibleConnections(connections, selectedIds, activeGroups, hideMulticast) {
+  return connections.filter((connection) => {
+    if (!selectedIds.has(connection.a) || !selectedIds.has(connection.b)) return false;
+    if (hideMulticast && connection.multicastOrBroadcast) return false;
+    if (!activeGroups.has(protocolGroupOf(connection.protocol))) return false;
     return true;
   });
 }

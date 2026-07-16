@@ -5,7 +5,7 @@ import {
   PROTOCOL_GROUPS,
   addressFamilyOf,
   compareDevicesByAddress,
-  computeVisibleEvents,
+  computeVisibleConnections,
   computeVisiblePairs,
   deviceLabel,
   formatBytes,
@@ -15,18 +15,17 @@ import {
 } from './data-model.js';
 import { renderMatrix } from './matrix-view.js';
 import { renderGraph, updateForces } from './graph-view.js';
-import { renderSequence } from './sequence-view.js';
+import { renderConnections } from './connections-view.js';
 import { exportActiveViewAsImage } from './export-image.js';
 import { exportToExcel } from './export-excel.js';
 
 const LARGE_SELECTION_THRESHOLD = 50;
-const MAX_SEQUENCE_RENDER = 400;
+const MAX_CONNECTIONS_RENDER = 400;
 
 const state = {
   devices: [],
   pairs: [],
-  events: [],
-  eventsTruncated: false,
+  connections: [],
   deviceIndex: new Map(),
   selectedIds: new Set(),
   search: '',
@@ -61,21 +60,21 @@ const el = {
   toggleHideBroadcast: document.getElementById('toggle-hide-broadcast'),
   tabMatrix: document.getElementById('tab-matrix'),
   tabGraph: document.getElementById('tab-graph'),
-  tabSequence: document.getElementById('tab-sequence'),
+  tabConnections: document.getElementById('tab-connections'),
   viewMatrix: document.getElementById('view-matrix'),
   viewGraph: document.getElementById('view-graph'),
-  viewSequence: document.getElementById('view-sequence'),
+  viewConnections: document.getElementById('view-connections'),
   matrixContainer: document.getElementById('matrix-container'),
   graphContainer: document.getElementById('graph-container'),
-  sequenceContainer: document.getElementById('sequence-container'),
+  connectionsContainer: document.getElementById('connections-container'),
   graphControls: document.getElementById('graph-controls'),
   forceCharge: document.getElementById('force-charge'),
   forceDistance: document.getElementById('force-distance'),
   metricGroup: document.getElementById('metric-group'),
   metricPackets: document.getElementById('metric-packets'),
   metricBytes: document.getElementById('metric-bytes'),
-  sequenceTruncatedWarning: document.getElementById('sequence-truncated-warning'),
-  sequenceTruncatedMessage: document.getElementById('sequence-truncated-message'),
+  connectionsTruncatedWarning: document.getElementById('connections-truncated-warning'),
+  connectionsTruncatedMessage: document.getElementById('connections-truncated-message'),
   familyIpv4: document.getElementById('family-ipv4'),
   familyIpv6: document.getElementById('family-ipv6'),
   familyMac: document.getElementById('family-mac'),
@@ -130,8 +129,7 @@ function onParseComplete(msg) {
 
   state.devices = msg.devices;
   state.pairs = msg.pairs;
-  state.events = msg.events;
-  state.eventsTruncated = msg.eventsTruncated;
+  state.connections = msg.connections;
   state.deviceIndex = new Map(state.devices.map((d) => [d.id, d]));
   state.selectedIds = new Set(state.devices.map((d) => d.id));
   state.search = '';
@@ -290,7 +288,7 @@ el.toggleHideBroadcast.addEventListener('change', () => {
 const TABS = {
   matrix: { tabButton: () => el.tabMatrix, view: () => el.viewMatrix },
   graph: { tabButton: () => el.tabGraph, view: () => el.viewGraph },
-  sequence: { tabButton: () => el.tabSequence, view: () => el.viewSequence },
+  connections: { tabButton: () => el.tabConnections, view: () => el.viewConnections },
 };
 
 function setActiveTab(tab) {
@@ -302,13 +300,13 @@ function setActiveTab(tab) {
     view().hidden = !isActive;
   }
   el.graphControls.hidden = tab !== 'graph';
-  el.metricGroup.hidden = tab === 'sequence';
+  el.metricGroup.hidden = tab === 'connections';
   renderActiveView();
 }
 
 el.tabMatrix.addEventListener('click', () => setActiveTab('matrix'));
 el.tabGraph.addEventListener('click', () => setActiveTab('graph'));
-el.tabSequence.addEventListener('click', () => setActiveTab('sequence'));
+el.tabConnections.addEventListener('click', () => setActiveTab('connections'));
 
 function setMetric(metric) {
   state.metric = metric;
@@ -360,10 +358,10 @@ function getVisibleDevicesAndPairs() {
   return { devices, pairs, familyIds };
 }
 
-/** Chronologically-ordered packet events for the sequence view, filtered like getVisibleDevicesAndPairs(). */
-function getVisibleEvents(familyIds) {
-  return computeVisibleEvents(state.events, familyIds, state.activeGroups, state.hideMulticast)
-    .sort((a, b) => a.timestamp - b.timestamp);
+/** Per-connection (device pair + protocol + port) breakdown for the connections view, heaviest first, filtered like getVisibleDevicesAndPairs(). */
+function getVisibleConnections(familyIds) {
+  return computeVisibleConnections(state.connections, familyIds, state.activeGroups, state.hideMulticast)
+    .sort((a, b) => b.packets - a.packets);
 }
 
 function renderActiveView() {
@@ -372,7 +370,7 @@ function renderActiveView() {
   const { devices: selectedDevices, pairs: visiblePairs, familyIds } = getVisibleDevicesAndPairs();
 
   el.largeSelectionWarning.hidden = selectedDevices.length <= LARGE_SELECTION_THRESHOLD;
-  el.sequenceTruncatedWarning.hidden = true;
+  el.connectionsTruncatedWarning.hidden = true;
 
   if (state.activeTab === 'matrix') {
     state.activeSvg = renderMatrix(el.matrixContainer, {
@@ -397,19 +395,17 @@ function renderActiveView() {
     state.activeSvg = svg;
     state.graphSimulation = simulation;
   } else {
-    const allEvents = getVisibleEvents(familyIds);
-    const renderedEvents = allEvents.slice(0, MAX_SEQUENCE_RENDER);
-    const isTruncated = state.eventsTruncated || allEvents.length > renderedEvents.length;
-    el.sequenceTruncatedWarning.hidden = !isTruncated;
+    const allConnections = getVisibleConnections(familyIds);
+    const renderedConnections = allConnections.slice(0, MAX_CONNECTIONS_RENDER);
+    const isTruncated = allConnections.length > renderedConnections.length;
+    el.connectionsTruncatedWarning.hidden = !isTruncated;
     if (isTruncated) {
-      el.sequenceTruncatedMessage.textContent = state.eventsTruncated
-        ? `Das Capture enthält mehr Pakete, als PacketAtlas für die Sequenzansicht erfassen kann; zusätzlich werden hier nur die ersten ${renderedEvents.length.toLocaleString('de-DE')} von ${allEvents.length.toLocaleString('de-DE')} gefilterten Paketen angezeigt. Bitte weiter filtern.`
-        : `Zeige die ersten ${renderedEvents.length.toLocaleString('de-DE')} von ${allEvents.length.toLocaleString('de-DE')} Paketen. Für eine vollständige Ansicht bitte weiter filtern.`;
+      el.connectionsTruncatedMessage.textContent = `Zeige die größten ${renderedConnections.length.toLocaleString('de-DE')} von ${allConnections.length.toLocaleString('de-DE')} Verbindungen. Für eine vollständige Ansicht bitte weiter filtern.`;
     }
-    state.activeSvg = renderSequence(el.sequenceContainer, {
+    state.activeSvg = renderConnections(el.connectionsContainer, {
       devices: selectedDevices,
-      events: renderedEvents,
-      onHover: (event, packetEvent) => showSequenceTooltip(event, packetEvent),
+      connections: renderedConnections,
+      onHover: (event, connection) => showConnectionTooltip(event, connection),
       onLeave: hideTooltip,
     });
     state.graphSimulation = null;
@@ -438,15 +434,15 @@ function showDeviceTooltip(event, device) {
   showTooltip(event, html);
 }
 
-function showSequenceTooltip(event, packetEvent) {
-  const deviceA = state.deviceIndex.get(packetEvent.a);
-  const deviceB = state.deviceIndex.get(packetEvent.b);
-  const ports = packetEvent.srcPort != null ? `<div>Ports: ${packetEvent.srcPort} → ${packetEvent.dstPort}</div>` : '';
-  const html = `<div><strong>${deviceLabel(deviceA)}</strong> → <strong>${deviceLabel(deviceB)}</strong></div>
-    <div>Protokoll: ${packetEvent.protocol || '–'}</div>
-    ${ports}
-    <div>Frame-Länge: ${formatBytes(packetEvent.frameLength)}</div>
-    <div>Zeitpunkt: ${formatTimestamp(packetEvent.timestamp)}</div>`;
+function showConnectionTooltip(event, connection) {
+  const deviceA = state.deviceIndex.get(connection.a);
+  const deviceB = state.deviceIndex.get(connection.b);
+  const port = connection.port != null ? `<div>Port: ${connection.port}</div>` : '';
+  const html = `<div><strong>${deviceLabel(deviceA)}</strong> ↔ <strong>${deviceLabel(deviceB)}</strong></div>
+    <div>Protokoll: ${connection.protocol || '–'}</div>
+    ${port}
+    <div>Pakete: ${connection.packets.toLocaleString('de-DE')} · Bytes: ${formatBytes(connection.bytes)}</div>
+    <div>Zeitraum: ${formatTimestamp(connection.firstSeen)} – ${formatTimestamp(connection.lastSeen)}</div>`;
   showTooltip(event, html);
 }
 
