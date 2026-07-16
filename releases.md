@@ -5,6 +5,13 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [0.4.0] – 2026-07-15
+
+### Added
+
+- Geräteliste im Seitenpanel: ausgewählte Geräte werden dauerhaft oben in der Liste angezeigt, optisch von den übrigen Einträgen abgesetzt; wird ein Gerät abgewählt, wandert es zurück in die restliche Liste. Beide Gruppen sind aufsteigend nach Adresse sortiert.
+- Bei komplett leerer Auswahl wählt ein Klick auf ein einzelnes Gerät automatisch auch alle Geräte mit aus, mit denen es tatsächlich kommuniziert hat – jedes davon lässt sich danach unabhängig wieder abwählen.
+
 ## [0.3.0] – 2026-07-15
 
 ### Added

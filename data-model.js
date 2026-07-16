@@ -81,6 +81,16 @@ export function computeVisiblePairs(pairs, selectedIds, activeGroups, hideMultic
   });
 }
 
+/** IDs of `deviceId` itself plus every device it has at least one pair with (direct communication partners only, not transitive). */
+export function relatedDeviceIds(pairs, deviceId) {
+  const related = new Set([deviceId]);
+  for (const pair of pairs) {
+    if (pair.a === deviceId) related.add(pair.b);
+    else if (pair.b === deviceId) related.add(pair.a);
+  }
+  return related;
+}
+
 export function metricValue(pair, metric) {
   return metric === 'bytes' ? pair.bytes : pair.packets;
 }

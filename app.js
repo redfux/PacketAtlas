@@ -10,6 +10,7 @@ import {
   formatBytes,
   formatTimestamp,
   metricValue,
+  relatedDeviceIds,
 } from './data-model.js';
 import { renderMatrix } from './matrix-view.js';
 import { renderGraph, updateForces } from './graph-view.js';
@@ -184,43 +185,60 @@ el.dropZone.addEventListener('drop', (e) => {
 
 // --- Device list / filtering -------------------------------------------------
 
+function createDeviceListItem(device, isSelected) {
+  const label = deviceLabel(device);
+  const li = document.createElement('li');
+  li.className = isSelected ? 'device-list__item device-list__item--selected' : 'device-list__item';
+
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.checked = isSelected;
+  checkbox.addEventListener('change', () => {
+    if (checkbox.checked) {
+      const wasEmpty = state.selectedIds.size === 0;
+      state.selectedIds.add(device.id);
+      // Starting a fresh selection from nothing: pull in everything this
+      // device actually talks to, so the matrix isn't just a single isolated
+      // node. Each of those stays individually uncheckable afterward.
+      if (wasEmpty) {
+        for (const relatedId of relatedDeviceIds(state.pairs, device.id)) state.selectedIds.add(relatedId);
+      }
+    } else {
+      state.selectedIds.delete(device.id);
+    }
+    renderDeviceList();
+    renderActiveView();
+  });
+
+  const labelSpan = document.createElement('span');
+  labelSpan.className = 'device-list__label';
+  labelSpan.textContent = label;
+  labelSpan.title = label;
+
+  const meta = document.createElement('span');
+  meta.className = 'device-list__meta';
+  meta.textContent = device.packetCount.toLocaleString('de-DE');
+
+  li.append(checkbox, labelSpan, meta);
+  return li;
+}
+
 function renderDeviceList() {
   const search = state.search.toLowerCase();
-  const sorted = [...state.devices].sort((a, b) => b.packetCount - a.packetCount);
+  const filtered = state.devices.filter((d) => !search || deviceLabel(d).toLowerCase().includes(search));
+  const selected = filtered.filter((d) => state.selectedIds.has(d.id)).sort(compareDevicesByAddress);
+  const rest = filtered.filter((d) => !state.selectedIds.has(d.id)).sort(compareDevicesByAddress);
+
   el.deviceList.innerHTML = '';
-  let visibleCount = 0;
-
-  for (const device of sorted) {
-    const label = deviceLabel(device);
-    if (search && !label.toLowerCase().includes(search)) continue;
-    visibleCount++;
-
-    const li = document.createElement('li');
-    li.className = 'device-list__item';
-
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.checked = state.selectedIds.has(device.id);
-    checkbox.addEventListener('change', () => {
-      if (checkbox.checked) state.selectedIds.add(device.id);
-      else state.selectedIds.delete(device.id);
-      renderActiveView();
-    });
-
-    const labelSpan = document.createElement('span');
-    labelSpan.className = 'device-list__label';
-    labelSpan.textContent = label;
-    labelSpan.title = label;
-
-    const meta = document.createElement('span');
-    meta.className = 'device-list__meta';
-    meta.textContent = device.packetCount.toLocaleString('de-DE');
-
-    li.append(checkbox, labelSpan, meta);
-    el.deviceList.appendChild(li);
+  for (const device of selected) el.deviceList.appendChild(createDeviceListItem(device, true));
+  if (selected.length > 0 && rest.length > 0) {
+    const divider = document.createElement('li');
+    divider.className = 'device-list__divider';
+    el.deviceList.appendChild(divider);
   }
+  for (const device of rest) el.deviceList.appendChild(createDeviceListItem(device, false));
 
-  el.deviceCount.textContent = visibleCount.toLocaleString('de-DE');
+  el.deviceCount.textContent = filtered.length.toLocaleString('de-DE');
 }
 
 el.deviceSearch.addEventListener('input', () => {
