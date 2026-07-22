@@ -19,7 +19,7 @@ import { renderGraph, updateForces } from './graph-view.js';
 import { renderConnections } from './connections-view.js';
 import { renderTimeline } from './timeline-view.js';
 import { exportActiveViewAsImage } from './export-image.js';
-import { exportToExcel } from './export-excel.js';
+import { exportToExcel, exportSelectionToExcel } from './export-excel.js';
 
 const LARGE_SELECTION_THRESHOLD = 50;
 const MAX_CONNECTIONS_RENDER = 400;
@@ -41,6 +41,7 @@ const state = {
   forceDistance: 120,
   graphSimulation: null,
   activeSvg: null,
+  pinnedItems: [], // { id, type: 'pair'|'connection'|'device', data, deviceA, deviceB }
 };
 
 const el = {
@@ -92,7 +93,12 @@ const el = {
   exportPng: document.getElementById('export-png'),
   exportSvg: document.getElementById('export-svg'),
   exportXlsx: document.getElementById('export-xlsx'),
+  exportPinnedXlsx: document.getElementById('export-pinned-xlsx'),
   tooltip: document.getElementById('tooltip'),
+  pinnedPanel: document.getElementById('pinned-panel'),
+  pinnedList: document.getElementById('pinned-list'),
+  pinnedCount: document.getElementById('pinned-count'),
+  btnClearPinned: document.getElementById('btn-clear-pinned'),
 };
 
 let worker = null;
@@ -142,6 +148,8 @@ function onParseComplete(msg) {
   state.selectedIds = new Set(state.devices.map((d) => d.id));
   state.search = '';
   el.deviceSearch.value = '';
+  state.pinnedItems = [];
+  renderPinnedPanel();
 
   el.dropZone.hidden = true;
   el.workspace.hidden = false;
@@ -372,17 +380,14 @@ function getVisibleDevicesAndPairs() {
 /**
  * Per-connection (device pair + protocol + port) breakdown, filtered like
  * getVisibleDevicesAndPairs(). `order` picks the sort appropriate for each
- * view: 'packets' (connections view, heaviest first) or 'timeline' (grouped
- * by device pair, then chronologically within each pair - so the Gantt rows
- * for the same pair sit together instead of interleaved by volume).
+ * view: 'packets' (connections view, heaviest first) or 'timeline' (earliest
+ * start time first, so the Gantt chart reads top-to-bottom by when each
+ * connection began).
  */
 function getVisibleConnections(familyIds, order) {
   const filtered = computeVisibleConnections(state.connections, familyIds, state.activeGroups, state.hideMulticast);
   if (order === 'timeline') {
-    return filtered.sort((a, b) => {
-      const groupDiff = pairKey(a.a, a.b).localeCompare(pairKey(b.a, b.b));
-      return groupDiff !== 0 ? groupDiff : a.firstSeen - b.firstSeen;
-    });
+    return filtered.sort((a, b) => a.firstSeen - b.firstSeen);
   }
   return filtered.sort((a, b) => b.packets - a.packets);
 }
@@ -403,6 +408,7 @@ function renderActiveView() {
       metric: state.metric,
       onHover: (event, pair, deviceA, deviceB) => showPairTooltip(event, pair, deviceA, deviceB),
       onLeave: hideTooltip,
+      onClick: (event, pair, deviceA, deviceB) => { if (pair) pinPair(pair, deviceA, deviceB); },
     });
     state.graphSimulation = null;
   } else if (state.activeTab === 'graph') {
@@ -415,6 +421,8 @@ function renderActiveView() {
       onHoverEdge: (event, pair, deviceA, deviceB) => showPairTooltip(event, pair, deviceA, deviceB),
       onHoverNode: (event, device) => showDeviceTooltip(event, device),
       onLeave: hideTooltip,
+      onClickEdge: (event, pair, deviceA, deviceB) => pinPair(pair, deviceA, deviceB),
+      onClickNode: (event, device) => pinDevice(device),
     });
     state.activeSvg = svg;
     state.graphSimulation = simulation;
@@ -431,6 +439,7 @@ function renderActiveView() {
       connections: renderedConnections,
       onHover: (event, connection) => showConnectionTooltip(event, connection),
       onLeave: hideTooltip,
+      onClick: (event, connection) => pinConnection(connection),
     });
     state.graphSimulation = null;
   } else {
@@ -446,43 +455,73 @@ function renderActiveView() {
       deviceIndex: state.deviceIndex,
       onHover: (event, connection) => showConnectionTooltip(event, connection),
       onLeave: hideTooltip,
+      onClick: (event, connection) => pinConnection(connection),
     });
     state.graphSimulation = null;
   }
 }
 
+// --- Detail content (shared by hover tooltips and pinned cards) ------------------
+
+/**
+ * A pair aggregates traffic in both directions, so there's no single fixed
+ * "source port" / "destination port" - instead ports are grouped by which
+ * device uses them (see parser.worker.js), which stays meaningful regardless
+ * of which side happened to send a given packet.
+ */
+function pairDetailsHtml(pair, deviceA, deviceB) {
+  if (!pair) {
+    return `<div><strong>${deviceLabel(deviceA)}</strong> ↔ <strong>${deviceLabel(deviceB)}</strong></div><div>Keine Kommunikation</div>`;
+  }
+  const value = metricValue(pair, state.metric);
+  const portsA = pair.portsA.length ? pair.portsA.slice(0, 12).join(', ') : '–';
+  const portsB = pair.portsB.length ? pair.portsB.slice(0, 12).join(', ') : '–';
+  return `<div><strong>${deviceLabel(deviceA)}</strong> ↔ <strong>${deviceLabel(deviceB)}</strong></div>
+    <div>Protokolle: ${pair.protocols.join(', ') || '–'}</div>
+    <div>Ports bei ${deviceLabel(deviceA)}: ${portsA}</div>
+    <div>Ports bei ${deviceLabel(deviceB)}: ${portsB}</div>
+    <div>Pakete: ${pair.packets.toLocaleString('de-DE')} · Bytes: ${formatBytes(pair.bytes)}</div>
+    <div>Zeitraum: ${formatTimestamp(pair.firstSeen)} – ${formatTimestamp(pair.lastSeen)}</div>
+    <div>Metrik (${state.metric}): ${value.toLocaleString('de-DE')}</div>`;
+}
+
+function deviceDetailsHtml(device) {
+  return `<div><strong>${deviceLabel(device)}</strong></div>
+    <div>MAC: ${device.mac || '–'}</div>
+    <div>Pakete: ${device.packetCount.toLocaleString('de-DE')} · Bytes: ${formatBytes(device.byteCount)}</div>`;
+}
+
+/**
+ * Unlike a pair, a single connection represents one direction-stable flow
+ * (grouped by service port, see servicePortOf() in parser.worker.js), so a
+ * literal source/destination port pair - taken from the packet that first
+ * opened this connection entry - is meaningful here.
+ */
+function connectionDetailsHtml(connection) {
+  const deviceA = state.deviceIndex.get(connection.a);
+  const deviceB = state.deviceIndex.get(connection.b);
+  const ports = connection.srcPort != null
+    ? `<div>Quell-Port: ${connection.srcPort} · Ziel-Port: ${connection.dstPort}</div>`
+    : '';
+  return `<div><strong>${deviceLabel(deviceA)}</strong> ↔ <strong>${deviceLabel(deviceB)}</strong></div>
+    <div>Protokoll: ${connection.protocol || '–'}</div>
+    ${ports}
+    <div>Pakete: ${connection.packets.toLocaleString('de-DE')} · Bytes: ${formatBytes(connection.bytes)}</div>
+    <div>Zeitraum: ${formatTimestamp(connection.firstSeen)} – ${formatTimestamp(connection.lastSeen)}</div>`;
+}
+
 // --- Tooltip ---------------------------------------------------------------------
 
 function showPairTooltip(event, pair, deviceA, deviceB) {
-  const value = pair ? metricValue(pair, state.metric) : 0;
-  const html = pair
-    ? `<div><strong>${deviceLabel(deviceA)}</strong> ↔ <strong>${deviceLabel(deviceB)}</strong></div>
-       <div>Protokolle: ${pair.protocols.join(', ') || '–'}</div>
-       <div>Ports: ${pair.ports.slice(0, 12).join(', ') || '–'}</div>
-       <div>Pakete: ${pair.packets.toLocaleString('de-DE')} · Bytes: ${formatBytes(pair.bytes)}</div>
-       <div>Zeitraum: ${formatTimestamp(pair.firstSeen)} – ${formatTimestamp(pair.lastSeen)}</div>
-       <div>Metrik (${state.metric}): ${value.toLocaleString('de-DE')}</div>`
-    : `<div><strong>${deviceLabel(deviceA)}</strong> ↔ <strong>${deviceLabel(deviceB)}</strong></div><div>Keine Kommunikation</div>`;
-  showTooltip(event, html);
+  showTooltip(event, pairDetailsHtml(pair, deviceA, deviceB));
 }
 
 function showDeviceTooltip(event, device) {
-  const html = `<div><strong>${deviceLabel(device)}</strong></div>
-    <div>MAC: ${device.mac || '–'}</div>
-    <div>Pakete: ${device.packetCount.toLocaleString('de-DE')} · Bytes: ${formatBytes(device.byteCount)}</div>`;
-  showTooltip(event, html);
+  showTooltip(event, deviceDetailsHtml(device));
 }
 
 function showConnectionTooltip(event, connection) {
-  const deviceA = state.deviceIndex.get(connection.a);
-  const deviceB = state.deviceIndex.get(connection.b);
-  const port = connection.port != null ? `<div>Port: ${connection.port}</div>` : '';
-  const html = `<div><strong>${deviceLabel(deviceA)}</strong> ↔ <strong>${deviceLabel(deviceB)}</strong></div>
-    <div>Protokoll: ${connection.protocol || '–'}</div>
-    ${port}
-    <div>Pakete: ${connection.packets.toLocaleString('de-DE')} · Bytes: ${formatBytes(connection.bytes)}</div>
-    <div>Zeitraum: ${formatTimestamp(connection.firstSeen)} – ${formatTimestamp(connection.lastSeen)}</div>`;
-  showTooltip(event, html);
+  showTooltip(event, connectionDetailsHtml(connection));
 }
 
 function showTooltip(event, html) {
@@ -510,6 +549,81 @@ document.addEventListener('mousemove', (event) => {
   if (!el.tooltip.hidden) positionTooltip(event);
 });
 
+// --- Pinned selection --------------------------------------------------------------
+//
+// Clicking a cell/edge/arrow/bar pins its details as a persistent card in the
+// right-hand panel, so comparing e.g. several connections from one client to
+// multiple servers doesn't require re-hovering each one. Cards stay until
+// explicitly closed via their "×" button or "Alle entfernen".
+
+function connectionId(connection) {
+  return `connection:${pairKey(connection.a, connection.b)}|${connection.protocol}|${connection.port}`;
+}
+
+function pinItem(item) {
+  if (state.pinnedItems.some((existing) => existing.id === item.id)) return;
+  state.pinnedItems.push(item);
+  renderPinnedPanel();
+}
+
+function pinPair(pair, deviceA, deviceB) {
+  pinItem({ id: `pair:${pairKey(pair.a, pair.b)}`, type: 'pair', data: pair, deviceA, deviceB });
+}
+
+function pinConnection(connection) {
+  pinItem({ id: connectionId(connection), type: 'connection', data: connection });
+}
+
+function pinDevice(device) {
+  pinItem({ id: `device:${device.id}`, type: 'device', data: device });
+}
+
+function unpinItem(id) {
+  state.pinnedItems = state.pinnedItems.filter((item) => item.id !== id);
+  renderPinnedPanel();
+}
+
+const PINNED_TYPE_LABEL = { pair: 'Paar', connection: 'Verbindung', device: 'Gerät' };
+
+function renderPinnedPanel() {
+  el.pinnedPanel.hidden = state.pinnedItems.length === 0;
+  el.pinnedCount.textContent = state.pinnedItems.length.toLocaleString('de-DE');
+  el.exportPinnedXlsx.disabled = state.pinnedItems.length === 0;
+
+  el.pinnedList.innerHTML = '';
+  for (const item of state.pinnedItems) {
+    const card = document.createElement('div');
+    card.className = 'pinned-card';
+
+    const header = document.createElement('div');
+    header.className = 'pinned-card__header';
+    const type = document.createElement('span');
+    type.className = 'pinned-card__type';
+    type.textContent = PINNED_TYPE_LABEL[item.type];
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'pinned-card__close';
+    closeBtn.setAttribute('aria-label', 'Kachel schließen');
+    closeBtn.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true" style="font-size:16px">close</span>';
+    closeBtn.addEventListener('click', () => unpinItem(item.id));
+    header.append(type, closeBtn);
+
+    const body = document.createElement('div');
+    body.className = 'pinned-card__body';
+    if (item.type === 'pair') body.innerHTML = pairDetailsHtml(item.data, item.deviceA, item.deviceB);
+    else if (item.type === 'connection') body.innerHTML = connectionDetailsHtml(item.data);
+    else body.innerHTML = deviceDetailsHtml(item.data);
+
+    card.append(header, body);
+    el.pinnedList.appendChild(card);
+  }
+}
+
+el.btnClearPinned.addEventListener('click', () => {
+  state.pinnedItems = [];
+  renderPinnedPanel();
+});
+
 // --- Export ------------------------------------------------------------------------
 
 el.btnExport.addEventListener('click', (e) => {
@@ -530,4 +644,9 @@ el.exportXlsx.addEventListener('click', () => {
   el.exportMenu.hidden = true;
   const { devices: selectedDevices, pairs: visiblePairs } = getVisibleDevicesAndPairs();
   exportToExcel({ devices: selectedDevices, pairs: visiblePairs, metric: state.metric, filenameBase: `packetatlas-kommunikationsmatrix-${state.addressFamily}` });
+});
+el.exportPinnedXlsx.addEventListener('click', () => {
+  el.exportMenu.hidden = true;
+  if (state.pinnedItems.length === 0) return;
+  exportSelectionToExcel({ items: state.pinnedItems, deviceIndex: state.deviceIndex, filenameBase: 'packetatlas-angeheftete-auswahl' });
 });

@@ -78,7 +78,12 @@ class Aggregator {
         packets: 0,
         bytes: 0,
         protocols: new Set(),
-        ports: new Set(),
+        // Ports are tracked per device (not per src/dst direction): a pair
+        // aggregates traffic both ways, so "source port" flips depending on
+        // which side happens to be sending a given packet, but "which ports
+        // does device X use" is stable regardless of direction.
+        portsA: new Set(),
+        portsB: new Set(),
         firstSeen: decoded.timestamp,
         lastSeen: decoded.timestamp,
         multicastOrBroadcast: false,
@@ -88,8 +93,9 @@ class Aggregator {
     pair.packets++;
     pair.bytes += decoded.frameLength;
     if (decoded.protocol) pair.protocols.add(decoded.protocol);
-    if (decoded.srcPort != null) pair.ports.add(decoded.srcPort);
-    if (decoded.dstPort != null) pair.ports.add(decoded.dstPort);
+    const [srcPortSet, dstPortSet] = srcId === pair.a ? [pair.portsA, pair.portsB] : [pair.portsB, pair.portsA];
+    if (decoded.srcPort != null) srcPortSet.add(decoded.srcPort);
+    if (decoded.dstPort != null) dstPortSet.add(decoded.dstPort);
     if (decoded.timestamp < pair.firstSeen) pair.firstSeen = decoded.timestamp;
     if (decoded.timestamp > pair.lastSeen) pair.lastSeen = decoded.timestamp;
     if (decoded.multicastOrBroadcast) pair.multicastOrBroadcast = true;
@@ -103,6 +109,11 @@ class Aggregator {
         b: dstId,
         protocol: decoded.protocol,
         port: servicePort,
+        // Source/destination port of the packet that first opened this
+        // connection entry - representative of the flow's direction, since
+        // service-port grouping otherwise merges both directions together.
+        srcPort: decoded.srcPort,
+        dstPort: decoded.dstPort,
         packets: 0,
         bytes: 0,
         firstSeen: decoded.timestamp,
@@ -135,7 +146,8 @@ class Aggregator {
       pairs: Array.from(this.pairs.values()).map((p) => ({
         ...p,
         protocols: Array.from(p.protocols),
-        ports: Array.from(p.ports),
+        portsA: Array.from(p.portsA),
+        portsB: Array.from(p.portsB),
       })),
       connections: Array.from(this.connections.values()),
     };

@@ -5,6 +5,18 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [0.8.0] – 2026-07-16
+
+### Added
+
+- Klick auf eine Matrixzelle, Graph-Kante/-Knoten, einen Verbindungen-Pfeil oder einen Zeitleiste-Balken heftet die Tooltip-Informationen dauerhaft als schließbare Kachel im neuen rechten Panel an, über alle vier Ansichten hinweg. Nützlich, um z. B. mehrere Verbindungen eines Clients zu verschiedenen Servern gleichzeitig zu vergleichen.
+- Neuer Export-Menüpunkt „Nur angeheftete Auswahl (.xlsx)" exportiert ausschließlich die aktuell angehefteten Kacheln als eigenes Sheet, unabhängig von der aktuellen Tab-/Filteransicht.
+
+### Changed
+
+- Zeitleiste: Zeilen sind jetzt aufsteigend nach Startzeitpunkt sortiert (früheste Verbindung oben, späteste unten) statt nach Geräte-Paar gruppiert.
+- Tooltips/Kacheln zeigen Ports nicht mehr als vermischte Liste, sondern eindeutig zugeordnet: bei Geräte-Paaren „Ports bei ⟨Gerät A⟩" / „Ports bei ⟨Gerät B⟩" (da ein Paar beide Richtungen aggregiert), bei einzelnen Verbindungen „Quell-Port" / „Ziel-Port" (vom ersten Paket der jeweiligen Verbindung).
+
 ## [0.7.0] – 2026-07-16
 
 ### Added
