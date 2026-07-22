@@ -30,7 +30,7 @@ const timeTickFormat = (date) => date.toLocaleTimeString('de-DE', { hour: '2-dig
  * by-device-pair) connections into `container`. Returns the root <svg>
  * element (used for image export).
  */
-export function renderTimeline(container, { connections, deviceIndex, onHover, onLeave }) {
+export function renderTimeline(container, { connections, deviceIndex, onHover, onLeave, onClick }) {
   const width = container.clientWidth || 800;
   const plotWidth = Math.max(100, width - LABEL_WIDTH);
   const plotHeight = Math.max(1, connections.length) * ROW_HEIGHT;
@@ -130,6 +130,7 @@ export function renderTimeline(container, { connections, deviceIndex, onHover, o
     rect.classList.add('timeline-bar');
     rect.addEventListener('mousemove', (e) => onHover(e, connection));
     rect.addEventListener('mouseleave', onLeave);
+    rect.addEventListener('click', (e) => onClick(e, connection));
     barGroup.appendChild(rect);
     return { rect, connection };
   });

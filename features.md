@@ -38,11 +38,12 @@ Rein clientseitige Web-App, die Wireshark-Capture-Dateien (`.pcap`/`.pcapng`) im
 - [x] Ansicht B – Force-Directed-Graph (Kantenstärke = Kommunikationsvolumen)
 - [x] Beide Ansichten synchron auf derselben gefilterten Geräte-Selektion
 - [x] Umschaltbare Metrik (Pakete vs. Bytes) für beide Ansichten
-- [x] Tooltip bei Hover (Protokolle, Ports, Pakete/Bytes, Zeitraum)
+- [x] Tooltip bei Hover (Protokolle, Ports eindeutig nach Gerät/Quelle-Ziel zugeordnet, Pakete/Bytes, Zeitraum)
 - [x] Zoom/Pan und einstellbare Kräfte-Parameter für den Graphen (>20–30 Geräte)
 - [x] Getrennte Matrix/Graph je Adressfamilie (IPv4 / IPv6 / Sonstige) mit Umschalter, Geräte aufsteigend nach Adresse sortiert (nachträglich ergänzt, über ursprünglichen Anforderungsumfang hinaus)
 - [x] Ansicht C – Verbindungen (korrelierte Ansicht: eine Lebenslinie pro Gerät, ein Pfeil pro Kombination aus Geräte-Paar/Protokoll/Port mit Paket-/Byte-Summe, sortiert nach Paketanzahl) (nachträglich ergänzt, über ursprünglichen Anforderungsumfang hinaus)
-- [x] Ansicht D – Zeitleiste (Gantt-Diagramm: ein Balken pro Verbindung von erstem bis letztem Zeitpunkt, gruppiert nach Geräte-Paar, zoombare/verschiebbare Zeitachse) (nachträglich ergänzt, über ursprünglichen Anforderungsumfang hinaus)
+- [x] Ansicht D – Zeitleiste (Gantt-Diagramm: ein Balken pro Verbindung von erstem bis letztem Zeitpunkt, aufsteigend nach Startzeitpunkt sortiert, zoombare/verschiebbare Zeitachse) (nachträglich ergänzt, über ursprünglichen Anforderungsumfang hinaus)
+- [x] Klick auf Zelle/Kante/Knoten/Pfeil/Balken heftet die Detail-Informationen dauerhaft als schließbare Kachel im rechten Panel an, über alle vier Ansichten hinweg (nachträglich ergänzt, über ursprünglichen Anforderungsumfang hinaus)
 
 ## 5. Filterung / Teilnehmer-Selektion
 
@@ -63,6 +64,7 @@ Rein clientseitige Web-App, die Wireshark-Capture-Dateien (`.pcap`/`.pcapng`) im
 
 - [x] `.xlsx` mit Sheet „Matrix" und Sheet „Rohdaten"
 - [x] Export berücksichtigt aktuelle Selektion/Filterung
+- [x] Zusätzlicher Export „Nur angeheftete Auswahl": exportiert ausschließlich die aktuell angehefteten Kacheln als eigenes Sheet, unabhängig von Tab/Filter (nachträglich ergänzt, über ursprünglichen Anforderungsumfang hinaus)
 
 ## Backlog (nicht Bestandteil dieser Version)
 

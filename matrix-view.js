@@ -34,7 +34,7 @@ function colorForValue(value, maxValue) {
  * devices and pairs into `container`, replacing its previous content.
  * Returns the root <svg> element (used for image export).
  */
-export function renderMatrix(container, { devices, pairs, metric, onHover, onLeave }) {
+export function renderMatrix(container, { devices, pairs, metric, onHover, onLeave, onClick }) {
   const pairIndex = new Map();
   for (const pair of pairs) pairIndex.set(pairKey(pair.a, pair.b), pair);
 
@@ -72,6 +72,7 @@ export function renderMatrix(container, { devices, pairs, metric, onHover, onLea
       rect.classList.add('matrix-cell');
       rect.addEventListener('mousemove', (e) => onHover(e, pair, rowDevice, colDevice));
       rect.addEventListener('mouseleave', onLeave);
+      rect.addEventListener('click', (e) => onClick(e, pair, rowDevice, colDevice));
       svg.appendChild(rect);
     });
   });

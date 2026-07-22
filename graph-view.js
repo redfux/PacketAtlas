@@ -18,7 +18,7 @@ function nodeRadius(device) {
  * force parameters via updateForces() without a full re-render.
  */
 export function renderGraph(container, {
-  devices, pairs, metric, forceCharge, forceDistance, onHoverEdge, onHoverNode, onLeave,
+  devices, pairs, metric, forceCharge, forceDistance, onHoverEdge, onHoverNode, onLeave, onClickEdge, onClickNode,
 }) {
   container.innerHTML = '';
   const width = container.clientWidth || 800;
@@ -50,6 +50,7 @@ export function renderGraph(container, {
     line.setAttribute('stroke-width', edgeWidth(link.pair));
     line.addEventListener('mousemove', (e) => onHoverEdge(e, link.pair, nodeById.get(link.pair.a), nodeById.get(link.pair.b)));
     line.addEventListener('mouseleave', onLeave);
+    line.addEventListener('click', (e) => onClickEdge(e, link.pair, nodeById.get(link.pair.a), nodeById.get(link.pair.b)));
     edgeLayer.appendChild(line);
     return line;
   });
@@ -67,6 +68,7 @@ export function renderGraph(container, {
     g.append(circle, label);
     g.addEventListener('mousemove', (e) => onHoverNode(e, node));
     g.addEventListener('mouseleave', onLeave);
+    g.addEventListener('click', (e) => onClickNode(e, node));
     nodeLayer.appendChild(g);
     return g;
   });

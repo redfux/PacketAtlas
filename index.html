@@ -126,6 +126,7 @@
               <button type="button" id="export-png" class="menu__item">Als PNG …</button>
               <button type="button" id="export-svg" class="menu__item">Als SVG …</button>
               <button type="button" id="export-xlsx" class="menu__item">Als Excel (.xlsx) …</button>
+              <button type="button" id="export-pinned-xlsx" class="menu__item" disabled>Nur angeheftete Auswahl (.xlsx) …</button>
             </div>
           </div>
         </div>
@@ -168,13 +169,21 @@
           <div id="timeline-container" class="timeline-container"></div>
         </div>
       </section>
+
+      <aside id="pinned-panel" class="pinned-panel" aria-label="Angeheftete Auswahl" hidden>
+        <div class="pinned-panel__header">
+          <span class="field-label">Angeheftet (<span id="pinned-count">0</span>)</span>
+          <button type="button" id="btn-clear-pinned" class="btn btn--text">Alle entfernen</button>
+        </div>
+        <div id="pinned-list" class="pinned-list"></div>
+      </aside>
     </div>
   </main>
 
   <div id="tooltip" class="tooltip" hidden role="tooltip"></div>
 
   <footer class="app-footer">
-    <span>PacketAtlas v0.7.0 — thought up by human, created by ai</span>
+    <span>PacketAtlas v0.8.0 — thought up by human, created by ai</span>
   </footer>
 
   <script src="vendor/d3.min.js"></script>

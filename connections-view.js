@@ -27,7 +27,7 @@ function connectionLabel(connection) {
  * heaviest first) into `container`. Returns the root <svg> element (used for
  * image export).
  */
-export function renderConnections(container, { devices, connections, onHover, onLeave }) {
+export function renderConnections(container, { devices, connections, onHover, onLeave, onClick }) {
   const laneX = new Map(devices.map((d, i) => [d.id, MARGIN_X + i * LANE_SPACING]));
 
   const diagramWidth = MARGIN_X * 2 + Math.max(0, devices.length - 1) * LANE_SPACING;
@@ -135,6 +135,7 @@ export function renderConnections(container, { devices, connections, onHover, on
     hitArea.classList.add('sequence-hit-area');
     hitArea.addEventListener('mousemove', (e) => onHover(e, connection));
     hitArea.addEventListener('mouseleave', onLeave);
+    hitArea.addEventListener('click', (e) => onClick(e, connection));
     group.appendChild(hitArea);
 
     zoomLayer.appendChild(group);
