@@ -15,7 +15,7 @@
 // URL got - without a matching query string here, these could still be
 // served stale after an update even though parser.worker.js itself was
 // freshly fetched.
-const WORKER_VERSION = '0.12.1';
+const WORKER_VERSION = '0.13.0';
 importScripts(
   `pcap-parser.js?v=${WORKER_VERSION}`,
   `pcapng-parser.js?v=${WORKER_VERSION}`,

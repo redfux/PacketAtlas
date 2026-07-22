@@ -48,15 +48,10 @@
     </div>
 
     <div id="workspace" class="workspace" hidden>
-      <aside class="sidebar" aria-label="Geräte-Filter">
+      <aside class="sidebar" aria-label="Geräte-/Port-Filter">
         <div class="sidebar__section">
           <label class="field-label" for="device-search">Suche</label>
           <input type="search" id="device-search" class="text-input" placeholder="IP-Teilstring …" autocomplete="off">
-        </div>
-
-        <div class="sidebar__section sidebar__section--row">
-          <button type="button" id="btn-select-all" class="btn btn--text">Alle auswählen</button>
-          <button type="button" id="btn-select-none" class="btn btn--text">Alle abwählen</button>
         </div>
 
         <div class="sidebar__section">
@@ -69,17 +64,34 @@
           </div>
         </div>
 
-        <div class="sidebar__section">
-          <label class="switch">
-            <input type="checkbox" id="toggle-hide-broadcast">
-            <span class="switch__track" aria-hidden="true"></span>
-            Multicast/Broadcast ausblenden
-          </label>
+        <div class="sidebar__section sidebar-subtabs" role="tablist" aria-label="Filterliste">
+          <button type="button" class="sidebar-subtab is-active" id="subtab-devices" role="tab" aria-selected="true">Geräte</button>
+          <button type="button" class="sidebar-subtab" id="subtab-ports" role="tab" aria-selected="false">Ports</button>
         </div>
 
-        <div class="sidebar__section sidebar__section--grow">
+        <div id="device-filter-extras">
+          <div class="sidebar__section sidebar__section--row">
+            <button type="button" id="btn-select-all" class="btn btn--text">Alle auswählen</button>
+            <button type="button" id="btn-select-none" class="btn btn--text">Alle abwählen</button>
+          </div>
+
+          <div class="sidebar__section">
+            <label class="switch">
+              <input type="checkbox" id="toggle-hide-broadcast">
+              <span class="switch__track" aria-hidden="true"></span>
+              Multicast/Broadcast ausblenden
+            </label>
+          </div>
+        </div>
+
+        <div class="sidebar__section sidebar__section--grow" id="device-list-section">
           <span class="field-label">Geräte (<span id="device-count">0</span>)</span>
           <ul id="device-list" class="device-list"></ul>
+        </div>
+
+        <div class="sidebar__section sidebar__section--grow" id="port-list-section" hidden>
+          <span class="field-label">Ports (<span id="port-count">0</span>)</span>
+          <ul id="port-list" class="device-list"></ul>
         </div>
       </aside>
 
@@ -187,7 +199,7 @@
   <div id="tooltip" class="tooltip" hidden role="tooltip"></div>
 
   <footer class="app-footer">
-    <span>PacketAtlas v0.12.1 — thought up by human, created by ai</span>
+    <span>PacketAtlas v0.13.0 — thought up by human, created by ai</span>
   </footer>
 
   <script src="vendor/d3.min.js"></script>
