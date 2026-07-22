@@ -5,6 +5,16 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [0.12.0] – 2026-07-22
+
+### Changed
+
+- Verbindungen-Ansicht: Pfeil-Beschriftung zeigt jetzt nur noch den Destination-Port der jeweiligen Richtung statt Source→Destination – welche beiden Ports beteiligt sind, ist durch die beiden gruppierten Pfeile ohnehin ersichtlich, der volle Source-/Destination-Port-Umfang bleibt im Hover-Tooltip verfügbar.
+
+### Added
+
+- Verbindungen-Ansicht: Bei ICMP/ICMPv6 zeigt die Beschriftung jetzt den tatsächlichen Nachrichtentyp (z. B. „ICMP (Echo Request)" / „ICMP (Echo Reply)") statt nur „ICMP" – dafür trackt der Worker pro Verbindungsrichtung die beobachteten ICMP-Typen zusätzlich zu Paketen/Bytes.
+
 ## [0.11.1] – 2026-07-22
 
 ### Fixed
