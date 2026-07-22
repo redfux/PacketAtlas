@@ -80,6 +80,61 @@ export function compareDevicesByAddress(a, b) {
   return compareNumericArrays(keyFn(a.ip), keyFn(b.ip));
 }
 
+// Common IANA-registered service ports, purely for a human-readable hint in
+// the port filter list (e.g. "22 (SSH)") - not exhaustive, unknown ports
+// simply show without a parenthetical instead of being hidden or guessed at.
+export const WELL_KNOWN_PORTS = {
+  20: 'FTP-Data', 21: 'FTP', 22: 'SSH', 23: 'Telnet', 25: 'SMTP', 53: 'DNS',
+  67: 'DHCP-Server', 68: 'DHCP-Client', 69: 'TFTP', 80: 'HTTP', 110: 'POP3',
+  111: 'RPCbind', 119: 'NNTP', 123: 'NTP', 137: 'NetBIOS-NS', 138: 'NetBIOS-DGM',
+  139: 'NetBIOS-SSN', 143: 'IMAP', 161: 'SNMP', 162: 'SNMP-Trap', 179: 'BGP',
+  194: 'IRC', 389: 'LDAP', 443: 'HTTPS', 445: 'SMB', 465: 'SMTPS', 514: 'Syslog',
+  515: 'LPD', 587: 'SMTP-Submission', 631: 'IPP', 636: 'LDAPS', 993: 'IMAPS',
+  995: 'POP3S', 1194: 'OpenVPN', 1433: 'MSSQL', 1521: 'Oracle-DB', 1723: 'PPTP',
+  1883: 'MQTT', 1900: 'SSDP', 2049: 'NFS', 3128: 'HTTP-Proxy', 3306: 'MySQL',
+  3389: 'RDP', 5060: 'SIP', 5061: 'SIP-TLS', 5222: 'XMPP', 5353: 'mDNS',
+  5432: 'PostgreSQL', 5683: 'CoAP', 5900: 'VNC', 6379: 'Redis', 6667: 'IRC',
+  8080: 'HTTP-Alt', 8443: 'HTTPS-Alt', 8883: 'MQTT(S)', 9200: 'Elasticsearch',
+  27017: 'MongoDB',
+};
+
+export function wellKnownPortName(port) {
+  return WELL_KNOWN_PORTS[port] || null;
+}
+
+/** "22 (SSH)" if the port is a recognized well-known service, otherwise just "22". */
+export function portListLabel(port) {
+  const name = wellKnownPortName(port);
+  return name ? `${port} (${name})` : String(port);
+}
+
+/**
+ * Ports actually used in the capture (grouped by TCP/UDP, ICMP/ARP have no
+ * ports so are never included), one entry per distinct (protocol, port)
+ * combination, each carrying every device involved in a connection over it -
+ * used to drive the sidebar's port filter list (see app.js), where selecting
+ * a port selects all of its participating devices in one step.
+ */
+export function computePortEntries(connections) {
+  const byKey = new Map();
+  for (const connection of connections) {
+    if (connection.port == null) continue;
+    const group = protocolGroupOf(connection.protocol);
+    if (group !== 'TCP' && group !== 'UDP') continue;
+    const key = `${group}|${connection.port}`;
+    let entry = byKey.get(key);
+    if (!entry) {
+      entry = { port: connection.port, protocolGroup: group, deviceIds: new Set(), packets: 0, bytes: 0 };
+      byKey.set(key, entry);
+    }
+    entry.deviceIds.add(connection.a);
+    entry.deviceIds.add(connection.b);
+    entry.packets += connection.packets;
+    entry.bytes += connection.bytes;
+  }
+  return Array.from(byKey.values()).sort((a, b) => a.port - b.port || a.protocolGroup.localeCompare(b.protocolGroup));
+}
+
 export function protocolGroupOf(protocol) {
   for (const [group, members] of Object.entries(PROTOCOL_GROUPS)) {
     if (members.includes(protocol)) return group;

@@ -5,6 +5,7 @@ import {
   PROTOCOL_GROUPS,
   addressFamilyOf,
   compareDevicesByAddress,
+  computePortEntries,
   computeVisibleConnections,
   computeVisiblePairs,
   deviceLabel,
@@ -12,6 +13,7 @@ import {
   formatTimestamp,
   metricValue,
   pairKey,
+  portListLabel,
   relatedDeviceIds,
 } from './data-model.js';
 import { renderMatrix } from './matrix-view.js';
@@ -31,7 +33,7 @@ const MAX_TIMELINE_RENDER = 300;
 // browser. Appending the version as a query string changes the request URL
 // whenever the app updates, forcing a fresh fetch instead of silently
 // running old worker code after an update.
-const APP_VERSION = '0.12.1';
+const APP_VERSION = '0.13.0';
 
 const state = {
   devices: [],
@@ -42,6 +44,7 @@ const state = {
   search: '',
   activeGroups: new Set(Object.keys(PROTOCOL_GROUPS)),
   hideMulticast: false,
+  sidebarTab: 'devices', // 'devices' | 'ports'
   activeTab: 'matrix',
   metric: 'packets',
   addressFamily: 'ipv4',
@@ -66,10 +69,17 @@ const el = {
   deviceSearch: document.getElementById('device-search'),
   deviceList: document.getElementById('device-list'),
   deviceCount: document.getElementById('device-count'),
+  deviceListSection: document.getElementById('device-list-section'),
+  deviceFilterExtras: document.getElementById('device-filter-extras'),
   btnSelectAll: document.getElementById('btn-select-all'),
   btnSelectNone: document.getElementById('btn-select-none'),
   protocolFilters: document.getElementById('protocol-filters'),
   toggleHideBroadcast: document.getElementById('toggle-hide-broadcast'),
+  subtabDevices: document.getElementById('subtab-devices'),
+  subtabPorts: document.getElementById('subtab-ports'),
+  portListSection: document.getElementById('port-list-section'),
+  portList: document.getElementById('port-list'),
+  portCount: document.getElementById('port-count'),
   tabMatrix: document.getElementById('tab-matrix'),
   tabGraph: document.getElementById('tab-graph'),
   tabConnections: document.getElementById('tab-connections'),
@@ -163,7 +173,9 @@ function onParseComplete(msg) {
   el.workspace.hidden = false;
 
   setupAddressFamilyToggle();
+  setSidebarTab('devices');
   renderDeviceList();
+  renderPortList();
   renderActiveView();
 }
 
@@ -242,6 +254,7 @@ function createDeviceListItem(device, isSelected) {
       state.selectedIds.delete(device.id);
     }
     renderDeviceList();
+    renderPortList();
     renderActiveView();
   });
 
@@ -276,19 +289,105 @@ function renderDeviceList() {
   el.deviceCount.textContent = filtered.length.toLocaleString('de-DE');
 }
 
+// --- Port list / filtering ----------------------------------------------------
+//
+// A second sidebar tab listing every (protocol, service port) combination
+// actually used in the capture (see computePortEntries() in data-model.js),
+// so e.g. all SSH traffic can be shown with one click instead of having to
+// know and manually select every involved IP first. Checking a port selects
+// every device that has at least one connection over it, on top of whatever
+// devices are already selected; unchecking removes exactly those devices
+// again. Reuses the same search field and TCP/UDP protocol chips as the
+// device list rather than introducing separate controls.
+
+function createPortListItem(entry, isSelected) {
+  const li = document.createElement('li');
+  li.className = isSelected ? 'device-list__item device-list__item--selected' : 'device-list__item';
+
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.checked = isSelected;
+  checkbox.addEventListener('change', () => {
+    if (checkbox.checked) {
+      for (const id of entry.deviceIds) state.selectedIds.add(id);
+    } else {
+      for (const id of entry.deviceIds) state.selectedIds.delete(id);
+    }
+    renderDeviceList();
+    renderPortList();
+    renderActiveView();
+  });
+
+  const fullLabel = `${portListLabel(entry.port)} · ${entry.protocolGroup}`;
+  const labelSpan = document.createElement('span');
+  labelSpan.className = 'device-list__label';
+  labelSpan.textContent = fullLabel;
+  labelSpan.title = fullLabel;
+
+  const meta = document.createElement('span');
+  meta.className = 'device-list__meta';
+  meta.textContent = entry.packets.toLocaleString('de-DE');
+
+  li.append(checkbox, labelSpan, meta);
+  return li;
+}
+
+function isPortEntryFullySelected(entry) {
+  return entry.deviceIds.size > 0 && [...entry.deviceIds].every((id) => state.selectedIds.has(id));
+}
+
+function renderPortList() {
+  const search = state.search.toLowerCase();
+  const entries = computePortEntries(state.connections)
+    .filter((entry) => state.activeGroups.has(entry.protocolGroup))
+    .filter((entry) => !search || portListLabel(entry.port).toLowerCase().includes(search));
+  const selected = entries.filter(isPortEntryFullySelected);
+  const rest = entries.filter((entry) => !isPortEntryFullySelected(entry));
+
+  el.portList.innerHTML = '';
+  for (const entry of selected) el.portList.appendChild(createPortListItem(entry, true));
+  if (selected.length > 0 && rest.length > 0) {
+    const divider = document.createElement('li');
+    divider.className = 'device-list__divider';
+    el.portList.appendChild(divider);
+  }
+  for (const entry of rest) el.portList.appendChild(createPortListItem(entry, false));
+
+  el.portCount.textContent = entries.length.toLocaleString('de-DE');
+}
+
+function setSidebarTab(tab) {
+  state.sidebarTab = tab;
+  const isPorts = tab === 'ports';
+  el.subtabDevices.classList.toggle('is-active', !isPorts);
+  el.subtabDevices.setAttribute('aria-selected', String(!isPorts));
+  el.subtabPorts.classList.toggle('is-active', isPorts);
+  el.subtabPorts.setAttribute('aria-selected', String(isPorts));
+  el.deviceListSection.hidden = isPorts;
+  el.deviceFilterExtras.hidden = isPorts;
+  el.portListSection.hidden = !isPorts;
+  el.deviceSearch.placeholder = isPorts ? 'Port oder Dienst …' : 'IP-Teilstring …';
+}
+
+el.subtabDevices.addEventListener('click', () => setSidebarTab('devices'));
+el.subtabPorts.addEventListener('click', () => setSidebarTab('ports'));
+
 el.deviceSearch.addEventListener('input', () => {
   state.search = el.deviceSearch.value;
   renderDeviceList();
+  renderPortList();
 });
 
 el.btnSelectAll.addEventListener('click', () => {
   state.selectedIds = new Set(state.devices.map((d) => d.id));
   renderDeviceList();
+  renderPortList();
   renderActiveView();
 });
 el.btnSelectNone.addEventListener('click', () => {
   state.selectedIds.clear();
   renderDeviceList();
+  renderPortList();
   renderActiveView();
 });
 
@@ -299,6 +398,7 @@ el.protocolFilters.addEventListener('click', (e) => {
   if (state.activeGroups.has(group)) state.activeGroups.delete(group);
   else state.activeGroups.add(group);
   chip.classList.toggle('is-active');
+  renderPortList();
   renderActiveView();
 });
 

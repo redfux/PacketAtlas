@@ -54,6 +54,7 @@ Rein clientseitige Web-App, die Wireshark-Capture-Dateien (`.pcap`/`.pcapng`) im
 - [x] Filter nach Protokoll (TCP/UDP/ICMP/Sonstige)
 - [x] Geräteliste aufsteigend nach Adresse sortiert, ausgewählte Geräte dauerhaft oben und optisch abgesetzt (nachträglich ergänzt)
 - [x] Bei leerer Auswahl wählt ein einzelnes Gerät automatisch auch alle direkten Kommunikationspartner mit aus; einzeln wieder abwählbar (nachträglich ergänzt)
+- [x] Zweiter Seitenpanel-Reiter „Ports": listet alle im Capture genutzten TCP-/UDP-Ports numerisch aufsteigend, mit bekanntem Dienstnamen in Klammern (z. B. „22 (SSH)"), gefiltert über dieselbe Suche/Protokoll-Chips wie die Geräteliste; ein Häkchen wählt automatisch alle Geräte mit Verbindungen über diesen Port aus (nachträglich ergänzt, über ursprünglichen Anforderungsumfang hinaus)
 
 ## 6. Export – Bild
 

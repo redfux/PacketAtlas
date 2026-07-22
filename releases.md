@@ -5,6 +5,12 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [0.13.0] – 2026-07-22
+
+### Added
+
+- Neuer zweiter Seitenpanel-Reiter „Ports" neben „Geräte": listet jeden im Capture genutzten TCP-/UDP-Port numerisch aufsteigend sortiert, mit bekanntem Dienstnamen in Klammern sofern erkannt (z. B. „22 (SSH)", „443 (HTTPS)"). Nutzt dieselbe Suche und dieselben TCP/UDP-Protokoll-Chips wie die Geräteliste. Ein Häkchen bei einem Port wählt automatisch alle Geräte aus, die mindestens eine Verbindung darüber haben – z. B. zeigt ein Klick auf „22 (SSH)" mit einem Schritt die komplette SSH-Kommunikation in Matrix, Graph, Verbindungen und Zeitleiste.
+
 ## [0.12.1] – 2026-07-22
 
 ### Fixed
