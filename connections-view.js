@@ -6,7 +6,7 @@
 // provides d3-zoom for panning/zooming large diagrams.
 // thought up by human, created by ai
 
-import { deviceLabel } from './data-model.js';
+import { deviceLabel, icmpTypeLabel } from './data-model.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -36,6 +36,7 @@ function directionView(connection, reversed) {
     port: connection.port,
     srcPort: directional.srcPort,
     dstPort: directional.dstPort,
+    icmpTypes: directional.icmpTypes,
     packets: directional.packets,
     bytes: directional.bytes,
     firstSeen: directional.firstSeen,
@@ -46,20 +47,21 @@ function directionView(connection, reversed) {
 }
 
 /**
- * Shows the actual srcPort->dstPort of THIS direction, not the shared service
- * port both arrows of a group have in common (connection.port) - with only
- * the service port and packet count visible, a grouped pair could look like
- * duplicate/wrong data at a glance whenever packet counts happen to coincide
- * (e.g. a symmetric ICMP echo/reply, or any two-way exchange with an equal
- * number of segments each way), even though the underlying ports/bytes
- * already differ correctly (confirmed via directionView()).
+ * Shows only the destination port of THIS direction (not source+destination):
+ * with both the initiator and reply arrow visible right next to each other,
+ * which two ports are involved is already obvious from the pair of arrows,
+ * and the full source/destination breakdown remains available in the hover
+ * tooltip - repeating both ports on the label itself was more than needed.
+ * For ICMP/ICMPv6 (no ports at all), the actual message type(s) seen in this
+ * direction (e.g. "Echo Request") are shown instead, since otherwise both the
+ * initiator and reply arrow of a ping exchange would just read "ICMP".
  */
 function connectionLabel(view) {
-  const portPart = view.srcPort != null && view.dstPort != null
-    ? ` ${view.srcPort}→${view.dstPort}`
-    : (view.port != null ? ` ${view.port}` : '');
+  const icmpLabel = icmpTypeLabel(view.protocol, view.icmpTypes);
+  const protocolPart = icmpLabel ? `${view.protocol} (${icmpLabel})` : (view.protocol || 'IP');
+  const portPart = view.dstPort != null ? ` ${view.dstPort}` : (icmpLabel ? '' : (view.port != null ? ` ${view.port}` : ''));
   const icon = view.isReply ? '○' : '▲';
-  return `${icon} ${view.protocol || 'IP'}${portPart} — ${view.packets.toLocaleString('de-DE')}×`;
+  return `${icon} ${protocolPart}${portPart} — ${view.packets.toLocaleString('de-DE')}×`;
 }
 
 /**

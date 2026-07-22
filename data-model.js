@@ -18,6 +18,29 @@ export function deviceLabel(device) {
   return device.hostname ? `${device.ip || device.mac} (${device.hostname})` : device.ip || device.mac;
 }
 
+// IANA ICMP/ICMPv6 type numbers, common subset (RFC 792 / RFC 4443) -
+// covers everything likely to show up in a typical capture; anything else
+// falls back to a generic "Typ N" label rather than being silently dropped.
+const ICMP_TYPE_NAMES = {
+  ICMP: {
+    0: 'Echo Reply', 3: 'Destination Unreachable', 4: 'Source Quench', 5: 'Redirect',
+    8: 'Echo Request', 9: 'Router Advertisement', 10: 'Router Solicitation',
+    11: 'Time Exceeded', 12: 'Parameter Problem', 13: 'Timestamp', 14: 'Timestamp Reply',
+  },
+  ICMPv6: {
+    1: 'Destination Unreachable', 2: 'Packet Too Big', 3: 'Time Exceeded', 4: 'Parameter Problem',
+    128: 'Echo Request', 129: 'Echo Reply', 133: 'Router Solicitation', 134: 'Router Advertisement',
+    135: 'Neighbor Solicitation', 136: 'Neighbor Advertisement', 137: 'Redirect',
+  },
+};
+
+/** Human-readable name(s) for the distinct ICMP/ICMPv6 types seen in one direction, or null if none apply (e.g. non-ICMP protocols). */
+export function icmpTypeLabel(protocol, types) {
+  const names = protocol === 'ICMP' || protocol === 'ICMPv6' ? ICMP_TYPE_NAMES[protocol] : null;
+  if (!names || !types || !types.length) return null;
+  return [...new Set(types.map((t) => names[t] || `Typ ${t}`))].join(', ');
+}
+
 /** 'ipv4' | 'ipv6' | 'mac' (device known only by MAC address, e.g. from malformed ARP). */
 export function addressFamilyOf(device) {
   if (device.kind !== 'ip' || !device.ip) return 'mac';

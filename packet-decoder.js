@@ -135,6 +135,7 @@ function decodeFrame(buffer, offset, length, linkType, timestamp, origLen) {
     srcPort: null,
     dstPort: null,
     protocol: null,
+    icmpType: null,
     multicastOrBroadcast: dstMac === BROADCAST_MAC || (dstMac !== null && isMacMulticast(dstMac)),
   };
 
@@ -274,8 +275,10 @@ function applyL4(view, offset, length, proto, result, isV6, baseOffset) {
     }
   } else if (proto === IP_PROTO_ICMP && !isV6) {
     result.protocol = 'ICMP';
+    if (length >= offset + 1) result.icmpType = view.getUint8(offset);
   } else if (proto === IP_PROTO_ICMPV6 && isV6) {
     result.protocol = 'ICMPv6';
+    if (length >= offset + 1) result.icmpType = view.getUint8(offset);
   } else {
     result.protocol = 'OTHER';
   }

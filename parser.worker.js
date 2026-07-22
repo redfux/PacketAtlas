@@ -49,12 +49,16 @@ function createConnectionDirectional(decoded) {
   // Unlike a Pair's directional entry, a Connection is already scoped to one
   // protocol + service port, so a single representative srcPort/dstPort (from
   // the first packet seen in this direction) is enough - no need for a Set.
-  return { packets: 0, bytes: 0, srcPort: decoded.srcPort, dstPort: decoded.dstPort, firstSeen: decoded.timestamp, lastSeen: decoded.timestamp };
+  // ICMP/ICMPv6 have no ports at all, so a connection groups ALL of a pair's
+  // ICMP traffic together regardless of type (echo request, echo reply, ...);
+  // icmpTypes tracks the distinct types actually seen in this direction so
+  // the Connections view can show e.g. "Echo Request" instead of just "ICMP".
+  return { packets: 0, bytes: 0, srcPort: decoded.srcPort, dstPort: decoded.dstPort, icmpTypes: new Set(), firstSeen: decoded.timestamp, lastSeen: decoded.timestamp };
 }
 
 function serializeConnectionDirectional(entry) {
-  if (!entry) return { packets: 0, bytes: 0, srcPort: null, dstPort: null, firstSeen: null, lastSeen: null };
-  return { ...entry };
+  if (!entry) return { packets: 0, bytes: 0, srcPort: null, dstPort: null, icmpTypes: [], firstSeen: null, lastSeen: null };
+  return { ...entry, icmpTypes: Array.from(entry.icmpTypes) };
 }
 
 /**
@@ -214,6 +218,7 @@ class Aggregator {
     const connectionDirectional = connection[connectionDirectionKey];
     connectionDirectional.packets++;
     connectionDirectional.bytes += decoded.frameLength;
+    if (decoded.icmpType != null) connectionDirectional.icmpTypes.add(decoded.icmpType);
     if (decoded.timestamp < connectionDirectional.firstSeen) connectionDirectional.firstSeen = decoded.timestamp;
     if (decoded.timestamp > connectionDirectional.lastSeen) connectionDirectional.lastSeen = decoded.timestamp;
   }
