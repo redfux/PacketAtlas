@@ -5,6 +5,12 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [0.11.0] – 2026-07-22
+
+### Changed
+
+- Verbindungen-Ansicht: Ein Pfeil zeigte bisher nur die kombinierte Summe beider Richtungen und blendete Antwort-Traffic (z. B. die TCP-Antwortpakete eines Servers) komplett aus. Gibt es Traffic in die Gegenrichtung, wird jetzt direkt darunter ein zweiter, gestrichelter Antwort-Pfeil mit eigener Paketanzahl/eigenen Ports gezeichnet, beide eng gruppiert mit gemeinsamem Hintergrundband und „▲"/„○"-Symbolen (konsistent zur Matrix-Legende), damit erkennbar bleibt, welche zwei Pfeile zusammengehören. Angeheftete Pfeile lassen sich jetzt unabhängig für beide Richtungen anheften und exportieren.
+
 ## [0.10.0] – 2026-07-22
 
 ### Fixed

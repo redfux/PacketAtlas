@@ -593,8 +593,15 @@ document.addEventListener('mousemove', (event) => {
 // multiple servers doesn't require re-hovering each one. Cards stay until
 // explicitly closed via their "×" button or "Alle entfernen".
 
+/**
+ * Ordered (not pairKey-sorted) on purpose: the Connections view now pins
+ * initiator and reply arrows of the same underlying connection separately
+ * (they're direction-shaped views with swapped a/b, see connections-view.js),
+ * and a pairKey-sorted ID would collide between the two, making the second
+ * pin a no-op.
+ */
 function connectionId(connection) {
-  return `connection:${pairKey(connection.a, connection.b)}|${connection.protocol}|${connection.port}`;
+  return `connection:${connection.a}->${connection.b}|${connection.protocol}|${connection.port}`;
 }
 
 function pinItem(item) {

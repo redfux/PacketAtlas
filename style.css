@@ -528,6 +528,10 @@ body {
 .sequence-event:hover .sequence-arrow { stroke: var(--md-primary); }
 .sequence-event:hover .sequence-event-label { fill: var(--md-primary); }
 .sequence-arrowhead-fill { fill: var(--md-on-surface-variant); }
+.sequence-arrow--reply { stroke: var(--md-outline); stroke-dasharray: 3 3; }
+.sequence-event-label--reply { fill: var(--md-on-surface-variant); }
+.sequence-arrowhead-fill--reply { fill: var(--md-outline); }
+.sequence-group-band { fill: var(--md-surface-container); }
 
 .timeline-svg { background: var(--md-surface); display: block; }
 .timeline-row-stripe { fill: var(--md-surface-container); }
