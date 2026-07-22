@@ -45,6 +45,18 @@ function serializeDirectional(entry) {
   };
 }
 
+function createConnectionDirectional(decoded) {
+  // Unlike a Pair's directional entry, a Connection is already scoped to one
+  // protocol + service port, so a single representative srcPort/dstPort (from
+  // the first packet seen in this direction) is enough - no need for a Set.
+  return { packets: 0, bytes: 0, srcPort: decoded.srcPort, dstPort: decoded.dstPort, firstSeen: decoded.timestamp, lastSeen: decoded.timestamp };
+}
+
+function serializeConnectionDirectional(entry) {
+  if (!entry) return { packets: 0, bytes: 0, srcPort: null, dstPort: null, firstSeen: null, lastSeen: null };
+  return { ...entry };
+}
+
 /**
  * Accumulates decoded frames into device, pair, and connection aggregates
  * using Map structures, so each frame only costs O(1) lookups/updates
@@ -182,6 +194,12 @@ class Aggregator {
         firstSeen: decoded.timestamp,
         lastSeen: decoded.timestamp,
         multicastOrBroadcast: false,
+        // Per-direction sub-aggregates, same rationale as pair.aToB/bToA:
+        // a connection currently merges both directions into one combined
+        // total, which hides e.g. a TCP reply entirely. The Connections view
+        // uses these to draw a separate, grouped reply arrow when present.
+        aToB: null,
+        bToA: null,
       };
       this.connections.set(connectionKey, connection);
     }
@@ -190,6 +208,14 @@ class Aggregator {
     if (decoded.timestamp < connection.firstSeen) connection.firstSeen = decoded.timestamp;
     if (decoded.timestamp > connection.lastSeen) connection.lastSeen = decoded.timestamp;
     if (decoded.multicastOrBroadcast) connection.multicastOrBroadcast = true;
+
+    const connectionDirectionKey = srcId === connection.a ? 'aToB' : 'bToA';
+    if (!connection[connectionDirectionKey]) connection[connectionDirectionKey] = createConnectionDirectional(decoded);
+    const connectionDirectional = connection[connectionDirectionKey];
+    connectionDirectional.packets++;
+    connectionDirectional.bytes += decoded.frameLength;
+    if (decoded.timestamp < connectionDirectional.firstSeen) connectionDirectional.firstSeen = decoded.timestamp;
+    if (decoded.timestamp > connectionDirectional.lastSeen) connectionDirectional.lastSeen = decoded.timestamp;
   }
 
   addHostname(ip, hostname) {
@@ -222,7 +248,10 @@ class Aggregator {
           bToA: serializeDirectional(bToA),
         };
       }),
-      connections: Array.from(this.connections.values()),
+      connections: Array.from(this.connections.values()).map((c) => {
+        const { aToB, bToA, ...rest } = c;
+        return { ...rest, aToB: serializeConnectionDirectional(aToB), bToA: serializeConnectionDirectional(bToA) };
+      }),
     };
   }
 }
