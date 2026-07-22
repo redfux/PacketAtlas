@@ -94,6 +94,12 @@ export function renderMatrix(container, { devices, pairs, metric, onHover, onLea
     svg.appendChild(createLabel(device, leftLabelWidth - 8, topHeaderHeight + i * CELL_SIZE + CELL_SIZE / 2 + 3, 0, 'end'));
   });
 
+  // Keyed by "rowId|colId" so hovering one of a pair's two mirrored cells can
+  // look up and highlight the other one (see mouseenter/mouseleave below) -
+  // otherwise only the literally-hovered cell gets CSS :hover, leaving its
+  // counterpart direction easy to overlook right next to it.
+  const cellRects = new Map();
+
   devices.forEach((rowDevice, i) => {
     devices.forEach((colDevice, j) => {
       if (i === j) return;
@@ -113,7 +119,14 @@ export function renderMatrix(container, { devices, pairs, metric, onHover, onLea
       rect.addEventListener('mousemove', (e) => onHover(e, pair, rowDevice, colDevice));
       rect.addEventListener('mouseleave', onLeave);
       rect.addEventListener('click', (e) => onClick(e, pair, rowDevice, colDevice));
+      rect.addEventListener('mouseenter', () => {
+        cellRects.get(`${colDevice.id}|${rowDevice.id}`)?.classList.add('matrix-cell--mirror-hover');
+      });
+      rect.addEventListener('mouseleave', () => {
+        cellRects.get(`${colDevice.id}|${rowDevice.id}`)?.classList.remove('matrix-cell--mirror-hover');
+      });
       svg.appendChild(rect);
+      cellRects.set(`${rowDevice.id}|${colDevice.id}`, rect);
 
       // Small always-visible marker distinguishing which of the two mirrored
       // cells is the direction that actually opened the communication versus

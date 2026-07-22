@@ -5,6 +5,12 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [0.14.0] – 2026-07-22
+
+### Added
+
+- Matrix: Beim Überfahren einer Zelle wird jetzt automatisch auch die gegenüberliegende Zelle desselben Geräte-Paares (Zeile↔Spalte vertauscht) hervorgehoben, gekennzeichnet durch einen gestrichelten Rahmen – auch wenn sie an einer ganz anderen Stelle der Matrix liegt, lassen sich so beide Richtungen einer Verbindung auf einen Blick finden.
+
 ## [0.13.1] – 2026-07-22
 
 ### Fixed
