@@ -24,6 +24,14 @@ import { exportToExcel, exportSelectionToExcel } from './export-excel.js';
 const LARGE_SELECTION_THRESHOLD = 50;
 const MAX_CONNECTIONS_RENDER = 400;
 const MAX_TIMELINE_RENDER = 300;
+// Bumped alongside the footer version in index.html. parser.worker.js (and
+// the scripts it loads via importScripts()) is fetched as a plain classic
+// script, which browsers can cache independently of the main page - a normal
+// (or even hard) page reload doesn't reliably bust that cache in every
+// browser. Appending the version as a query string changes the request URL
+// whenever the app updates, forcing a fresh fetch instead of silently
+// running old worker code after an update.
+const APP_VERSION = '0.12.1';
 
 const state = {
   devices: [],
@@ -111,7 +119,7 @@ function startParsing(file) {
   reader.onerror = () => showError('Die Datei konnte nicht gelesen werden.');
   reader.onload = () => {
     if (worker) worker.terminate();
-    worker = new Worker('parser.worker.js');
+    worker = new Worker(`parser.worker.js?v=${APP_VERSION}`);
     worker.onmessage = handleWorkerMessage;
     worker.onerror = (event) => {
       const detail = event.message || (event.filename ? `${event.filename}:${event.lineno}` : null);

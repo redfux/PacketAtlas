@@ -183,6 +183,8 @@ Ist die Auswahl leer (`state.selectedIds.size === 0`) und wird ein einzelnes Ger
 - Eine abschließende `result`-Nachricht mit dem vollständig aggregierten Datenmodell (Devices + Pairs + Connections).
 - Eine `error`-Nachricht bei nicht behebbaren Parsing-Fehlern.
 
+**Cache-Busting:** `parser.worker.js` selbst sowie die per `importScripts()` nachgeladenen Dateien (`pcap-parser.js`, `pcapng-parser.js`, `packet-decoder.js`, `dns-resolver.js`) sind klassische Skript-Requests, die der Browser unabhängig vom Haupt-Dokument im HTTP-Cache halten kann – ein Seiten-Reload (auch ein harter) garantiert in manchen Browsern nicht, dass nach einem Update tatsächlich neuer Worker-Code läuft. `app.js` instanziiert den Worker deshalb als `new Worker(\`parser.worker.js?v=${APP_VERSION}\`)`, und `parser.worker.js` hängt denselben Versions-String an jeden `importScripts()`-Aufruf an (`WORKER_VERSION`). Beide Konstanten müssen bei jedem Versions-Bump zusammen mit der Footer-Version in `index.html` aktualisiert werden, sonst greift das Cache-Busting nicht.
+
 Der Main-Thread bleibt während des Parsens vollständig responsiv.
 
 ### Klassischer Worker statt Modul-Worker

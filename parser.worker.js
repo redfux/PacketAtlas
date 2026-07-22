@@ -9,7 +9,19 @@
 // importScripts() has been supported everywhere for well over a decade.
 // thought up by human, created by ai
 
-importScripts('pcap-parser.js', 'pcapng-parser.js', 'packet-decoder.js', 'dns-resolver.js');
+// Bumped alongside APP_VERSION in app.js and the footer version in
+// index.html. importScripts() fetches are plain classic-script requests the
+// browser can cache independently of whatever cache-busting the worker's own
+// URL got - without a matching query string here, these could still be
+// served stale after an update even though parser.worker.js itself was
+// freshly fetched.
+const WORKER_VERSION = '0.12.1';
+importScripts(
+  `pcap-parser.js?v=${WORKER_VERSION}`,
+  `pcapng-parser.js?v=${WORKER_VERSION}`,
+  `packet-decoder.js?v=${WORKER_VERSION}`,
+  `dns-resolver.js?v=${WORKER_VERSION}`,
+);
 
 function pairKey(idA, idB) {
   return idA < idB ? `${idA}|${idB}` : `${idB}|${idA}`;

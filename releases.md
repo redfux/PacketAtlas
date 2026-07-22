@@ -5,6 +5,12 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [0.12.1] – 2026-07-22
+
+### Fixed
+
+- `parser.worker.js` und die darin per `importScripts()` geladenen Dateien (`pcap-parser.js`, `pcapng-parser.js`, `packet-decoder.js`, `dns-resolver.js`) wurden vom Browser unabhängig vom Haupt-Dokument gecacht – ein normaler oder sogar harter Seiten-Reload garantierte in manchen Browsern nicht, dass nach einem Update auch tatsächlich der neue Worker-Code läuft (beobachtet: ICMP-Typen aus 0.12.0 erschienen bei einem Nutzer trotz Reload nicht). Worker-URL und alle `importScripts()`-Aufrufe tragen jetzt einen Versions-Query-String, der bei jedem Versions-Bump automatisch einen frischen Fetch erzwingt.
+
 ## [0.12.0] – 2026-07-22
 
 ### Changed
