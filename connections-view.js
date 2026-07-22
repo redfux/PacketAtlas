@@ -45,8 +45,19 @@ function directionView(connection, reversed) {
   };
 }
 
+/**
+ * Shows the actual srcPort->dstPort of THIS direction, not the shared service
+ * port both arrows of a group have in common (connection.port) - with only
+ * the service port and packet count visible, a grouped pair could look like
+ * duplicate/wrong data at a glance whenever packet counts happen to coincide
+ * (e.g. a symmetric ICMP echo/reply, or any two-way exchange with an equal
+ * number of segments each way), even though the underlying ports/bytes
+ * already differ correctly (confirmed via directionView()).
+ */
 function connectionLabel(view) {
-  const portPart = view.port != null ? ` ${view.port}` : '';
+  const portPart = view.srcPort != null && view.dstPort != null
+    ? ` ${view.srcPort}→${view.dstPort}`
+    : (view.port != null ? ` ${view.port}` : '');
   const icon = view.isReply ? '○' : '▲';
   return `${icon} ${view.protocol || 'IP'}${portPart} — ${view.packets.toLocaleString('de-DE')}×`;
 }
