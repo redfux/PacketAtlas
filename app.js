@@ -464,22 +464,24 @@ function renderActiveView() {
 // --- Detail content (shared by hover tooltips and pinned cards) ------------------
 
 /**
- * A pair aggregates traffic in both directions, so there's no single fixed
- * "source port" / "destination port" - instead ports are grouped by which
- * device uses them (see parser.worker.js), which stays meaningful regardless
- * of which side happened to send a given packet.
+ * `pair.a`/`pair.b` are set from whichever device sent the very first packet
+ * of that pair (see parser.worker.js), so they already encode who initiated
+ * the communication - shown here as Source IP -> Destination IP regardless of
+ * the row/column order a caller (e.g. the matrix) happened to hover over.
  */
-function pairDetailsHtml(pair, deviceA, deviceB) {
+function pairDetailsHtml(pair, fallbackDeviceA, fallbackDeviceB) {
   if (!pair) {
-    return `<div><strong>${deviceLabel(deviceA)}</strong> ↔ <strong>${deviceLabel(deviceB)}</strong></div><div>Keine Kommunikation</div>`;
+    return `<div><strong>${deviceLabel(fallbackDeviceA)}</strong> → <strong>${deviceLabel(fallbackDeviceB)}</strong></div><div>Keine Kommunikation</div>`;
   }
+  const sourceDevice = state.deviceIndex.get(pair.a) || fallbackDeviceA;
+  const destDevice = state.deviceIndex.get(pair.b) || fallbackDeviceB;
   const value = metricValue(pair, state.metric);
-  const portsA = pair.portsA.length ? pair.portsA.slice(0, 12).join(', ') : '–';
-  const portsB = pair.portsB.length ? pair.portsB.slice(0, 12).join(', ') : '–';
-  return `<div><strong>${deviceLabel(deviceA)}</strong> ↔ <strong>${deviceLabel(deviceB)}</strong></div>
+  const sourcePorts = pair.portsA.length ? pair.portsA.slice(0, 12).join(', ') : '–';
+  const destPorts = pair.portsB.length ? pair.portsB.slice(0, 12).join(', ') : '–';
+  return `<div><strong>${deviceLabel(sourceDevice)}</strong> → <strong>${deviceLabel(destDevice)}</strong></div>
     <div>Protokolle: ${pair.protocols.join(', ') || '–'}</div>
-    <div>Ports bei ${deviceLabel(deviceA)}: ${portsA}</div>
-    <div>Ports bei ${deviceLabel(deviceB)}: ${portsB}</div>
+    <div>Source Port: ${sourcePorts}</div>
+    <div>Destination Port: ${destPorts}</div>
     <div>Pakete: ${pair.packets.toLocaleString('de-DE')} · Bytes: ${formatBytes(pair.bytes)}</div>
     <div>Zeitraum: ${formatTimestamp(pair.firstSeen)} – ${formatTimestamp(pair.lastSeen)}</div>
     <div>Metrik (${state.metric}): ${value.toLocaleString('de-DE')}</div>`;
@@ -501,9 +503,9 @@ function connectionDetailsHtml(connection) {
   const deviceA = state.deviceIndex.get(connection.a);
   const deviceB = state.deviceIndex.get(connection.b);
   const ports = connection.srcPort != null
-    ? `<div>Quell-Port: ${connection.srcPort} · Ziel-Port: ${connection.dstPort}</div>`
+    ? `<div>Source Port: ${connection.srcPort} · Destination Port: ${connection.dstPort}</div>`
     : '';
-  return `<div><strong>${deviceLabel(deviceA)}</strong> ↔ <strong>${deviceLabel(deviceB)}</strong></div>
+  return `<div><strong>${deviceLabel(deviceA)}</strong> → <strong>${deviceLabel(deviceB)}</strong></div>
     <div>Protokoll: ${connection.protocol || '–'}</div>
     ${ports}
     <div>Pakete: ${connection.packets.toLocaleString('de-DE')} · Bytes: ${formatBytes(connection.bytes)}</div>

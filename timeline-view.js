@@ -11,16 +11,31 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 
 const LABEL_WIDTH = 240;
 const HEADER_HEIGHT = 36;
-const ROW_HEIGHT = 28;
+// Tall enough to fit two label lines (see rowLabelParts()) for rows that need
+// it; rows with a short label simply center their single line within it.
+const ROW_HEIGHT = 40;
 const BAR_HEIGHT = 16;
 const MIN_BAR_WIDTH = 3;
 const FOOTER_MARGIN = 16;
+// Above this combined length a one-line label would overflow LABEL_WIDTH
+// (which isn't clipped, unlike the zoomable plot area), so it's split across
+// two lines instead of being truncated - most relevant for IPv6 addresses,
+// which routinely run longer than IPv4 ones even after hostname formatting.
+const SINGLE_LINE_MAX_CHARS = 36;
+const LINE_MAX_CHARS = 42;
 
-function rowLabel(connection, deviceIndex) {
+function capLine(text) {
+  return text.length > LINE_MAX_CHARS ? `${text.slice(0, LINE_MAX_CHARS - 1)}…` : text;
+}
+
+/** Source device alone on one line, "-> destination · protocol port" on the other - only combined into a single line when short enough. */
+function rowLabelParts(connection, deviceIndex) {
   const deviceA = deviceIndex.get(connection.a);
   const deviceB = deviceIndex.get(connection.b);
   const portPart = connection.port != null ? ` ${connection.port}` : '';
-  return `${deviceLabel(deviceA)} ↔ ${deviceLabel(deviceB)} · ${connection.protocol || 'IP'}${portPart}`;
+  const source = deviceLabel(deviceA);
+  const dest = `→ ${deviceLabel(deviceB)} · ${connection.protocol || 'IP'}${portPart}`;
+  return { source, dest, full: `${source} ${dest}` };
 }
 
 const timeTickFormat = (date) => date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -84,14 +99,25 @@ export function renderTimeline(container, { connections, deviceIndex, onHover, o
       labelLayer.appendChild(stripe);
     }
     const text = document.createElementNS(SVG_NS, 'text');
-    text.setAttribute('x', 8);
-    text.setAttribute('y', y + ROW_HEIGHT / 2 + 4);
     text.classList.add('timeline-row-label');
-    const label = rowLabel(connection, deviceIndex);
-    const maxChars = 34;
-    text.textContent = label.length > maxChars ? `${label.slice(0, maxChars - 1)}…` : label;
+    const parts = rowLabelParts(connection, deviceIndex);
+    if (parts.full.length <= SINGLE_LINE_MAX_CHARS) {
+      text.setAttribute('x', 8);
+      text.setAttribute('y', y + ROW_HEIGHT / 2 + 4);
+      text.textContent = capLine(parts.full);
+    } else {
+      const line1 = document.createElementNS(SVG_NS, 'tspan');
+      line1.setAttribute('x', 8);
+      line1.setAttribute('y', y + ROW_HEIGHT / 2 - 4);
+      line1.textContent = capLine(parts.source);
+      const line2 = document.createElementNS(SVG_NS, 'tspan');
+      line2.setAttribute('x', 8);
+      line2.setAttribute('y', y + ROW_HEIGHT / 2 + 10);
+      line2.textContent = capLine(parts.dest);
+      text.append(line1, line2);
+    }
     const title = document.createElementNS(SVG_NS, 'title');
-    title.textContent = label;
+    title.textContent = parts.full;
     text.appendChild(title);
     labelLayer.appendChild(text);
   });
