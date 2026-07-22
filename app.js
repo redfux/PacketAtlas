@@ -11,16 +11,19 @@ import {
   formatBytes,
   formatTimestamp,
   metricValue,
+  pairKey,
   relatedDeviceIds,
 } from './data-model.js';
 import { renderMatrix } from './matrix-view.js';
 import { renderGraph, updateForces } from './graph-view.js';
 import { renderConnections } from './connections-view.js';
+import { renderTimeline } from './timeline-view.js';
 import { exportActiveViewAsImage } from './export-image.js';
 import { exportToExcel } from './export-excel.js';
 
 const LARGE_SELECTION_THRESHOLD = 50;
 const MAX_CONNECTIONS_RENDER = 400;
+const MAX_TIMELINE_RENDER = 300;
 
 const state = {
   devices: [],
@@ -61,12 +64,15 @@ const el = {
   tabMatrix: document.getElementById('tab-matrix'),
   tabGraph: document.getElementById('tab-graph'),
   tabConnections: document.getElementById('tab-connections'),
+  tabTimeline: document.getElementById('tab-timeline'),
   viewMatrix: document.getElementById('view-matrix'),
   viewGraph: document.getElementById('view-graph'),
   viewConnections: document.getElementById('view-connections'),
+  viewTimeline: document.getElementById('view-timeline'),
   matrixContainer: document.getElementById('matrix-container'),
   graphContainer: document.getElementById('graph-container'),
   connectionsContainer: document.getElementById('connections-container'),
+  timelineContainer: document.getElementById('timeline-container'),
   graphControls: document.getElementById('graph-controls'),
   forceCharge: document.getElementById('force-charge'),
   forceDistance: document.getElementById('force-distance'),
@@ -75,6 +81,8 @@ const el = {
   metricBytes: document.getElementById('metric-bytes'),
   connectionsTruncatedWarning: document.getElementById('connections-truncated-warning'),
   connectionsTruncatedMessage: document.getElementById('connections-truncated-message'),
+  timelineTruncatedWarning: document.getElementById('timeline-truncated-warning'),
+  timelineTruncatedMessage: document.getElementById('timeline-truncated-message'),
   familyIpv4: document.getElementById('family-ipv4'),
   familyIpv6: document.getElementById('family-ipv6'),
   familyMac: document.getElementById('family-mac'),
@@ -289,7 +297,9 @@ const TABS = {
   matrix: { tabButton: () => el.tabMatrix, view: () => el.viewMatrix },
   graph: { tabButton: () => el.tabGraph, view: () => el.viewGraph },
   connections: { tabButton: () => el.tabConnections, view: () => el.viewConnections },
+  timeline: { tabButton: () => el.tabTimeline, view: () => el.viewTimeline },
 };
+const TABS_WITHOUT_METRIC = new Set(['connections', 'timeline']);
 
 function setActiveTab(tab) {
   state.activeTab = tab;
@@ -300,13 +310,14 @@ function setActiveTab(tab) {
     view().hidden = !isActive;
   }
   el.graphControls.hidden = tab !== 'graph';
-  el.metricGroup.hidden = tab === 'connections';
+  el.metricGroup.hidden = TABS_WITHOUT_METRIC.has(tab);
   renderActiveView();
 }
 
 el.tabMatrix.addEventListener('click', () => setActiveTab('matrix'));
 el.tabGraph.addEventListener('click', () => setActiveTab('graph'));
 el.tabConnections.addEventListener('click', () => setActiveTab('connections'));
+el.tabTimeline.addEventListener('click', () => setActiveTab('timeline'));
 
 function setMetric(metric) {
   state.metric = metric;
@@ -358,10 +369,22 @@ function getVisibleDevicesAndPairs() {
   return { devices, pairs, familyIds };
 }
 
-/** Per-connection (device pair + protocol + port) breakdown for the connections view, heaviest first, filtered like getVisibleDevicesAndPairs(). */
-function getVisibleConnections(familyIds) {
-  return computeVisibleConnections(state.connections, familyIds, state.activeGroups, state.hideMulticast)
-    .sort((a, b) => b.packets - a.packets);
+/**
+ * Per-connection (device pair + protocol + port) breakdown, filtered like
+ * getVisibleDevicesAndPairs(). `order` picks the sort appropriate for each
+ * view: 'packets' (connections view, heaviest first) or 'timeline' (grouped
+ * by device pair, then chronologically within each pair - so the Gantt rows
+ * for the same pair sit together instead of interleaved by volume).
+ */
+function getVisibleConnections(familyIds, order) {
+  const filtered = computeVisibleConnections(state.connections, familyIds, state.activeGroups, state.hideMulticast);
+  if (order === 'timeline') {
+    return filtered.sort((a, b) => {
+      const groupDiff = pairKey(a.a, a.b).localeCompare(pairKey(b.a, b.b));
+      return groupDiff !== 0 ? groupDiff : a.firstSeen - b.firstSeen;
+    });
+  }
+  return filtered.sort((a, b) => b.packets - a.packets);
 }
 
 function renderActiveView() {
@@ -371,6 +394,7 @@ function renderActiveView() {
 
   el.largeSelectionWarning.hidden = selectedDevices.length <= LARGE_SELECTION_THRESHOLD;
   el.connectionsTruncatedWarning.hidden = true;
+  el.timelineTruncatedWarning.hidden = true;
 
   if (state.activeTab === 'matrix') {
     state.activeSvg = renderMatrix(el.matrixContainer, {
@@ -394,8 +418,8 @@ function renderActiveView() {
     });
     state.activeSvg = svg;
     state.graphSimulation = simulation;
-  } else {
-    const allConnections = getVisibleConnections(familyIds);
+  } else if (state.activeTab === 'connections') {
+    const allConnections = getVisibleConnections(familyIds, 'packets');
     const renderedConnections = allConnections.slice(0, MAX_CONNECTIONS_RENDER);
     const isTruncated = allConnections.length > renderedConnections.length;
     el.connectionsTruncatedWarning.hidden = !isTruncated;
@@ -405,6 +429,21 @@ function renderActiveView() {
     state.activeSvg = renderConnections(el.connectionsContainer, {
       devices: selectedDevices,
       connections: renderedConnections,
+      onHover: (event, connection) => showConnectionTooltip(event, connection),
+      onLeave: hideTooltip,
+    });
+    state.graphSimulation = null;
+  } else {
+    const allConnections = getVisibleConnections(familyIds, 'timeline');
+    const renderedConnections = allConnections.slice(0, MAX_TIMELINE_RENDER);
+    const isTruncated = allConnections.length > renderedConnections.length;
+    el.timelineTruncatedWarning.hidden = !isTruncated;
+    if (isTruncated) {
+      el.timelineTruncatedMessage.textContent = `Zeige ${renderedConnections.length.toLocaleString('de-DE')} von ${allConnections.length.toLocaleString('de-DE')} Verbindungen. Für eine vollständige Ansicht bitte weiter filtern.`;
+    }
+    state.activeSvg = renderTimeline(el.timelineContainer, {
+      connections: renderedConnections,
+      deviceIndex: state.deviceIndex,
       onHover: (event, connection) => showConnectionTooltip(event, connection),
       onLeave: hideTooltip,
     });
