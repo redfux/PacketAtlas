@@ -54,6 +54,11 @@
           <input type="search" id="device-search" class="text-input" placeholder="IP-Teilstring …" autocomplete="off">
         </div>
 
+        <div class="sidebar__section sidebar__section--row">
+          <button type="button" id="btn-select-all" class="btn btn--text">Alle auswählen</button>
+          <button type="button" id="btn-select-none" class="btn btn--text">Alle abwählen</button>
+        </div>
+
         <div class="sidebar__section">
           <span class="field-label">Protokoll</span>
           <div id="protocol-filters" class="chip-group">
@@ -70,11 +75,6 @@
         </div>
 
         <div id="device-filter-extras">
-          <div class="sidebar__section sidebar__section--row">
-            <button type="button" id="btn-select-all" class="btn btn--text">Alle auswählen</button>
-            <button type="button" id="btn-select-none" class="btn btn--text">Alle abwählen</button>
-          </div>
-
           <div class="sidebar__section">
             <label class="switch">
               <input type="checkbox" id="toggle-hide-broadcast">
@@ -199,7 +199,7 @@
   <div id="tooltip" class="tooltip" hidden role="tooltip"></div>
 
   <footer class="app-footer">
-    <span>PacketAtlas v0.13.0 — thought up by human, created by ai</span>
+    <span>PacketAtlas v0.13.1 — thought up by human, created by ai</span>
   </footer>
 
   <script src="vendor/d3.min.js"></script>
