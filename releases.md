@@ -5,6 +5,16 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [0.9.0] – 2026-07-22
+
+### Changed
+
+- Tooltips und angeheftete Kacheln zeigen bei Geräte-Paaren und Verbindungen jetzt immer einen einzelnen Pfeil („Source IP → Destination IP") statt eines richtungslosen „↔", basierend auf dem Gerät, das die Kommunikation nachweislich zuerst initiiert hat (erstes beobachtetes Paket des Paares/der Verbindung) – unabhängig davon, in welcher Zeilen-/Spaltenreihenfolge z. B. eine Matrixzelle gehovert wurde.
+- Deutsche Quell-/Ziel-Begriffe wurden durchgängig durch „Source IP", „Destination IP", „Source Port" und „Destination Port" ersetzt – in Tooltips, angehefteten Kacheln und allen Excel-Exporten.
+- Excel-Export „Rohdaten": Spalten „Quelle"/„Ziel" heißen jetzt „Source IP"/„Destination IP"; zusätzlich erzeugt jedes Geräte-Paar eine eigene Zeile pro Protokoll (TCP/UDP/ICMP/ARP/…) statt einer einzigen Zeile mit über alle Protokolle vermischten Ports – TCP- und UDP-Ports desselben Paares sind dadurch nicht mehr ununterscheidbar. Der Export „Nur angeheftete Auswahl" wurde entsprechend angepasst (Geräte-Paare werden ebenfalls je Protokoll aufgeteilt).
+- Matrix: Zeilen-/Spaltenbeschriftungsbereich wird jetzt aus der tatsächlich längsten Geräte-Bezeichnung berechnet statt aus einer festen Breite/Höhe – lange IPv6-Adressen bzw. IP+Hostname-Kombinationen wurden dadurch am oberen Rand der rotierten Spaltenköpfe abgeschnitten.
+- Zeitleiste: Zeilenbeschriftungen werden bei zu langer Source-/Destination-Kombination (v. a. IPv6) jetzt zweizeilig dargestellt statt mit „…" abgeschnitten.
+
 ## [0.8.0] – 2026-07-16
 
 ### Added

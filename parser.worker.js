@@ -87,6 +87,9 @@ class Aggregator {
         firstSeen: decoded.timestamp,
         lastSeen: decoded.timestamp,
         multicastOrBroadcast: false,
+        // Per-protocol sub-aggregates, so the Excel export can emit one row
+        // per protocol instead of merging e.g. TCP and UDP ports together.
+        byProtocol: new Map(),
       };
       this.pairs.set(key, pair);
     }
@@ -99,6 +102,30 @@ class Aggregator {
     if (decoded.timestamp < pair.firstSeen) pair.firstSeen = decoded.timestamp;
     if (decoded.timestamp > pair.lastSeen) pair.lastSeen = decoded.timestamp;
     if (decoded.multicastOrBroadcast) pair.multicastOrBroadcast = true;
+
+    const protocolKey = decoded.protocol || 'OTHER';
+    let protoEntry = pair.byProtocol.get(protocolKey);
+    if (!protoEntry) {
+      protoEntry = {
+        protocol: protocolKey,
+        packets: 0,
+        bytes: 0,
+        portsA: new Set(),
+        portsB: new Set(),
+        firstSeen: decoded.timestamp,
+        lastSeen: decoded.timestamp,
+        multicastOrBroadcast: false,
+      };
+      pair.byProtocol.set(protocolKey, protoEntry);
+    }
+    protoEntry.packets++;
+    protoEntry.bytes += decoded.frameLength;
+    const [protoSrcPortSet, protoDstPortSet] = srcId === pair.a ? [protoEntry.portsA, protoEntry.portsB] : [protoEntry.portsB, protoEntry.portsA];
+    if (decoded.srcPort != null) protoSrcPortSet.add(decoded.srcPort);
+    if (decoded.dstPort != null) protoDstPortSet.add(decoded.dstPort);
+    if (decoded.timestamp < protoEntry.firstSeen) protoEntry.firstSeen = decoded.timestamp;
+    if (decoded.timestamp > protoEntry.lastSeen) protoEntry.lastSeen = decoded.timestamp;
+    if (decoded.multicastOrBroadcast) protoEntry.multicastOrBroadcast = true;
 
     const servicePort = servicePortOf(decoded);
     const connectionKey = `${key}|${decoded.protocol}|${servicePort}`;
@@ -143,12 +170,20 @@ class Aggregator {
     }
     return {
       devices: Array.from(this.devices.values()),
-      pairs: Array.from(this.pairs.values()).map((p) => ({
-        ...p,
-        protocols: Array.from(p.protocols),
-        portsA: Array.from(p.portsA),
-        portsB: Array.from(p.portsB),
-      })),
+      pairs: Array.from(this.pairs.values()).map((p) => {
+        const { byProtocol, ...rest } = p;
+        return {
+          ...rest,
+          protocols: Array.from(p.protocols),
+          portsA: Array.from(p.portsA),
+          portsB: Array.from(p.portsB),
+          protocolBreakdown: Array.from(byProtocol.values()).map((pe) => ({
+            ...pe,
+            portsA: Array.from(pe.portsA),
+            portsB: Array.from(pe.portsB),
+          })),
+        };
+      }),
       connections: Array.from(this.connections.values()),
     };
   }
