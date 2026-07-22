@@ -5,6 +5,16 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [0.10.0] – 2026-07-22
+
+### Fixed
+
+- Matrix: die schrägen Spaltenüberschriften der letzten Spalten wurden am rechten Rand abgeschnitten, weil nur ein oberer Rand für die diagonale Textausdehnung reserviert war, nicht aber der symmetrisch dazu benötigte rechte Rand.
+
+### Changed
+
+- Matrix: die beiden Zellen eines Geräte-Paares (Zeile→Spalte und Spalte→Zeile) zeigen jetzt jeweils nur den tatsächlichen Traffic dieser einen Richtung (Farbe, Pakete/Bytes, Source-/Destination-Port) statt zweimal denselben kombinierten Wert. Ein kleines Symbol in jeder nicht-leeren Zelle (gefülltes Dreieck = hat die Verbindung initiiert, Ring = ist nur die Antwort, erklärt in einer neuen Legende oberhalb der Matrix) macht auch ohne Hover erkennbar, welche Richtung den Verbindungsaufbau darstellt – relevant z. B. für Firewall-/ACL-Regelwerke. Angeheftete Matrixzellen-Kacheln und deren Excel-Export („Auswahl"-Sheet, neue Spalte „Richtung") berücksichtigen das entsprechend; der Graph zeigt für seine Kanten weiterhin die kombinierte, richtungsunabhängige Gesamtsumme des Paares.
+
 ## [0.9.0] – 2026-07-22
 
 ### Changed

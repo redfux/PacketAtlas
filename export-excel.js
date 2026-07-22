@@ -56,15 +56,38 @@ const PINNED_TYPE_LABEL = { pair: 'Paar', connection: 'Verbindung', device: 'Ger
 
 /**
  * Exports the user's pinned selection (mix of pairs/connections/devices) as a
- * single-sheet .xlsx file. Pinned pairs expand into one row per protocol, same
- * as the main Rohdaten sheet, and always use pair.a/pair.b (the true
- * initiator, see parser.worker.js) for Source IP/Destination IP rather than
- * whatever row/column order the item happened to be pinned from.
+ * single-sheet .xlsx file. A pair pinned from the Graph (item.directional
+ * false) expands into one row per protocol, same as the main Rohdaten sheet,
+ * using pair.a/pair.b (the true initiator) for Source IP/Destination IP. A
+ * pair pinned from the Matrix (item.directional true) instead exports the one
+ * specific mirrored cell the user pinned - Source IP/Destination IP as
+ * item.deviceA/deviceB, with packets/bytes/ports from that direction's
+ * aToB/bToA sub-aggregate and an explicit "Richtung" column, since the two
+ * mirrored cells of a pair can now carry different values (see
+ * matrix-view.js/parser.worker.js).
  */
 export function exportSelectionToExcel({ items, deviceIndex, filenameBase }) {
   const rows = items.flatMap((item) => {
     if (item.type === 'pair') {
       const pair = item.data;
+      if (item.directional) {
+        const isInitiatorDirection = item.deviceA.id === pair.a;
+        const directional = isInitiatorDirection ? pair.aToB : pair.bToA;
+        return [{
+          Typ: PINNED_TYPE_LABEL.pair,
+          'Source IP': deviceLabel(item.deviceA),
+          'Destination IP': deviceLabel(item.deviceB),
+          Protokoll: pair.protocols.join(', '),
+          Richtung: isInitiatorDirection ? 'Verbindungsaufbau' : 'Antwort',
+          'Source Port': directional.srcPorts.join(', '),
+          'Destination Port': directional.dstPorts.join(', '),
+          Pakete: directional.packets,
+          Bytes: directional.bytes,
+          'Bytes (lesbar)': formatBytes(directional.bytes),
+          'Erster Zeitstempel': directional.firstSeen != null ? formatTimestamp(directional.firstSeen) : '',
+          'Letzter Zeitstempel': directional.lastSeen != null ? formatTimestamp(directional.lastSeen) : '',
+        }];
+      }
       const sourceLabel = deviceLabel(deviceIndex.get(pair.a) || item.deviceA);
       const destLabel = deviceLabel(deviceIndex.get(pair.b) || item.deviceB);
       return pair.protocolBreakdown.map((pb) => ({
@@ -72,6 +95,7 @@ export function exportSelectionToExcel({ items, deviceIndex, filenameBase }) {
         'Source IP': sourceLabel,
         'Destination IP': destLabel,
         Protokoll: pb.protocol,
+        Richtung: '',
         'Source Port': pb.portsA.join(', '),
         'Destination Port': pb.portsB.join(', '),
         Pakete: pb.packets,
@@ -88,6 +112,7 @@ export function exportSelectionToExcel({ items, deviceIndex, filenameBase }) {
         'Source IP': deviceLabel(deviceIndex.get(c.a) || { id: c.a }),
         'Destination IP': deviceLabel(deviceIndex.get(c.b) || { id: c.b }),
         Protokoll: c.protocol || '',
+        Richtung: '',
         'Source Port': c.srcPort ?? '',
         'Destination Port': c.dstPort ?? '',
         Pakete: c.packets,
@@ -103,6 +128,7 @@ export function exportSelectionToExcel({ items, deviceIndex, filenameBase }) {
       'Source IP': deviceLabel(device),
       'Destination IP': '',
       Protokoll: '',
+      Richtung: '',
       'Source Port': '',
       'Destination Port': '',
       Pakete: device.packetCount,

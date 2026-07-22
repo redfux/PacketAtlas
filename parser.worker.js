@@ -28,6 +28,23 @@ function servicePortOf(decoded) {
   return Math.min(decoded.srcPort, decoded.dstPort);
 }
 
+function createDirectionalEntry(timestamp) {
+  return { packets: 0, bytes: 0, srcPorts: new Set(), dstPorts: new Set(), firstSeen: timestamp, lastSeen: timestamp };
+}
+
+/** `null` (never any traffic that way) serializes to an explicit zero entry, not `null`, so callers never need a null-check. */
+function serializeDirectional(entry) {
+  if (!entry) return { packets: 0, bytes: 0, srcPorts: [], dstPorts: [], firstSeen: null, lastSeen: null };
+  return {
+    packets: entry.packets,
+    bytes: entry.bytes,
+    srcPorts: Array.from(entry.srcPorts),
+    dstPorts: Array.from(entry.dstPorts),
+    firstSeen: entry.firstSeen,
+    lastSeen: entry.lastSeen,
+  };
+}
+
 /**
  * Accumulates decoded frames into device, pair, and connection aggregates
  * using Map structures, so each frame only costs O(1) lookups/updates
@@ -90,6 +107,15 @@ class Aggregator {
         // Per-protocol sub-aggregates, so the Excel export can emit one row
         // per protocol instead of merging e.g. TCP and UDP ports together.
         byProtocol: new Map(),
+        // Per-direction sub-aggregates (which of the two devices sent this
+        // specific packet), created lazily so a direction that never carries
+        // any traffic (e.g. a one-way UDP fire-and-forget) serializes as an
+        // explicit zero entry instead of falsely inheriting the other
+        // direction's first-ever timestamp. The matrix view uses these to
+        // show each of a pair's two mirrored cells independently, instead of
+        // both cells displaying the same direction-agnostic combined value.
+        aToB: null,
+        bToA: null,
       };
       this.pairs.set(key, pair);
     }
@@ -102,6 +128,16 @@ class Aggregator {
     if (decoded.timestamp < pair.firstSeen) pair.firstSeen = decoded.timestamp;
     if (decoded.timestamp > pair.lastSeen) pair.lastSeen = decoded.timestamp;
     if (decoded.multicastOrBroadcast) pair.multicastOrBroadcast = true;
+
+    const directionKey = srcId === pair.a ? 'aToB' : 'bToA';
+    if (!pair[directionKey]) pair[directionKey] = createDirectionalEntry(decoded.timestamp);
+    const directional = pair[directionKey];
+    directional.packets++;
+    directional.bytes += decoded.frameLength;
+    if (decoded.srcPort != null) directional.srcPorts.add(decoded.srcPort);
+    if (decoded.dstPort != null) directional.dstPorts.add(decoded.dstPort);
+    if (decoded.timestamp < directional.firstSeen) directional.firstSeen = decoded.timestamp;
+    if (decoded.timestamp > directional.lastSeen) directional.lastSeen = decoded.timestamp;
 
     const protocolKey = decoded.protocol || 'OTHER';
     let protoEntry = pair.byProtocol.get(protocolKey);
@@ -171,7 +207,7 @@ class Aggregator {
     return {
       devices: Array.from(this.devices.values()),
       pairs: Array.from(this.pairs.values()).map((p) => {
-        const { byProtocol, ...rest } = p;
+        const { byProtocol, aToB, bToA, ...rest } = p;
         return {
           ...rest,
           protocols: Array.from(p.protocols),
@@ -182,6 +218,8 @@ class Aggregator {
             portsA: Array.from(pe.portsA),
             portsB: Array.from(pe.portsB),
           })),
+          aToB: serializeDirectional(aToB),
+          bToA: serializeDirectional(bToA),
         };
       }),
       connections: Array.from(this.connections.values()),

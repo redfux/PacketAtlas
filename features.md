@@ -34,7 +34,7 @@ Rein clientseitige Web-App, die Wireshark-Capture-Dateien (`.pcap`/`.pcapng`) im
 
 ## 4. Visualisierung
 
-- [x] Ansicht A – Adjazenzmatrix (Zellfarbe = Kommunikationsvolumen)
+- [x] Ansicht A – Adjazenzmatrix (Zellfarbe = Kommunikationsvolumen); die beiden Zellen eines Geräte-Paares zeigen jeweils nur ihre eigene Richtung, mit Symbol für Verbindungsaufbau vs. Antwort (nachträglich ergänzt, über ursprünglichen Anforderungsumfang hinaus)
 - [x] Ansicht B – Force-Directed-Graph (Kantenstärke = Kommunikationsvolumen)
 - [x] Beide Ansichten synchron auf derselben gefilterten Geräte-Selektion
 - [x] Umschaltbare Metrik (Pakete vs. Bytes) für beide Ansichten
