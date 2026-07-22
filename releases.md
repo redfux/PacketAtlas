@@ -5,6 +5,12 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [0.11.1] – 2026-07-22
+
+### Fixed
+
+- Verbindungen-Ansicht: Die Beschriftung von Aufbau- und Antwort-Pfeil zeigte nur den gemeinsamen Service-Port (z. B. „TCP 80"), nicht die tatsächlichen, vertauschten Source-/Destination-Ports der jeweiligen Richtung – bei zufällig gleicher Paketanzahl in beiden Richtungen (z. B. symmetrischer ICMP-Echo/Reply-Verkehr) sahen dadurch beide Pfeile im Diagramm identisch aus, obwohl die zugrunde liegenden Daten bereits korrekt getrennt waren. Die Beschriftung zeigt jetzt „Source→Destination" der jeweiligen Richtung (z. B. „▲ TCP 40142→80 — 59×" / „○ TCP 80→40142 — 59×").
+
 ## [0.11.0] – 2026-07-22
 
 ### Changed
