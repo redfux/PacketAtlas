@@ -5,6 +5,12 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [0.13.1] – 2026-07-22
+
+### Fixed
+
+- „Alle auswählen"/„Alle abwählen" saßen unterhalb des Geräte-/Ports-Reiterumschalters und waren dadurch im Ports-Tab unsichtbar. Beide Buttons stehen jetzt oberhalb des Umschalters und sind in beiden Tabs sichtbar.
+
 ## [0.13.0] – 2026-07-22
 
 ### Added
