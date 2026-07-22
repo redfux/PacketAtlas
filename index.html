@@ -154,6 +154,10 @@
         </div>
 
         <div id="view-matrix" class="view" role="tabpanel" aria-labelledby="tab-matrix">
+          <div class="matrix-legend">
+            <span><span class="matrix-legend__icon matrix-legend__icon--initiator">▲</span> Verbindungsaufbau (Zeile → Spalte initiiert)</span>
+            <span><span class="matrix-legend__icon matrix-legend__icon--responder">○</span> Antwort auf die jeweils andere Zelle</span>
+          </div>
           <div id="matrix-container" class="matrix-container"></div>
         </div>
 
@@ -183,7 +187,7 @@
   <div id="tooltip" class="tooltip" hidden role="tooltip"></div>
 
   <footer class="app-footer">
-    <span>PacketAtlas v0.9.0 — thought up by human, created by ai</span>
+    <span>PacketAtlas v0.10.0 — thought up by human, created by ai</span>
   </footer>
 
   <script src="vendor/d3.min.js"></script>

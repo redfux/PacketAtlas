@@ -498,6 +498,19 @@ body {
 .matrix-label { fill: var(--md-on-surface-variant); font-size: 10px; }
 .matrix-cell { cursor: pointer; stroke: var(--md-surface); stroke-width: 1; }
 .matrix-cell:hover { stroke: var(--md-primary); stroke-width: 2; }
+.matrix-direction-icon--initiator { fill: var(--md-primary); }
+.matrix-direction-icon--responder { fill: none; stroke: var(--md-outline); stroke-width: 1; }
+
+.matrix-legend {
+  display: flex;
+  gap: var(--space-5);
+  padding: 0 0 var(--space-2);
+  font-size: 12px;
+  color: var(--md-on-surface-variant);
+}
+.matrix-legend__icon { display: inline-block; width: 1em; text-align: center; }
+.matrix-legend__icon--initiator { color: var(--md-primary); }
+.matrix-legend__icon--responder { color: var(--md-outline); }
 
 .graph-svg { background: var(--md-surface); display: block; width: 100%; height: 100%; }
 .graph-edge { stroke: var(--md-outline); stroke-opacity: 0.55; }

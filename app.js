@@ -406,9 +406,9 @@ function renderActiveView() {
       devices: selectedDevices,
       pairs: visiblePairs,
       metric: state.metric,
-      onHover: (event, pair, deviceA, deviceB) => showPairTooltip(event, pair, deviceA, deviceB),
+      onHover: (event, pair, rowDevice, colDevice) => showMatrixCellTooltip(event, pair, rowDevice, colDevice),
       onLeave: hideTooltip,
-      onClick: (event, pair, deviceA, deviceB) => { if (pair) pinPair(pair, deviceA, deviceB); },
+      onClick: (event, pair, rowDevice, colDevice) => { if (pair) pinPair(pair, rowDevice, colDevice, true); },
     });
     state.graphSimulation = null;
   } else if (state.activeTab === 'graph') {
@@ -487,6 +487,37 @@ function pairDetailsHtml(pair, fallbackDeviceA, fallbackDeviceB) {
     <div>Metrik (${state.metric}): ${value.toLocaleString('de-DE')}</div>`;
 }
 
+/**
+ * Unlike pairDetailsHtml() (used by the Graph, which draws a single edge per
+ * pair), the Matrix draws TWO mirrored cells per pair - one per direction -
+ * so this always shows rowDevice -> colDevice using the matching directional
+ * sub-aggregate (pair.aToB/pair.bToA, see parser.worker.js), never the
+ * combined totals, plus which of the two directions actually opened the
+ * communication (relevant e.g. for stateless firewall/ACL rules, where only
+ * the initiating direction needs an explicit allow entry).
+ */
+function matrixCellDetailsHtml(pair, rowDevice, colDevice) {
+  if (!pair) {
+    return `<div><strong>${deviceLabel(rowDevice)}</strong> → <strong>${deviceLabel(colDevice)}</strong></div><div>Keine Kommunikation</div>`;
+  }
+  const isInitiatorDirection = rowDevice.id === pair.a;
+  const directional = isInitiatorDirection ? pair.aToB : pair.bToA;
+  const directionLabel = isInitiatorDirection ? 'Verbindungsaufbau' : 'Antwort';
+  const value = metricValue(directional, state.metric);
+  const sourcePorts = directional.srcPorts.length ? directional.srcPorts.slice(0, 12).join(', ') : '–';
+  const destPorts = directional.dstPorts.length ? directional.dstPorts.slice(0, 12).join(', ') : '–';
+  const zeitraum = directional.firstSeen != null
+    ? `${formatTimestamp(directional.firstSeen)} – ${formatTimestamp(directional.lastSeen)}`
+    : '–';
+  return `<div><strong>${deviceLabel(rowDevice)}</strong> → <strong>${deviceLabel(colDevice)}</strong> · ${directionLabel}</div>
+    <div>Protokolle: ${pair.protocols.join(', ') || '–'}</div>
+    <div>Source Port: ${sourcePorts}</div>
+    <div>Destination Port: ${destPorts}</div>
+    <div>Pakete: ${directional.packets.toLocaleString('de-DE')} · Bytes: ${formatBytes(directional.bytes)}</div>
+    <div>Zeitraum: ${zeitraum}</div>
+    <div>Metrik (${state.metric}): ${value.toLocaleString('de-DE')}</div>`;
+}
+
 function deviceDetailsHtml(device) {
   return `<div><strong>${deviceLabel(device)}</strong></div>
     <div>MAC: ${device.mac || '–'}</div>
@@ -516,6 +547,10 @@ function connectionDetailsHtml(connection) {
 
 function showPairTooltip(event, pair, deviceA, deviceB) {
   showTooltip(event, pairDetailsHtml(pair, deviceA, deviceB));
+}
+
+function showMatrixCellTooltip(event, pair, rowDevice, colDevice) {
+  showTooltip(event, matrixCellDetailsHtml(pair, rowDevice, colDevice));
 }
 
 function showDeviceTooltip(event, device) {
@@ -568,8 +603,17 @@ function pinItem(item) {
   renderPinnedPanel();
 }
 
-function pinPair(pair, deviceA, deviceB) {
-  pinItem({ id: `pair:${pairKey(pair.a, pair.b)}`, type: 'pair', data: pair, deviceA, deviceB });
+/**
+ * `directional` distinguishes a Matrix-originated pin (one specific mirrored
+ * cell, e.g. rowDevice -> colDevice) from a Graph-originated one (the pair's
+ * combined, direction-agnostic totals) - they need different IDs so pinning
+ * BOTH of a pair's matrix cells creates two separate cards instead of the
+ * second click being a no-op, and different rendering (matrixCellDetailsHtml
+ * vs. pairDetailsHtml, see renderPinnedPanel()).
+ */
+function pinPair(pair, deviceA, deviceB, directional = false) {
+  const id = directional ? `pair-dir:${deviceA.id}->${deviceB.id}` : `pair:${pairKey(pair.a, pair.b)}`;
+  pinItem({ id, type: 'pair', data: pair, deviceA, deviceB, directional });
 }
 
 function pinConnection(connection) {
@@ -612,8 +656,11 @@ function renderPinnedPanel() {
 
     const body = document.createElement('div');
     body.className = 'pinned-card__body';
-    if (item.type === 'pair') body.innerHTML = pairDetailsHtml(item.data, item.deviceA, item.deviceB);
-    else if (item.type === 'connection') body.innerHTML = connectionDetailsHtml(item.data);
+    if (item.type === 'pair') {
+      body.innerHTML = item.directional
+        ? matrixCellDetailsHtml(item.data, item.deviceA, item.deviceB)
+        : pairDetailsHtml(item.data, item.deviceA, item.deviceB);
+    } else if (item.type === 'connection') body.innerHTML = connectionDetailsHtml(item.data);
     else body.innerHTML = deviceDetailsHtml(item.data);
 
     card.append(header, body);
