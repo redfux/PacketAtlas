@@ -5,6 +5,12 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [0.7.0] – 2026-07-16
+
+### Added
+
+- Neues viertes Tab „Zeitleiste": Gantt-Diagramm derselben Verbindungen (Geräte-Paar + Protokoll + Port) wie im Verbindungen-Tab, aber als Zeilen mit einem Balken von erstem bis letztem beobachteten Zeitpunkt statt als Pfeil-Diagramm. Zeilen sind nach Geräte-Paar gruppiert; die Zeitachse ist per Mausrad zoombar und per Ziehen verschiebbar, mit fix positionierter Beschriftungsspalte links. Bei sehr vielen Verbindungen werden nur die ersten 300 gezeichnet (Warnhinweis bei Überschreitung).
+
 ## [0.6.0] – 2026-07-16
 
 ### Changed

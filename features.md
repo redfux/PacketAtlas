@@ -42,6 +42,7 @@ Rein clientseitige Web-App, die Wireshark-Capture-Dateien (`.pcap`/`.pcapng`) im
 - [x] Zoom/Pan und einstellbare Kräfte-Parameter für den Graphen (>20–30 Geräte)
 - [x] Getrennte Matrix/Graph je Adressfamilie (IPv4 / IPv6 / Sonstige) mit Umschalter, Geräte aufsteigend nach Adresse sortiert (nachträglich ergänzt, über ursprünglichen Anforderungsumfang hinaus)
 - [x] Ansicht C – Verbindungen (korrelierte Ansicht: eine Lebenslinie pro Gerät, ein Pfeil pro Kombination aus Geräte-Paar/Protokoll/Port mit Paket-/Byte-Summe, sortiert nach Paketanzahl) (nachträglich ergänzt, über ursprünglichen Anforderungsumfang hinaus)
+- [x] Ansicht D – Zeitleiste (Gantt-Diagramm: ein Balken pro Verbindung von erstem bis letztem Zeitpunkt, gruppiert nach Geräte-Paar, zoombare/verschiebbare Zeitachse) (nachträglich ergänzt, über ursprünglichen Anforderungsumfang hinaus)
 
 ## 5. Filterung / Teilnehmer-Selektion
 
@@ -65,7 +66,7 @@ Rein clientseitige Web-App, die Wireshark-Capture-Dateien (`.pcap`/`.pcapng`) im
 
 ## Backlog (nicht Bestandteil dieser Version)
 
-- **Zeitlicher Verlauf in der Verbindungen-Ansicht:** Eine erste Version zeigte pro Einzelpaket einen chronologisch angeordneten Pfeil (echtes Ablauf-/Sequenzdiagramm wie bei Wiresharks „Flow Graph" bzw. H.225-Signalisierungsdiagrammen). Auf Nutzerwunsch wurde dies zugunsten der korrelierten, nicht-zeitlichen Verbindungsübersicht zurückgestellt – für eine mögliche spätere Version denkbar, ggf. als zuschaltbare Option innerhalb desselben Tabs.
+- **Zeitlicher Verlauf auf Einzelpaket-Ebene:** Eine erste Version der Verbindungen-Ansicht zeigte pro Einzelpaket einen chronologisch angeordneten Pfeil (echtes Ablauf-/Sequenzdiagramm wie bei Wiresharks „Flow Graph" bzw. H.225-Signalisierungsdiagrammen). Auf Nutzerwunsch wurde dies zugunsten der korrelierten, nicht-zeitlichen Verbindungsübersicht zurückgestellt. Die später ergänzte Zeitleiste (Ansicht D) bringt zwar wieder eine Zeitachse zurück, aber nur auf Ebene „erster/letzter Zeitpunkt je Verbindung" (Gantt-Balken) – eine Einzelpaket-genaue Chronologie (einzelne Pakete als Punkte/Marker auf der Zeitleiste, nicht nur Start/Ende) bleibt weiterhin zurückgestellt, für eine mögliche spätere Version denkbar.
 
 - **Meraki-Import (Packet Capture / „Intelligent Capture" direkt aus der Cloud laden):** Recherchiert am 2026-07-16, noch nicht umgesetzt.
 

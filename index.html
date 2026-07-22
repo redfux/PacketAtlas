@@ -98,6 +98,10 @@
               <span class="material-symbols-outlined" aria-hidden="true">swap_horiz</span>
               Verbindungen
             </button>
+            <button type="button" class="tab" id="tab-timeline" role="tab" aria-selected="false" aria-controls="view-timeline">
+              <span class="material-symbols-outlined" aria-hidden="true">view_timeline</span>
+              Zeitleiste
+            </button>
           </div>
 
           <div class="toolbar__spacer"></div>
@@ -143,6 +147,11 @@
           <span id="connections-truncated-message"></span>
         </div>
 
+        <div id="timeline-truncated-warning" class="warning-banner" hidden>
+          <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+          <span id="timeline-truncated-message"></span>
+        </div>
+
         <div id="view-matrix" class="view" role="tabpanel" aria-labelledby="tab-matrix">
           <div id="matrix-container" class="matrix-container"></div>
         </div>
@@ -154,6 +163,10 @@
         <div id="view-connections" class="view" role="tabpanel" aria-labelledby="tab-connections" hidden>
           <div id="connections-container" class="sequence-container"></div>
         </div>
+
+        <div id="view-timeline" class="view" role="tabpanel" aria-labelledby="tab-timeline" hidden>
+          <div id="timeline-container" class="timeline-container"></div>
+        </div>
       </section>
     </div>
   </main>
@@ -161,7 +174,7 @@
   <div id="tooltip" class="tooltip" hidden role="tooltip"></div>
 
   <footer class="app-footer">
-    <span>PacketAtlas v0.6.0 — thought up by human, created by ai</span>
+    <span>PacketAtlas v0.7.0 — thought up by human, created by ai</span>
   </footer>
 
   <script src="vendor/d3.min.js"></script>
