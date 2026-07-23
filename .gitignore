@@ -5,3 +5,4 @@ build/
 .vscode/
 .DS_Store
 .claude/
+prompt_pcap_kommunikationsmatrix.md
