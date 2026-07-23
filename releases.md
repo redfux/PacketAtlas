@@ -5,6 +5,12 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [0.15.1] – 2026-07-22
+
+### Fixed
+
+- PCAP-Export-Dialog: Bei erfolgreichem Export schloss sich der Dialog sofort automatisch, was wie ein Abbruch/Absturz wirkte. Er zeigt jetzt zwei einzelne Fortschrittsschritte (Prüfsumme, Datei-Erstellung), die bei Erfolg grün mit Häkchen markiert werden, gefolgt von einer expliziten „Export erfolgreich"-Meldung. Der Dialog bleibt offen, bis er über „×" oder Klick außerhalb bzw. den nun „Schließen" beschrifteten Button aktiv geschlossen wird.
+
 ## [0.15.0] – 2026-07-22
 
 ### Added

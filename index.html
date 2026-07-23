@@ -201,7 +201,12 @@
 
   <div id="pcap-export-overlay" class="modal-overlay" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pcap-export-title">
-      <p id="pcap-export-title" class="modal__title">PCAP-Export vorbereiten</p>
+      <div class="modal__header">
+        <p id="pcap-export-title" class="modal__title">PCAP-Export vorbereiten</p>
+        <button type="button" id="pcap-export-close" class="modal__close" aria-label="Dialog schließen">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
       <p id="pcap-export-intro" class="modal__intro">Wähle die Original-Capture-Datei erneut aus. Nur die aktuell gefilterten Verbindungen werden exportiert.</p>
 
       <div class="modal__section">
@@ -236,9 +241,31 @@
       </div>
 
       <div id="pcap-export-progress" class="modal__section" hidden>
-        <p id="pcap-export-progress-label" class="modal__hint">Prüfsumme wird verglichen …</p>
-        <div class="progress-bar">
-          <div id="pcap-export-progress-fill" class="progress-bar__fill" style="width:0%"></div>
+        <div id="pcap-step-hash" class="export-step" hidden>
+          <div class="export-step__row">
+            <span id="pcap-step-hash-label" class="modal__hint">Prüfsumme wird verglichen …</span>
+            <span id="pcap-step-hash-check" class="export-step__check material-symbols-outlined" hidden aria-hidden="true">check_circle</span>
+          </div>
+          <div class="progress-bar">
+            <div id="pcap-step-hash-fill" class="progress-bar__fill" style="width:0%"></div>
+          </div>
+        </div>
+        <div id="pcap-step-build" class="export-step" hidden>
+          <div class="export-step__row">
+            <span id="pcap-step-build-label" class="modal__hint">PCAP-Datei wird erstellt …</span>
+            <span id="pcap-step-build-check" class="export-step__check material-symbols-outlined" hidden aria-hidden="true">check_circle</span>
+          </div>
+          <div class="progress-bar">
+            <div id="pcap-step-build-fill" class="progress-bar__fill" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="pcap-export-success" class="modal__success" hidden>
+        <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
+        <div>
+          <p style="margin:0">Export erfolgreich – Download gestartet.</p>
+          <p id="pcap-export-success-note" class="modal__hint" style="margin:4px 0 0" hidden></p>
         </div>
       </div>
 
@@ -250,7 +277,7 @@
   </div>
 
   <footer class="app-footer">
-    <span>PacketAtlas v0.15.0 — thought up by human, created by ai</span>
+    <span>PacketAtlas v0.15.1 — thought up by human, created by ai</span>
   </footer>
 
   <script src="vendor/d3.min.js"></script>
