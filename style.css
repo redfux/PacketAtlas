@@ -35,6 +35,9 @@
   --md-error: #ba1a1a;
   --md-on-error-container: #410002;
   --md-error-container: #ffdad6;
+  --md-success: #2e6930;
+  --md-on-success-container: #072100;
+  --md-success-container: #b6f2af;
   --md-background: var(--md-surface);
   --md-shadow: 220 38 38;
 
@@ -73,6 +76,9 @@
     --md-error: #ffb4ab;
     --md-on-error-container: #ffdad6;
     --md-error-container: #93000a;
+    --md-success: #9bd598;
+    --md-on-success-container: #b6f2af;
+    --md-success-container: #0e5116;
     --md-background: var(--md-surface);
   }
 }
@@ -655,11 +661,46 @@ body {
   box-shadow: var(--elevation-2);
   padding: var(--space-5);
 }
-.modal__title { font-size: 16px; font-weight: 500; margin: 0 0 var(--space-1); }
+.modal__header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-2); margin: 0 0 var(--space-1); }
+.modal__title { font-size: 16px; font-weight: 500; margin: 0; }
+.modal__close {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  cursor: pointer;
+}
+.modal__close:hover { background: var(--md-surface-container-high); }
 .modal__intro { font-size: 13px; color: var(--md-on-surface-variant); margin: 0 0 var(--space-4); line-height: 1.5; }
 .modal__section { margin-bottom: var(--space-4); }
 .modal__hint { font-size: 13px; color: var(--md-on-surface-variant); margin: 0 0 var(--space-2); }
 .modal__actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
+
+.export-step { margin-bottom: var(--space-3); }
+.export-step__row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.export-step__check { display: none; font-size: 18px; color: var(--md-success); }
+.export-step__check:not([hidden]) { display: inline-flex; }
+.progress-bar__fill--success { background: var(--md-success); }
+
+.modal__success {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-s);
+  background: var(--md-success-container);
+  color: var(--md-on-success-container);
+  margin-bottom: var(--space-4);
+}
+.modal__success .material-symbols-outlined { color: var(--md-success); }
+.modal__success p { color: inherit; }
 
 .radio-group { display: flex; flex-direction: column; gap: var(--space-2); }
 .radio-option { display: flex; align-items: center; gap: var(--space-2); font-size: 14px; cursor: pointer; }

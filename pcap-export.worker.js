@@ -8,7 +8,7 @@
 
 // Bumped alongside APP_VERSION/WORKER_VERSION - see parser.worker.js for why
 // these importScripts() URLs need a cache-busting query string.
-const PCAP_EXPORT_WORKER_VERSION = '0.15.0';
+const PCAP_EXPORT_WORKER_VERSION = '0.15.1';
 importScripts(
   `pcap-parser.js?v=${PCAP_EXPORT_WORKER_VERSION}`,
   `pcapng-parser.js?v=${PCAP_EXPORT_WORKER_VERSION}`,

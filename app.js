@@ -33,7 +33,7 @@ const MAX_TIMELINE_RENDER = 300;
 // browser. Appending the version as a query string changes the request URL
 // whenever the app updates, forcing a fresh fetch instead of silently
 // running old worker code after an update.
-const APP_VERSION = '0.15.0';
+const APP_VERSION = '0.15.1';
 
 const state = {
   devices: [],
@@ -138,10 +138,19 @@ const el = {
   pcapFileInput: document.getElementById('pcap-file-input'),
   pcapCachedSection: document.getElementById('pcap-cached-section'),
   pcapExportProgress: document.getElementById('pcap-export-progress'),
-  pcapExportProgressLabel: document.getElementById('pcap-export-progress-label'),
-  pcapExportProgressFill: document.getElementById('pcap-export-progress-fill'),
+  pcapStepHash: document.getElementById('pcap-step-hash'),
+  pcapStepHashLabel: document.getElementById('pcap-step-hash-label'),
+  pcapStepHashFill: document.getElementById('pcap-step-hash-fill'),
+  pcapStepHashCheck: document.getElementById('pcap-step-hash-check'),
+  pcapStepBuild: document.getElementById('pcap-step-build'),
+  pcapStepBuildLabel: document.getElementById('pcap-step-build-label'),
+  pcapStepBuildFill: document.getElementById('pcap-step-build-fill'),
+  pcapStepBuildCheck: document.getElementById('pcap-step-build-check'),
+  pcapExportSuccess: document.getElementById('pcap-export-success'),
+  pcapExportSuccessNote: document.getElementById('pcap-export-success-note'),
   pcapExportCancel: document.getElementById('pcap-export-cancel'),
   pcapExportConfirm: document.getElementById('pcap-export-confirm'),
+  pcapExportClose: document.getElementById('pcap-export-close'),
 };
 
 let worker = null;
@@ -868,17 +877,43 @@ function currentPcapPayloadMode() {
   return el.pcapPayloadHeaders.checked ? 'headers-only' : 'full';
 }
 
-function openPcapExportDialog() {
-  el.pcapExportError.hidden = true;
+function resetPcapStep(labelEl, fillEl, checkEl, label) {
+  labelEl.textContent = label;
+  fillEl.style.width = '0%';
+  fillEl.classList.remove('progress-bar__fill--success');
+  checkEl.hidden = true;
+}
+
+function completePcapStep(labelEl, fillEl, checkEl, label) {
+  labelEl.textContent = label;
+  fillEl.style.width = '100%';
+  fillEl.classList.add('progress-bar__fill--success');
+  checkEl.hidden = false;
+}
+
+/** Restores the dialog's "waiting for input" state - the appropriate one (re-upload vs. cached buffer) for whatever state.originalFileBuffer currently holds. Used both when first opening the dialog and after an error, so the user can immediately retry. */
+function showPcapAwaitingInput(introText) {
   el.pcapExportProgress.hidden = true;
-  el.pcapDropZone.classList.remove('is-dragover');
+  el.pcapExportSuccess.hidden = true;
   const hasCachedBuffer = state.originalFileBuffer != null;
   el.pcapUploadSection.hidden = hasCachedBuffer;
   el.pcapCachedSection.hidden = !hasCachedBuffer;
   el.pcapExportConfirm.hidden = !hasCachedBuffer;
-  el.pcapExportIntro.textContent = hasCachedBuffer
+  el.pcapExportIntro.hidden = false;
+  el.pcapExportIntro.textContent = introText || (hasCachedBuffer
     ? 'Wähle, was exportiert werden soll.'
-    : 'Wähle die Original-Capture-Datei erneut aus. Nur die aktuell gefilterten Verbindungen werden exportiert.';
+    : 'Wähle die Original-Capture-Datei erneut aus. Nur die aktuell gefilterten Verbindungen werden exportiert.');
+}
+
+function openPcapExportDialog() {
+  el.pcapExportError.hidden = true;
+  el.pcapDropZone.classList.remove('is-dragover');
+  el.pcapExportCancel.textContent = 'Abbrechen';
+  el.pcapStepHash.hidden = true;
+  el.pcapStepBuild.hidden = true;
+  resetPcapStep(el.pcapStepHashLabel, el.pcapStepHashFill, el.pcapStepHashCheck, 'Prüfsumme wird verglichen …');
+  resetPcapStep(el.pcapStepBuildLabel, el.pcapStepBuildFill, el.pcapStepBuildCheck, 'PCAP-Datei wird erstellt …');
+  showPcapAwaitingInput();
   el.pcapExportOverlay.hidden = false;
 }
 
@@ -891,16 +926,18 @@ function closePcapExportDialog() {
 }
 
 function showPcapExportError(message) {
-  el.pcapExportProgress.hidden = true;
+  showPcapAwaitingInput();
   el.pcapExportErrorMessage.textContent = message;
   el.pcapExportError.hidden = false;
 }
 
 async function handlePcapReupload(file) {
   el.pcapExportError.hidden = true;
+  el.pcapExportIntro.hidden = true;
+  el.pcapUploadSection.hidden = true;
   el.pcapExportProgress.hidden = false;
-  el.pcapExportProgressLabel.textContent = 'Prüfsumme wird verglichen …';
-  el.pcapExportProgressFill.style.width = '50%';
+  el.pcapStepHash.hidden = false;
+  el.pcapStepHashFill.style.width = '40%';
   try {
     const buffer = await file.arrayBuffer();
     const hash = await sha256Hex(buffer);
@@ -908,6 +945,7 @@ async function handlePcapReupload(file) {
       showPcapExportError('Diese Datei stimmt nicht mit der ursprünglich geladenen Capture-Datei überein. Bitte die richtige Datei auswählen.');
       return;
     }
+    completePcapStep(el.pcapStepHashLabel, el.pcapStepHashFill, el.pcapStepHashCheck, 'Prüfsumme stimmt überein.');
     state.originalFileBuffer = buffer;
     runPcapExport(buffer);
   } catch {
@@ -916,25 +954,29 @@ async function handlePcapReupload(file) {
 }
 
 function runPcapExport(buffer) {
+  el.pcapExportError.hidden = true;
   el.pcapUploadSection.hidden = true;
   el.pcapCachedSection.hidden = true;
   el.pcapExportConfirm.hidden = true;
-  el.pcapExportError.hidden = true;
+  el.pcapExportIntro.hidden = true;
+  el.pcapExportSuccess.hidden = true;
   el.pcapExportProgress.hidden = false;
-  el.pcapExportProgressLabel.textContent = 'PCAP-Datei wird erstellt …';
-  el.pcapExportProgressFill.style.width = '0%';
+  el.pcapStepBuild.hidden = false;
+  resetPcapStep(el.pcapStepBuildLabel, el.pcapStepBuildFill, el.pcapStepBuildCheck, 'PCAP-Datei wird erstellt …');
 
   if (pcapExportWorker) pcapExportWorker.terminate();
   pcapExportWorker = new Worker(`pcap-export.worker.js?v=${APP_VERSION}`);
   pcapExportWorker.onmessage = (event) => {
     const msg = event.data;
     if (msg.type === 'progress') {
-      el.pcapExportProgressFill.style.width = `${msg.percent}%`;
+      el.pcapStepBuildFill.style.width = `${msg.percent}%`;
     } else if (msg.type === 'error') {
       showPcapExportError(msg.message);
     } else if (msg.type === 'result') {
+      completePcapStep(el.pcapStepBuildLabel, el.pcapStepBuildFill, el.pcapStepBuildCheck, 'PCAP-Datei erstellt.');
       downloadPcapResult(msg);
-      closePcapExportDialog();
+      el.pcapExportSuccess.hidden = false;
+      el.pcapExportCancel.textContent = 'Schließen';
     }
   };
   pcapExportWorker.onerror = (event) => {
@@ -964,7 +1006,10 @@ function downloadPcapResult(msg) {
   a.click();
   URL.revokeObjectURL(url);
   if (msg.skippedLinkTypeCount > 0) {
-    showError(`${msg.skippedLinkTypeCount.toLocaleString('de-DE')} Pakete mit abweichendem Link-Type wurden beim PCAP-Export ausgelassen (klassisches pcap unterstützt nur einen Link-Type pro Datei).`);
+    el.pcapExportSuccessNote.textContent = `${msg.skippedLinkTypeCount.toLocaleString('de-DE')} Pakete mit abweichendem Link-Type wurden ausgelassen (klassisches pcap unterstützt nur einen Link-Type pro Datei).`;
+    el.pcapExportSuccessNote.hidden = false;
+  } else {
+    el.pcapExportSuccessNote.hidden = true;
   }
 }
 
@@ -973,6 +1018,7 @@ el.exportPcap.addEventListener('click', () => {
   openPcapExportDialog();
 });
 el.pcapExportCancel.addEventListener('click', closePcapExportDialog);
+el.pcapExportClose.addEventListener('click', closePcapExportDialog);
 el.pcapExportConfirm.addEventListener('click', () => {
   if (state.originalFileBuffer) runPcapExport(state.originalFileBuffer);
 });
