@@ -138,6 +138,7 @@
               <button type="button" id="export-png" class="menu__item">Als PNG …</button>
               <button type="button" id="export-svg" class="menu__item">Als SVG …</button>
               <button type="button" id="export-xlsx" class="menu__item">Als Excel (.xlsx) …</button>
+              <button type="button" id="export-pcap" class="menu__item">Als PCAP (gefiltert) …</button>
               <button type="button" id="export-pinned-xlsx" class="menu__item" disabled>Nur angeheftete Auswahl (.xlsx) …</button>
             </div>
           </div>
@@ -198,8 +199,58 @@
 
   <div id="tooltip" class="tooltip" hidden role="tooltip"></div>
 
+  <div id="pcap-export-overlay" class="modal-overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pcap-export-title">
+      <p id="pcap-export-title" class="modal__title">PCAP-Export vorbereiten</p>
+      <p id="pcap-export-intro" class="modal__intro">Wähle die Original-Capture-Datei erneut aus. Nur die aktuell gefilterten Verbindungen werden exportiert.</p>
+
+      <div class="modal__section">
+        <span class="field-label">Inhalt</span>
+        <div class="radio-group">
+          <label class="radio-option">
+            <input type="radio" name="pcap-payload-mode" id="pcap-payload-full" value="full" checked>
+            Mit Payload (vollständige Pakete)
+          </label>
+          <label class="radio-option">
+            <input type="radio" name="pcap-payload-mode" id="pcap-payload-headers" value="headers-only">
+            Ohne Payload (nur Header)
+          </label>
+        </div>
+      </div>
+
+      <div id="pcap-export-error" class="error-banner error-banner--inline" hidden role="alert">
+        <span class="material-symbols-outlined" aria-hidden="true">error</span>
+        <span id="pcap-export-error-message"></span>
+      </div>
+
+      <div id="pcap-upload-section" class="modal__section">
+        <div id="pcap-drop-zone" class="drop-zone drop-zone--compact">
+          <span class="material-symbols-outlined drop-zone__icon" aria-hidden="true">file_upload</span>
+          <p class="drop-zone__text">Original-Capture-Datei hierher ziehen oder auswählen</p>
+        </div>
+        <input type="file" id="pcap-file-input" accept=".pcap,.pcapng" hidden>
+      </div>
+
+      <div id="pcap-cached-section" class="modal__section" hidden>
+        <p class="modal__hint"><span class="material-symbols-outlined" aria-hidden="true" style="font-size:16px;vertical-align:-3px">check_circle</span> Original-Datei aus dieser Sitzung bereits verifiziert.</p>
+      </div>
+
+      <div id="pcap-export-progress" class="modal__section" hidden>
+        <p id="pcap-export-progress-label" class="modal__hint">Prüfsumme wird verglichen …</p>
+        <div class="progress-bar">
+          <div id="pcap-export-progress-fill" class="progress-bar__fill" style="width:0%"></div>
+        </div>
+      </div>
+
+      <div class="modal__actions">
+        <button type="button" id="pcap-export-cancel" class="btn btn--text">Abbrechen</button>
+        <button type="button" id="pcap-export-confirm" class="btn btn--filled" hidden>Exportieren</button>
+      </div>
+    </div>
+  </div>
+
   <footer class="app-footer">
-    <span>PacketAtlas v0.14.0 — thought up by human, created by ai</span>
+    <span>PacketAtlas v0.15.0 — thought up by human, created by ai</span>
   </footer>
 
   <script src="vendor/d3.min.js"></script>

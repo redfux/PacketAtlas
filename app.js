@@ -33,7 +33,7 @@ const MAX_TIMELINE_RENDER = 300;
 // browser. Appending the version as a query string changes the request URL
 // whenever the app updates, forcing a fresh fetch instead of silently
 // running old worker code after an update.
-const APP_VERSION = '0.14.0';
+const APP_VERSION = '0.15.0';
 
 const state = {
   devices: [],
@@ -53,6 +53,15 @@ const state = {
   graphSimulation: null,
   activeSvg: null,
   pinnedItems: [], // { id, type: 'pair'|'connection'|'device', data, deviceA, deviceB }
+  // Original capture bytes are NOT kept in memory for the whole session (only
+  // the aggregated device/pair/connection model is) - originalFileHash lets a
+  // later PCAP export verify a re-uploaded file is byte-identical before
+  // trusting it; originalFileBuffer caches that file only once it's been
+  // verified once, so re-exporting later in the same session doesn't need
+  // another re-upload. Both reset on a new capture import.
+  originalFileHash: null,
+  originalFileName: null,
+  originalFileBuffer: null,
 };
 
 const el = {
@@ -111,23 +120,51 @@ const el = {
   exportPng: document.getElementById('export-png'),
   exportSvg: document.getElementById('export-svg'),
   exportXlsx: document.getElementById('export-xlsx'),
+  exportPcap: document.getElementById('export-pcap'),
   exportPinnedXlsx: document.getElementById('export-pinned-xlsx'),
   tooltip: document.getElementById('tooltip'),
   pinnedPanel: document.getElementById('pinned-panel'),
   pinnedList: document.getElementById('pinned-list'),
   pinnedCount: document.getElementById('pinned-count'),
   btnClearPinned: document.getElementById('btn-clear-pinned'),
+  pcapExportOverlay: document.getElementById('pcap-export-overlay'),
+  pcapExportIntro: document.getElementById('pcap-export-intro'),
+  pcapPayloadFull: document.getElementById('pcap-payload-full'),
+  pcapPayloadHeaders: document.getElementById('pcap-payload-headers'),
+  pcapExportError: document.getElementById('pcap-export-error'),
+  pcapExportErrorMessage: document.getElementById('pcap-export-error-message'),
+  pcapUploadSection: document.getElementById('pcap-upload-section'),
+  pcapDropZone: document.getElementById('pcap-drop-zone'),
+  pcapFileInput: document.getElementById('pcap-file-input'),
+  pcapCachedSection: document.getElementById('pcap-cached-section'),
+  pcapExportProgress: document.getElementById('pcap-export-progress'),
+  pcapExportProgressLabel: document.getElementById('pcap-export-progress-label'),
+  pcapExportProgressFill: document.getElementById('pcap-export-progress-fill'),
+  pcapExportCancel: document.getElementById('pcap-export-cancel'),
+  pcapExportConfirm: document.getElementById('pcap-export-confirm'),
 };
 
 let worker = null;
 
+/** Hex-encoded SHA-256, used only to verify a later PCAP-export re-upload is byte-identical to the original import - not a security boundary, just avoiding the user picking the wrong file. */
+async function sha256Hex(buffer) {
+  const digest = await crypto.subtle.digest('SHA-256', buffer);
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 function startParsing(file) {
   showProgress(0, 'Datei wird gelesen …');
   el.errorBanner.hidden = true;
+  // A new import invalidates any buffer cached from a previous PCAP export
+  // re-upload in this session - it belonged to the previous capture file.
+  state.originalFileBuffer = null;
 
   const reader = new FileReader();
   reader.onerror = () => showError('Die Datei konnte nicht gelesen werden.');
-  reader.onload = () => {
+  reader.onload = async () => {
+    state.originalFileName = file.name;
+    state.originalFileHash = await sha256Hex(reader.result);
+
     if (worker) worker.terminate();
     worker = new Worker(`parser.worker.js?v=${APP_VERSION}`);
     worker.onmessage = handleWorkerMessage;
@@ -813,4 +850,156 @@ el.exportPinnedXlsx.addEventListener('click', () => {
   el.exportMenu.hidden = true;
   if (state.pinnedItems.length === 0) return;
   exportSelectionToExcel({ items: state.pinnedItems, deviceIndex: state.deviceIndex, filenameBase: 'packetatlas-angeheftete-auswahl' });
+});
+
+// --- PCAP export (filtered re-export of the original capture) --------------------
+//
+// The original capture bytes aren't kept in memory for the whole session (see
+// startParsing()), so building a filtered .pcap needs the user to provide the
+// file again. Its SHA-256 (computed at import time) is compared against the
+// re-uploaded file to catch the wrong file being picked by mistake - this is
+// NOT a security boundary, just user-error prevention, hence a fast native
+// hash rather than anything more elaborate. Once verified, the buffer is
+// cached for the rest of the session so later exports need no re-upload.
+
+let pcapExportWorker = null;
+
+function currentPcapPayloadMode() {
+  return el.pcapPayloadHeaders.checked ? 'headers-only' : 'full';
+}
+
+function openPcapExportDialog() {
+  el.pcapExportError.hidden = true;
+  el.pcapExportProgress.hidden = true;
+  el.pcapDropZone.classList.remove('is-dragover');
+  const hasCachedBuffer = state.originalFileBuffer != null;
+  el.pcapUploadSection.hidden = hasCachedBuffer;
+  el.pcapCachedSection.hidden = !hasCachedBuffer;
+  el.pcapExportConfirm.hidden = !hasCachedBuffer;
+  el.pcapExportIntro.textContent = hasCachedBuffer
+    ? 'Wähle, was exportiert werden soll.'
+    : 'Wähle die Original-Capture-Datei erneut aus. Nur die aktuell gefilterten Verbindungen werden exportiert.';
+  el.pcapExportOverlay.hidden = false;
+}
+
+function closePcapExportDialog() {
+  el.pcapExportOverlay.hidden = true;
+  if (pcapExportWorker) {
+    pcapExportWorker.terminate();
+    pcapExportWorker = null;
+  }
+}
+
+function showPcapExportError(message) {
+  el.pcapExportProgress.hidden = true;
+  el.pcapExportErrorMessage.textContent = message;
+  el.pcapExportError.hidden = false;
+}
+
+async function handlePcapReupload(file) {
+  el.pcapExportError.hidden = true;
+  el.pcapExportProgress.hidden = false;
+  el.pcapExportProgressLabel.textContent = 'Prüfsumme wird verglichen …';
+  el.pcapExportProgressFill.style.width = '50%';
+  try {
+    const buffer = await file.arrayBuffer();
+    const hash = await sha256Hex(buffer);
+    if (hash !== state.originalFileHash) {
+      showPcapExportError('Diese Datei stimmt nicht mit der ursprünglich geladenen Capture-Datei überein. Bitte die richtige Datei auswählen.');
+      return;
+    }
+    state.originalFileBuffer = buffer;
+    runPcapExport(buffer);
+  } catch {
+    showPcapExportError('Die Datei konnte nicht gelesen werden.');
+  }
+}
+
+function runPcapExport(buffer) {
+  el.pcapUploadSection.hidden = true;
+  el.pcapCachedSection.hidden = true;
+  el.pcapExportConfirm.hidden = true;
+  el.pcapExportError.hidden = true;
+  el.pcapExportProgress.hidden = false;
+  el.pcapExportProgressLabel.textContent = 'PCAP-Datei wird erstellt …';
+  el.pcapExportProgressFill.style.width = '0%';
+
+  if (pcapExportWorker) pcapExportWorker.terminate();
+  pcapExportWorker = new Worker(`pcap-export.worker.js?v=${APP_VERSION}`);
+  pcapExportWorker.onmessage = (event) => {
+    const msg = event.data;
+    if (msg.type === 'progress') {
+      el.pcapExportProgressFill.style.width = `${msg.percent}%`;
+    } else if (msg.type === 'error') {
+      showPcapExportError(msg.message);
+    } else if (msg.type === 'result') {
+      downloadPcapResult(msg);
+      closePcapExportDialog();
+    }
+  };
+  pcapExportWorker.onerror = (event) => {
+    const detail = event.message || (event.filename ? `${event.filename}:${event.lineno}` : null);
+    showPcapExportError(`Fehler beim PCAP-Export: ${detail || 'Unbekannter Fehler.'}`);
+  };
+
+  // A fresh transferable copy each time - state.originalFileBuffer itself is
+  // never handed over, so it stays usable for further exports this session.
+  const bufferCopy = buffer.slice(0);
+  pcapExportWorker.postMessage({
+    buffer: bufferCopy,
+    selectedIds: [...state.selectedIds],
+    activeGroups: [...state.activeGroups],
+    hideMulticast: state.hideMulticast,
+    payloadMode: currentPcapPayloadMode(),
+  }, [bufferCopy]);
+}
+
+function downloadPcapResult(msg) {
+  const blob = new Blob([msg.buffer], { type: 'application/vnd.tcpdump.pcap' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const suffix = currentPcapPayloadMode() === 'headers-only' ? 'ohne-payload' : 'mit-payload';
+  a.href = url;
+  a.download = `packetatlas-gefiltert-${suffix}.pcap`;
+  a.click();
+  URL.revokeObjectURL(url);
+  if (msg.skippedLinkTypeCount > 0) {
+    showError(`${msg.skippedLinkTypeCount.toLocaleString('de-DE')} Pakete mit abweichendem Link-Type wurden beim PCAP-Export ausgelassen (klassisches pcap unterstützt nur einen Link-Type pro Datei).`);
+  }
+}
+
+el.exportPcap.addEventListener('click', () => {
+  el.exportMenu.hidden = true;
+  openPcapExportDialog();
+});
+el.pcapExportCancel.addEventListener('click', closePcapExportDialog);
+el.pcapExportConfirm.addEventListener('click', () => {
+  if (state.originalFileBuffer) runPcapExport(state.originalFileBuffer);
+});
+el.pcapExportOverlay.addEventListener('click', (e) => {
+  if (e.target === el.pcapExportOverlay) closePcapExportDialog();
+});
+el.pcapDropZone.addEventListener('click', () => el.pcapFileInput.click());
+el.pcapFileInput.addEventListener('change', () => {
+  if (el.pcapFileInput.files[0]) handlePcapReupload(el.pcapFileInput.files[0]);
+  el.pcapFileInput.value = '';
+});
+['dragenter', 'dragover'].forEach((evt) => {
+  el.pcapDropZone.addEventListener(evt, (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    el.pcapDropZone.classList.add('is-dragover');
+  });
+});
+el.pcapDropZone.addEventListener('dragleave', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  el.pcapDropZone.classList.remove('is-dragover');
+});
+el.pcapDropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  el.pcapDropZone.classList.remove('is-dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) handlePcapReupload(file);
 });
