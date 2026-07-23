@@ -5,6 +5,13 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [1.0.1] – 2026-07-23
+
+### Changed
+
+- Erste 1.0-Version: Versionsnummer von 0.15.1 auf 1.0.1 angehoben.
+- Versionsnummer intern vereinheitlicht: `APP_VERSION` in `app.js` ist jetzt die einzige Stelle, die bei einem Release-Bump geändert werden muss. Der Footer-Text in `index.html` wird nun zur Laufzeit aus `APP_VERSION` gesetzt statt hartkodiert gepflegt, und `parser.worker.js`/`pcap-export.worker.js` leiten ihre eigene Worker-Version aus dem `?v=`-Query-String ihrer eigenen Worker-URL ab statt aus einer zweiten, separat zu pflegenden Konstante. Keine funktionalen Änderungen am Verhalten der App.
+
 ## [0.15.1] – 2026-07-22
 
 ### Fixed

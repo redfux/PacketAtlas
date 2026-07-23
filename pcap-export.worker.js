@@ -6,9 +6,12 @@
 // logic never drifts from how the file was originally interpreted.
 // thought up by human, created by ai
 
-// Bumped alongside APP_VERSION/WORKER_VERSION - see parser.worker.js for why
-// these importScripts() URLs need a cache-busting query string.
-const PCAP_EXPORT_WORKER_VERSION = '0.15.1';
+// Derived from this worker's own URL - see parser.worker.js for the same
+// pattern and the reasoning. app.js constructs
+// `new Worker('pcap-export.worker.js?v=' + APP_VERSION)`, so reusing that
+// query string here (instead of a second hardcoded constant) means
+// APP_VERSION in app.js is the only place a release bump has to happen.
+const PCAP_EXPORT_WORKER_VERSION = new URL(self.location.href).searchParams.get('v') || '0';
 importScripts(
   `pcap-parser.js?v=${PCAP_EXPORT_WORKER_VERSION}`,
   `pcapng-parser.js?v=${PCAP_EXPORT_WORKER_VERSION}`,

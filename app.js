@@ -33,7 +33,7 @@ const MAX_TIMELINE_RENDER = 300;
 // browser. Appending the version as a query string changes the request URL
 // whenever the app updates, forcing a fresh fetch instead of silently
 // running old worker code after an update.
-const APP_VERSION = '0.15.1';
+const APP_VERSION = '1.0.1';
 
 const state = {
   devices: [],
@@ -151,7 +151,15 @@ const el = {
   pcapExportCancel: document.getElementById('pcap-export-cancel'),
   pcapExportConfirm: document.getElementById('pcap-export-confirm'),
   pcapExportClose: document.getElementById('pcap-export-close'),
+  appVersion: document.getElementById('app-version'),
 };
+
+// Single source of truth for the version shown in the footer and passed as
+// the cache-busting ?v= query string on both Worker() URLs below - the
+// workers in turn derive their OWN internal importScripts() version from
+// that same query string (see parser.worker.js/pcap-export.worker.js), so
+// bumping a release only ever means editing APP_VERSION here.
+el.appVersion.textContent = `v${APP_VERSION}`;
 
 let worker = null;
 
