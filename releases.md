@@ -5,6 +5,12 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [0.15.0] – 2026-07-22
+
+### Added
+
+- Neuer Export-Menüpunkt „Als PCAP (gefiltert) …": erzeugt aus der Original-Capture-Datei eine neue `.pcap`-Datei mit ausschließlich den aktuell ausgewählten/gefilterten Paketen, wahlweise mit vollständigem Payload oder auf die Protokoll-Header gekürzt (Snaplen-Prinzip, wie `tcpdump -s`/`editcap -s`). Da die Original-Datei nach dem Import nicht dauerhaft im Speicher gehalten wird, fragt der Dialog beim ersten Export einer Sitzung nach der Original-Datei und vergleicht deren SHA-256-Prüfsumme mit der ursprünglich geladenen Datei, um eine versehentliche Verwechslung auszuschließen; danach bleibt sie für weitere Exporte in derselben Sitzung im Speicher.
+
 ## [0.14.0] – 2026-07-22
 
 ### Added

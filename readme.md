@@ -28,6 +28,7 @@ Keine Installation, kein Build-Schritt nötig. PacketAtlas ist eine statische We
    - **Bild:** Export-Button exportiert die aktuell aktive, gefilterte Ansicht als PNG oder SVG.
    - **Excel:** Export-Button erzeugt eine `.xlsx`-Datei mit den Sheets „Matrix" und „Rohdaten" auf Basis der aktuellen Filterung. Das Rohdaten-Sheet nutzt die Spalten Source IP/Destination IP und listet je Geräte-Paar eine eigene Zeile pro Protokoll (TCP/UDP/ICMP/ARP/…), damit Ports unterschiedlicher Protokolle nicht vermischt werden.
    - **Nur angeheftete Auswahl:** Ist mindestens eine Kachel angeheftet, exportiert dieser zusätzliche Menüpunkt ausschließlich die angehefteten Elemente (unabhängig von Tab/Filter) als eigene `.xlsx`-Datei mit einem Sheet „Auswahl".
+   - **PCAP (gefiltert):** Erzeugt aus der Original-Capture-Datei eine neue `.pcap`-Datei mit ausschließlich den aktuell ausgewählten/gefilterten Paketen, wahlweise mit vollständigem Payload oder gekürzt auf die Protokoll-Header. Da die Original-Datei nach dem Import nicht dauerhaft im Speicher gehalten wird, fragt der Dialog beim ersten Export einer Sitzung nach der Original-Datei (per Drag & Drop oder Dateiauswahl) und vergleicht deren Prüfsumme mit der ursprünglich geladenen Datei, um eine Verwechslung auszuschließen; danach bleibt sie für weitere Exporte in derselben Sitzung im Speicher.
 
 ## Grenzen
 

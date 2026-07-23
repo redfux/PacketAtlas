@@ -136,6 +136,12 @@ function decodeFrame(buffer, offset, length, linkType, timestamp, origLen) {
     dstPort: null,
     protocol: null,
     icmpType: null,
+    // Absolute buffer offset where this frame's headers end and any payload
+    // begins - used only by the "PCAP ohne Payload" export (pcap-export.worker.js)
+    // to truncate a frame right after its L4 header. `null` means "don't
+    // truncate this frame" (ARP has no payload concept, and a frame whose L3/L4
+    // couldn't be decoded is excluded from export filtering entirely anyway).
+    headerEndOffset: null,
     multicastOrBroadcast: dstMac === BROADCAST_MAC || (dstMac !== null && isMacMulticast(dstMac)),
   };
 
@@ -263,6 +269,14 @@ function applyL4(view, offset, length, proto, result, isV6, baseOffset) {
     result.protocol = 'TCP';
     result.srcPort = view.getUint16(offset);
     result.dstPort = view.getUint16(offset + 2);
+    // Data Offset: upper 4 bits of byte 12, header length in 32-bit words -
+    // includes any TCP options, so this is genuinely where the payload starts.
+    // Only computable if the frame wasn't itself snaplen-truncated to just the
+    // port fields; otherwise leave headerEndOffset null (don't truncate further).
+    if (length >= offset + 13) {
+      const tcpHeaderLen = (view.getUint8(offset + 12) >> 4) * 4;
+      result.headerEndOffset = baseOffset + offset + Math.max(20, tcpHeaderLen);
+    }
   } else if (proto === IP_PROTO_UDP && length >= offset + 4) {
     result.protocol = 'UDP';
     result.srcPort = view.getUint16(offset);
@@ -273,13 +287,17 @@ function applyL4(view, offset, length, proto, result, isV6, baseOffset) {
       result.udpPayloadOffset = baseOffset + offset + 8;
       result.udpPayloadLength = length - offset - 8;
     }
+    result.headerEndOffset = baseOffset + offset + 8;
   } else if (proto === IP_PROTO_ICMP && !isV6) {
     result.protocol = 'ICMP';
     if (length >= offset + 1) result.icmpType = view.getUint8(offset);
+    result.headerEndOffset = baseOffset + offset + 8; // type/code/checksum + 4-byte rest-of-header (e.g. echo id/seq)
   } else if (proto === IP_PROTO_ICMPV6 && isV6) {
     result.protocol = 'ICMPv6';
     if (length >= offset + 1) result.icmpType = view.getUint8(offset);
+    result.headerEndOffset = baseOffset + offset + 8;
   } else {
     result.protocol = 'OTHER';
+    result.headerEndOffset = baseOffset + offset; // unknown L4 structure - keep only up through the L3 header
   }
 }

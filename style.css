@@ -635,6 +635,50 @@ body {
 .pinned-card__close:hover { background: var(--md-surface-container); color: var(--md-on-surface); }
 .pinned-card__body strong { font-weight: 500; }
 
+/* Modal overlay (PCAP export dialog) */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal {
+  width: 420px;
+  max-width: calc(100vw - var(--space-6));
+  max-height: calc(100vh - var(--space-6));
+  overflow-y: auto;
+  background: var(--md-surface);
+  border-radius: var(--radius-l);
+  box-shadow: var(--elevation-2);
+  padding: var(--space-5);
+}
+.modal__title { font-size: 16px; font-weight: 500; margin: 0 0 var(--space-1); }
+.modal__intro { font-size: 13px; color: var(--md-on-surface-variant); margin: 0 0 var(--space-4); line-height: 1.5; }
+.modal__section { margin-bottom: var(--space-4); }
+.modal__hint { font-size: 13px; color: var(--md-on-surface-variant); margin: 0 0 var(--space-2); }
+.modal__actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
+
+.radio-group { display: flex; flex-direction: column; gap: var(--space-2); }
+.radio-option { display: flex; align-items: center; gap: var(--space-2); font-size: 14px; cursor: pointer; }
+
+.error-banner--inline {
+  border-radius: var(--radius-s);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-4);
+  align-items: flex-start;
+}
+
+.drop-zone--compact {
+  margin: 0;
+  padding: var(--space-4);
+  border-width: 1px;
+}
+.drop-zone--compact .drop-zone__icon { font-size: 28px; }
+.drop-zone--compact .drop-zone__text { font-size: 13px; font-weight: 400; }
+
 /* Footer */
 .app-footer {
   padding: var(--space-2) var(--space-5);

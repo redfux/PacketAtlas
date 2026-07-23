@@ -67,6 +67,11 @@ Rein clientseitige Web-App, die Wireshark-Capture-Dateien (`.pcap`/`.pcapng`) im
 - [x] Export berücksichtigt aktuelle Selektion/Filterung
 - [x] Zusätzlicher Export „Nur angeheftete Auswahl": exportiert ausschließlich die aktuell angehefteten Kacheln als eigenes Sheet, unabhängig von Tab/Filter (nachträglich ergänzt, über ursprünglichen Anforderungsumfang hinaus)
 
+## 8. Export – PCAP (gefiltert)
+
+- [x] Export der aktuell ausgewählten/gefilterten Pakete als neue `.pcap`-Datei, wahlweise mit vollständigem Payload oder gekürzt auf die Protokoll-Header (nachträglich ergänzt, über ursprünglichen Anforderungsumfang hinaus)
+- [x] Original-Datei wird dafür nicht dauerhaft im Speicher gehalten, sondern bei Bedarf per Re-Upload erneut eingelesen, gegen einen beim Import berechneten SHA-256-Hash verifiziert und danach für die restliche Sitzung gecacht
+
 ## Backlog (nicht Bestandteil dieser Version)
 
 - **Zeitlicher Verlauf auf Einzelpaket-Ebene:** Eine erste Version der Verbindungen-Ansicht zeigte pro Einzelpaket einen chronologisch angeordneten Pfeil (echtes Ablauf-/Sequenzdiagramm wie bei Wiresharks „Flow Graph" bzw. H.225-Signalisierungsdiagrammen). Auf Nutzerwunsch wurde dies zugunsten der korrelierten, nicht-zeitlichen Verbindungsübersicht zurückgestellt. Die später ergänzte Zeitleiste (Ansicht D) bringt zwar wieder eine Zeitachse zurück, aber nur auf Ebene „erster/letzter Zeitpunkt je Verbindung" (Gantt-Balken) – eine Einzelpaket-genaue Chronologie (einzelne Pakete als Punkte/Marker auf der Zeitleiste, nicht nur Start/Ende) bleibt weiterhin zurückgestellt, für eine mögliche spätere Version denkbar.

@@ -16,7 +16,8 @@ app.js (UI-Controller)
         ├─► matrix-view.js   (SVG-Adjazenzmatrix)
         ├─► graph-view.js    (SVG + d3-force)
         ├─► export-image.js  (PNG/SVG)
-        └─► export-excel.js  (XLSX via SheetJS)
+        ├─► export-excel.js  (XLSX via SheetJS)
+        └─► pcap-export.worker.js  ──►  pcap-parser.js / pcapng-parser.js / packet-decoder.js (gefilterter PCAP-Export)
 ```
 
 ## Warum kein Framework
@@ -200,6 +201,38 @@ Der Main-Thread bleibt während des Parsens vollständig responsiv.
 ### Klassischer Worker statt Modul-Worker
 
 `parser.worker.js` wird bewusst als **klassischer Worker** (`new Worker('parser.worker.js')`, ohne `{ type: 'module' }`) erzeugt und lädt `pcap-parser.js`, `pcapng-parser.js`, `packet-decoder.js` und `dns-resolver.js` per `importScripts()` nach – nicht über ES-`import`. Modul-Worker sind eine vergleichsweise junge Web-Plattform-Funktion (Firefox unterstützt sie erst seit Version 114, Mitte 2023) und schlagen in nicht unterstützten Browsern mit einer kryptischen, inhaltsunabhängigen Fehlermeldung fehl. `importScripts()` wird dagegen seit weit über einem Jahrzehnt von allen Browsern unterstützt. Da klassische Scripts (anders als Module) keinen eigenen Datei-Scope haben, teilen sich alle per `importScripts()` geladenen Dateien denselben globalen Scope wie `parser.worker.js` – die Funktionen aus den vier Parser-Dateien sind dort daher ohne Import direkt als globale Bezeichner nutzbar. Der `Aggregator` (Geräte-/Paar-Aggregation) ist deshalb direkt in `parser.worker.js` definiert statt in `data-model.js`, das als ES-Modul weiterhin ausschließlich vom Main-Thread (`app.js` und die Views) importiert wird.
+
+## PCAP-Export (gefilterte Re-Exportierung)
+
+Der Export-Menüpunkt „Als PCAP (gefiltert) …" erzeugt aus der Original-Capture-Datei eine neue, klassische `.pcap`-Datei, die nur die Pakete der aktuell ausgewählten/gefilterten Geräte, Protokolle und (falls aktiviert) ohne Multicast/Broadcast enthält – optional mit oder ohne Payload.
+
+### Warum ein Re-Upload nötig ist
+
+`parser.worker.js` sendet nach dem Parsen nur das aggregierte Datenmodell zurück (Devices/Pairs/Connections); die Original-Bytes werden **nicht** für die gesamte Session im Speicher gehalten (sie werden per Transferable Object an den Worker übergeben, wodurch der Haupt-Thread seine Referenz verliert). Für einen echten Paket-Export braucht es aber Zugriff auf die Original-Frame-Bytes, nicht nur Aggregat-Statistiken.
+
+Statt die Datei dauerhaft im Speicher zu halten (höherer Speicherbedarf für die gesamte Session, unabhängig davon, ob je exportiert wird), fragt der Export-Dialog den Nutzer, die Original-Datei erneut auszuwählen – nur beim ersten Exportversuch einer Session. `app.js` berechnet beim ursprünglichen Import einen SHA-256-Hash der Datei (`sha256Hex()`, über die native `crypto.subtle.digest()`-API – kein Vendoring nötig) und vergleicht ihn beim Re-Upload; bei Übereinstimmung wird der Buffer für den Rest der Session gecacht (`state.originalFileBuffer`), sodass spätere Exporte in derselben Session keinen erneuten Upload mehr benötigen. Ein neuer Datei-Import verwirft den gecachten Buffer sofort (`startParsing()`). Der Hash dient ausdrücklich nur der Fehlervermeidung (falsche Datei ausgewählt), nicht der Absicherung gegen Manipulation – dafür genügt ein schneller, nativer Hash ohne kryptografischen Anspruch an die konkrete Bedrohungslage.
+
+### Filterung auf Paket-Ebene
+
+`pcap-export.worker.js` ist ein weiterer klassischer Worker, der dieselben Parser-/Decoder-Skripte per `importScripts()` nachlädt wie `parser.worker.js` (`pcap-parser.js`, `pcapng-parser.js`, `packet-decoder.js`), damit die Filterlogik nie von der ursprünglichen Interpretation der Datei abweicht. Er bekommt `selectedIds`, `activeGroups`, `hideMulticast` und den gewählten `payloadMode` (`'full'` / `'headers-only'`) als Arrays/Primitives übergeben (keine Sets/Maps über `postMessage`, um jede strukturelle Klon-Unsicherheit zu vermeiden) und durchläuft die Original-Datei Frame für Frame erneut.
+
+Die Filterung erfolgt bewusst **pro Paket**, nicht pro aggregiertem Geräte-Paar: Ein Paket wird nur behalten, wenn beide Endpunkte aktuell ausgewählt sind, sein eigenes Protokoll zur aktiven Protokollgruppe gehört und es (falls „Multicast/Broadcast ausblenden" aktiv ist) selbst kein Multicast/Broadcast ist. Das ist feingranularer als die Matrix/Graph-Sichtbarkeit eines Paares (dort reicht ein einziges passendes Protokoll, damit das ganze Paar sichtbar ist) – für einen Paket-Export soll das Abwählen von z. B. „ARP" aber wirklich die ARP-Pakete selbst entfernen, nicht nur ein Paar ausblenden, dessen einzige Traffic-Art ARP war.
+
+`PROTOCOL_GROUPS`/`protocolGroupOf()` sind in `pcap-export.worker.js` dupliziert statt aus `data-model.js` importiert – derselbe Grund wie bei `pairKey()` in `parser.worker.js` (klassischer Worker, kein ES-Modul-Scope).
+
+### Payload-Kürzung
+
+Bei `payloadMode === 'headers-only'` wird jedes passende Frame auf `decoded.headerEndOffset` gekürzt – ein neues Feld, das `packet-decoder.js`/`applyL4()` pro Paket berechnet: für TCP das Ende des Headers inklusive Optionen (Data-Offset-Feld, Byte 12 des TCP-Headers), für UDP/ICMP/ICMPv6 die festen 8 Byte Header, für ARP `null` (keine Kürzung – ARP hat keinen nennenswerten Payload-Begriff), für unbekannte L4-Protokolle das Ende des L3-Headers. Die Kürzung wird zusätzlich beim tatsächlichen Schreiben auf die tatsächliche Frame-Grenze geclamped, falls `headerEndOffset` durch eine snaplen-verkürzte Originaldatei über das verfügbare Frame-Ende hinausragen sollte.
+
+Geschrieben wird nach dem klassischen Snaplen-Prinzip: `incl_len` (in der Ausgabedatei tatsächlich gespeicherte Länge) wird gekürzt, `orig_len` bleibt die tatsächliche ursprüngliche Framegröße – exakt das, was `tcpdump -s <n>`/`editcap -s <n>` heute schon tun, kein Sonderformat. Wireshark zeigt gekürzte Frames entsprechend als „[Packet size limited during capture]" an, mit weiterhin korrekter Paket-/Byte-Statistik.
+
+### Ausgabeformat
+
+Geschrieben wird immer **klassisches pcap** (24-Byte-Global-Header + 16-Byte-Record-Header je Paket), nicht pcapng – einfacher zu schreiben, von jedem Tool lesbar, deckt den Normalfall (eine Schnittstelle, ein Link-Type) vollständig ab. Da klassisches pcap nur einen einzigen Link-Type pro Datei kennt, eine pcapng-Quelle aber theoretisch mehrere Interfaces mit unterschiedlichen Link-Types mischen könnte, wird der **häufigste** Link-Type unter den passenden Paketen ermittelt und nur dieser übernommen; abweichende Pakete werden ausgelassen und die Anzahl dem Nutzer nach Abschluss als Warnhinweis gemeldet (`skippedLinkTypeCount`).
+
+### Ablauf im Dialog
+
+`app.js` verwaltet den Dialog (`#pcap-export-overlay`) über `openPcapExportDialog()`/`closePcapExportDialog()`: Ist bereits ein verifizierter Buffer aus dieser Session vorhanden, wird die Re-Upload-Dropzone übersprungen und nur Payload-Wahl + „Exportieren"-Button gezeigt. Andernfalls verifiziert `handlePcapReupload()` die per Drag-&-Drop oder Datei-Dialog bereitgestellte Datei per Hash-Vergleich und startet bei Erfolg automatisch den Export, ohne weiteren Klick. Fortschritt (`progress`-Nachrichten vom Worker) und Fehler (`error`-Nachrichten, z. B. „keine Pakete entsprechen der Filterung") werden direkt im Dialog angezeigt; bei Erfolg löst `downloadPcapResult()` einen Blob-Download aus und schließt den Dialog.
 
 ## Sicherheit / Datenschutz
 
