@@ -9,13 +9,16 @@
 // importScripts() has been supported everywhere for well over a decade.
 // thought up by human, created by ai
 
-// Bumped alongside APP_VERSION in app.js and the footer version in
-// index.html. importScripts() fetches are plain classic-script requests the
-// browser can cache independently of whatever cache-busting the worker's own
-// URL got - without a matching query string here, these could still be
-// served stale after an update even though parser.worker.js itself was
-// freshly fetched.
-const WORKER_VERSION = '0.15.1';
+// Derived from this worker's own URL rather than a hardcoded constant:
+// app.js constructs `new Worker('parser.worker.js?v=' + APP_VERSION)`, so the
+// same version string is already sitting in self.location's query string.
+// importScripts() fetches are plain classic-script requests the browser can
+// cache independently of whatever cache-busting the worker's own URL got -
+// without reusing that same query string here, these could still be served
+// stale after an update even though parser.worker.js itself was freshly
+// fetched. Reusing it (instead of a second hardcoded constant) means
+// APP_VERSION in app.js is the only place a release bump has to happen.
+const WORKER_VERSION = new URL(self.location.href).searchParams.get('v') || '0';
 importScripts(
   `pcap-parser.js?v=${WORKER_VERSION}`,
   `pcapng-parser.js?v=${WORKER_VERSION}`,
