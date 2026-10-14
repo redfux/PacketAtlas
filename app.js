@@ -34,7 +34,7 @@ const MAX_TIMELINE_RENDER = 300;
 // browser. Appending the version as a query string changes the request URL
 // whenever the app updates, forcing a fresh fetch instead of silently
 // running old worker code after an update.
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 
 const state = {
   devices: [],

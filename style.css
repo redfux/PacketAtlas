@@ -838,6 +838,7 @@ body {
 .stats-legend__pct { font-variant-numeric: tabular-nums; }
 .stats-legend__value { text-align: right; color: var(--md-on-surface-variant); font-variant-numeric: tabular-nums; }
 
+.stats-subtitle { margin: var(--space-3) 0 var(--space-1); font-size: 12px; font-weight: 500; }
 .stats-row { display: grid; grid-template-columns: 210px 1fr 110px; align-items: center; gap: var(--space-2); padding: 3px 0; font-size: 12px; }
 .stats-row__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stats-row__value { text-align: right; color: var(--md-on-surface-variant); font-variant-numeric: tabular-nums; }

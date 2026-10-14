@@ -191,6 +191,49 @@ function timelineCard(stats, metric) {
   );
 }
 
+function mtuFragmentationCard(stats) {
+  const f = stats.fragmentation;
+  const m = stats.mtu;
+  const countRow = (label, value, total, color, hint) => ({
+    label,
+    value,
+    color,
+    hint,
+    display: total ? `${countFormat.format(value)} (${formatPercent(value, total)})` : countFormat.format(value),
+  });
+  const fragRows = [
+    countRow('IPv4-Fragmente', f.ipv4Fragments, f.ipv4Packets, '--stats-bad', 'IPv4-Pakete, die Teil eines fragmentierten Datagramms sind (More-Fragments-Flag oder Fragment-Offset > 0). Prozentwert: Anteil an allen IPv4-Paketen.'),
+    countRow('IPv6-Fragmente', f.ipv6Fragments, f.ipv6Packets, '--stats-bad', 'IPv6-Pakete mit Fragment-Extension-Header. Prozentwert: Anteil an allen IPv6-Paketen.'),
+    countRow('Fragmentierte Datagramme', f.fragmentedDatagrams, 0, '--stats-warn', 'Anzahl der ersten Fragmente = Anzahl der fragmentierten Datagramme.'),
+    countRow('DF-Bit gesetzt (IPv4)', f.dontFragment, f.ipv4Packets, '--stats-neutral', '„Don\'t Fragment“: Router dürfen das Paket nicht fragmentieren und müssen bei zu großen Paketen ICMP „Fragmentation needed“ senden (Path-MTU-Discovery).'),
+  ];
+
+  const mssRows = m.mss.slice(0, 6).map((entry) => ({
+    label: `MSS ${entry.mss} (IPv${entry.ipVersion})`,
+    value: entry.packets,
+    color: '--stats-tcp',
+    hint: `Im SYN angekündigte Maximum Segment Size; entspricht einer MTU von ca. ${entry.impliedMtu} B (MSS + IP- und TCP-Header).`,
+    display: `≈ MTU ${countFormat.format(entry.impliedMtu)} · ${countFormat.format(entry.packets)}×`,
+  }));
+  const icmpRows = m.icmpReported.slice(0, 6).map((entry) => ({
+    label: entry.protocol === 'ICMPv6' ? 'Packet Too Big' : 'Fragmentation needed',
+    value: entry.packets,
+    color: '--stats-bad',
+    hint: 'Ein Router meldet, dass ein Paket größer als die MTU seines nächsten Hops war.',
+    display: `MTU ${countFormat.format(entry.mtu)} · ${countFormat.format(entry.packets)}×`,
+  }));
+
+  const summary = `<p class="stats-card__summary">Größtes IP-Paket: <strong>${m.maxIpPacketLength ? `${countFormat.format(m.maxIpPacketLength)} B` : '–'}</strong> (untere Schranke für die MTU) · größter Frame: <strong>${countFormat.format(m.maxFrameLength)} B</strong> inkl. Link-Layer-Header</p>`;
+  const body =
+    summary +
+    '<div class="stats-subtitle">Fragmentierung</div>' +
+    barRows(fragRows, '') +
+    '<div class="stats-subtitle">Angekündigte TCP-MSS (SYN)</div>' +
+    barRows(mssRows, 'Keine SYN-Pakete mit MSS-Option im Capture.') +
+    (icmpRows.length ? '<div class="stats-subtitle">Von Routern gemeldete MTU (ICMP)</div>' + barRows(icmpRows, '') : '');
+  return card('MTU und Fragmentierung', body, '', 'Die Pfad-MTU ist im Capture nicht direkt sichtbar – die Werte sind Anhaltspunkte. Pakete größer als die MTU (z. B. bei TSO/GSO am Messpunkt) können das größte IP-Paket über die echte MTU hinaus anheben.');
+}
+
 function streamsCard(stats) {
   if (!stats.problemStreams.length) return '';
   const head = '<tr><th>Verbindung</th><th class="num">Pakete</th><th class="num">Retransmits</th><th class="num">Dup-ACKs</th><th class="num">Lücken</th><th class="num">Out-of-Order</th><th class="num">Zero-Window</th><th class="num">RST</th></tr>';
@@ -251,6 +294,7 @@ export function renderStats(container, { stats, metric }) {
       ${flagsCard(stats)}
       ${portsCard(stats, metric)}
       ${sizesCard(stats, metric)}
+      ${mtuFragmentationCard(stats)}
       ${timelineCard(stats, metric)}
       ${streamsCard(stats)}
     </div>`;

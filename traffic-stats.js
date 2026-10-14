@@ -91,6 +91,18 @@ class TrafficStats {
       keepAlives: 0,
     };
     this.streams = new Map();
+    this.fragmentation = {
+      ipv4Packets: 0,
+      ipv4Fragments: 0,
+      ipv6Packets: 0,
+      ipv6Fragments: 0,
+      fragmentedDatagrams: 0,
+      dontFragment: 0,
+    };
+    this.maxIpPacketLength = 0;
+    this.maxFrameLength = 0;
+    this.mssValues = new Map(); // `${ipVersion}|${mss}` -> SYN packets announcing it
+    this.icmpMtuValues = new Map(); // `${protocol}|${mtu}` -> packets reporting it
   }
 
   add(decoded) {
@@ -117,9 +129,35 @@ class TrafficStats {
       this.perSecond.set(second, [1, size]);
     }
 
+    this.addSizeAndFragmentation(decoded, size);
     if (decoded.protocol === 'TCP' || decoded.protocol === 'UDP') this.addPort(decoded, size);
     if (decoded.protocol === 'ICMP' || decoded.protocol === 'ICMPv6') this.addIcmp(decoded);
     if (decoded.protocol === 'TCP' && decoded.tcpSeq !== null) this.addTcp(decoded);
+  }
+
+  addSizeAndFragmentation(decoded, size) {
+    if (size > this.maxFrameLength) this.maxFrameLength = size;
+    if (decoded.ipPacketLength !== null && decoded.ipPacketLength > this.maxIpPacketLength) this.maxIpPacketLength = decoded.ipPacketLength;
+
+    const f = this.fragmentation;
+    if (decoded.ipVersion === 4) {
+      f.ipv4Packets++;
+      if (decoded.isFragment) f.ipv4Fragments++;
+      if (decoded.dontFragment) f.dontFragment++;
+    } else if (decoded.ipVersion === 6) {
+      f.ipv6Packets++;
+      if (decoded.isFragment) f.ipv6Fragments++;
+    }
+    if (decoded.isFirstFragment) f.fragmentedDatagrams++;
+
+    if (decoded.tcpMss !== null) {
+      const key = `${decoded.ipVersion}|${decoded.tcpMss}`;
+      this.mssValues.set(key, (this.mssValues.get(key) || 0) + 1);
+    }
+    if (decoded.icmpMtu !== null) {
+      const key = `${decoded.protocol}|${decoded.icmpMtu}`;
+      this.icmpMtuValues.set(key, (this.icmpMtuValues.get(key) || 0) + 1);
+    }
   }
 
   addPort(decoded, size) {
@@ -312,6 +350,20 @@ class TrafficStats {
       icmp: Array.from(this.icmp.values()).sort((x, y) => y.packets - x.packets),
       tcpFlags: Array.from(this.tcpFlagCombos, ([label, packets]) => ({ label, packets })).sort((x, y) => y.packets - x.packets),
       tcp: { ...this.tcp, streams: this.streams.size },
+      fragmentation: { ...this.fragmentation },
+      mtu: {
+        maxIpPacketLength: this.maxIpPacketLength,
+        maxFrameLength: this.maxFrameLength,
+        // IPv4 adds 20 bytes IP + 20 bytes TCP header to the MSS, IPv6 40 + 20.
+        mss: Array.from(this.mssValues, ([key, packets]) => {
+          const [ipVersion, mss] = key.split('|').map(Number);
+          return { ipVersion, mss, impliedMtu: mss + (ipVersion === 6 ? 60 : 40), packets };
+        }).sort((x, y) => y.packets - x.packets),
+        icmpReported: Array.from(this.icmpMtuValues, ([key, packets]) => {
+          const [protocol, mtu] = key.split('|');
+          return { protocol, mtu: Number(mtu), packets };
+        }).sort((x, y) => y.packets - x.packets),
+      },
       problemStreams,
     };
   }

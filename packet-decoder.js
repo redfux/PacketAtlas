@@ -175,8 +175,21 @@ function decodeFrame(buffer, offset, length, linkType, timestamp, origLen) {
     tcpAck: null,
     tcpWindow: null,
     tcpPayloadLength: null,
-    // IPv4 only: this packet is part of a fragmented datagram.
+    // This packet is part of a fragmented IP datagram (IPv4 flags/offset, or an
+    // IPv6 Fragment extension header); isFirstFragment marks the first piece of
+    // such a datagram, so counting those counts fragmented datagrams.
     isFragment: false,
+    isFirstFragment: false,
+    // IPv4 "Don't Fragment" bit.
+    dontFragment: false,
+    // Total IP packet size in bytes (IP header + payload) as stated by the IP
+    // header, i.e. without any link-layer header or padding. null if unknown.
+    ipPacketLength: null,
+    // TCP MSS option announced in a SYN / SYN-ACK, and the next-hop MTU reported
+    // by ICMP "Fragmentation needed" / ICMPv6 "Packet Too Big" - both are the
+    // only places a capture reveals anything about the path MTU.
+    tcpMss: null,
+    icmpMtu: null,
     // Absolute buffer offset where this frame's headers end and any payload
     // begins - used only by the "PCAP ohne Payload" export (pcap-export.worker.js)
     // to truncate a frame right after its L4 header. `null` means "don't
@@ -300,6 +313,9 @@ function decodeIPv4(view, offset, length, result, baseOffset) {
   const moreFragments = (fragmentField & 0x2000) !== 0;
   const fragmentOffset = fragmentField & 0x1fff;
   if (moreFragments || fragmentOffset > 0) result.isFragment = true;
+  if (moreFragments && fragmentOffset === 0) result.isFirstFragment = true;
+  if ((fragmentField & 0x4000) !== 0) result.dontFragment = true;
+  if (ipPayloadLength !== null) result.ipPacketLength = totalLength;
 
   const l4Offset = offset + ihl;
   if (fragmentOffset > 0) {
@@ -324,8 +340,31 @@ function decodeIPv6(view, offset, length, result, baseOffset) {
 
   const payloadLength = view.getUint16(offset + 4); // 0 = jumbogram / segmentation offload, fall back to captured length
   const l4Offset = offset + 40;
+  if (payloadLength > 0) result.ipPacketLength = 40 + payloadLength;
+  if (nextHeader === 44 && length >= l4Offset + 8) {
+    // IPv6 Fragment extension header: next header, reserved, offset(13)+res(2)+M(1), identification.
+    const fragmentField = view.getUint16(l4Offset + 2);
+    result.isFragment = true;
+    if ((fragmentField >> 3) === 0 && (fragmentField & 0x1) !== 0) result.isFirstFragment = true;
+  }
   applyL4(view, l4Offset, length, nextHeader, result, true, baseOffset, payloadLength > 0 ? payloadLength : null);
   return result;
+}
+
+/** Walks TCP options in [start, end) and returns the MSS value (kind 2), or null if absent/malformed. */
+function readTcpMss(view, start, end) {
+  let pos = start;
+  while (pos < end) {
+    const kind = view.getUint8(pos);
+    if (kind === 0) return null; // end of option list
+    if (kind === 1) { pos++; continue; } // NOP padding
+    if (pos + 1 >= end) return null;
+    const optionLength = view.getUint8(pos + 1);
+    if (optionLength < 2) return null;
+    if (kind === 2 && optionLength === 4 && pos + 4 <= end) return view.getUint16(pos + 2);
+    pos += optionLength;
+  }
+  return null;
 }
 
 function applyL4(view, offset, length, proto, result, isV6, baseOffset, ipPayloadLength) {
@@ -351,6 +390,9 @@ function applyL4(view, offset, length, proto, result, isV6, baseOffset, ipPayloa
       // padding / trailers would otherwise count as TCP payload.
       const l4Length = ipPayloadLength != null ? ipPayloadLength : length - offset;
       result.tcpPayloadLength = Math.max(0, l4Length - tcpHeaderLen);
+      if ((result.tcpFlags & 0x02) !== 0 && tcpHeaderLen > 20) {
+        result.tcpMss = readTcpMss(view, offset + 20, Math.min(offset + tcpHeaderLen, length));
+      }
     }
   } else if (proto === IP_PROTO_UDP && length >= offset + 4) {
     result.protocol = 'UDP';
@@ -367,11 +409,15 @@ function applyL4(view, offset, length, proto, result, isV6, baseOffset, ipPayloa
     result.protocol = 'ICMP';
     if (length >= offset + 1) result.icmpType = view.getUint8(offset);
     if (length >= offset + 2) result.icmpCode = view.getUint8(offset + 1);
+    // Type 3 / code 4 = Fragmentation Needed: next-hop MTU in the low 16 bits of the "rest of header".
+    if (result.icmpType === 3 && result.icmpCode === 4 && length >= offset + 8) result.icmpMtu = view.getUint16(offset + 6);
     result.headerEndOffset = baseOffset + offset + 8; // type/code/checksum + 4-byte rest-of-header (e.g. echo id/seq)
   } else if (proto === IP_PROTO_ICMPV6 && isV6) {
     result.protocol = 'ICMPv6';
     if (length >= offset + 1) result.icmpType = view.getUint8(offset);
     if (length >= offset + 2) result.icmpCode = view.getUint8(offset + 1);
+    // Type 2 = Packet Too Big: MTU as a 32-bit value in the "rest of header".
+    if (result.icmpType === 2 && length >= offset + 8) result.icmpMtu = view.getUint32(offset + 4);
     result.headerEndOffset = baseOffset + offset + 8;
   } else {
     result.protocol = 'OTHER';

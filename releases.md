@@ -5,6 +5,15 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [1.2.0] – 2026-10-14
+
+### Added
+
+- Statistik-Tab: neue Kachel **MTU und Fragmentierung**.
+  - Fragmentierung: IPv4-Fragmente und IPv6-Fragmente (jeweils mit Anteil an allen Paketen der Adressfamilie), Anzahl fragmentierter Datagramme (= erste Fragmente) und Anzahl IPv4-Pakete mit gesetztem DF-Bit.
+  - MTU-Anhaltspunkte: größtes beobachtetes IP-Paket (untere Schranke für die MTU) und größter Frame, die in SYN-/SYN-ACK-Paketen angekündigte TCP-MSS (mit daraus abgeleiteter MTU, getrennt nach IPv4/IPv6) sowie die von Routern per ICMP „Fragmentation needed" bzw. ICMPv6 „Packet Too Big" gemeldete Next-Hop-MTU. Die Pfad-MTU selbst ist im Capture nicht direkt sichtbar, die Werte sind Anhaltspunkte (z. B. MSS 1394 → MTU 1434 deutet auf einen VPN-/Tunnel-Pfad hin).
+- Der Decoder liefert dafür zusätzlich IP-Paketlänge, DF-Bit, Fragment-Kennzeichnung (IPv4 und IPv6-Fragment-Header), TCP-MSS-Option und die in ICMP gemeldete MTU.
+
 ## [1.1.0] – 2026-10-14
 
 ### Added
