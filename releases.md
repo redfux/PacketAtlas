@@ -5,6 +5,12 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [1.0.2] – 2026-10-14
+
+### Fixed
+
+- Captures mit Raw-IP-Link-Type (LinkType 101, sowie 12/228/229), wie sie typischerweise auf VPN-/Tunnel-Interfaces entstehen, wurden bisher komplett verworfen und führten zur Meldung „Es konnten keine Geräte erkannt werden". Pakete ohne Link-Layer-Header werden jetzt direkt ab dem IPv4-/IPv6-Header dekodiert; Geräte werden dabei rein über ihre IP identifiziert (keine MAC-Adressen verfügbar).
+
 ## [1.0.1] – 2026-07-23
 
 ### Changed

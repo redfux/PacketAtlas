@@ -4,9 +4,13 @@
 // thought up by human, created by ai
 
 const LINKTYPE_ETHERNET = 1;
+const LINKTYPE_RAW_BSD = 12; // DLT_RAW on most BSD/Linux libpcap builds - raw IP, same as 101
+const LINKTYPE_RAW = 101;
 const LINKTYPE_IEEE802_11 = 105;
 const LINKTYPE_LINUX_SLL = 113;
 const LINKTYPE_IEEE802_11_RADIOTAP = 127;
+const LINKTYPE_IPV4 = 228;
+const LINKTYPE_IPV6 = 229;
 
 const ETHERTYPE_IPV4 = 0x0800;
 const ETHERTYPE_IPV6 = 0x86dd;
@@ -115,6 +119,21 @@ function decodeFrame(buffer, offset, length, linkType, timestamp, origLen) {
     const parsed = decode80211DataFrame(view, macOffset, length);
     if (!parsed) return null; // management/control/null-function frame - no payload to extract
     ({ srcMac, dstMac, l3Offset, ethertype } = parsed);
+  } else if (
+    linkType === LINKTYPE_RAW ||
+    linkType === LINKTYPE_RAW_BSD ||
+    linkType === LINKTYPE_IPV4 ||
+    linkType === LINKTYPE_IPV6
+  ) {
+    // Raw IP: no link-layer header at all (typical for captures on VPN/tunnel
+    // interfaces), the frame starts directly with the IPv4/IPv6 header. There
+    // are no MAC addresses, so devices are identified purely by IP.
+    if (length < 1) return null;
+    const ipVersion = view.getUint8(0) >> 4;
+    if (ipVersion === 4) ethertype = ETHERTYPE_IPV4;
+    else if (ipVersion === 6) ethertype = ETHERTYPE_IPV6;
+    else return null;
+    l3Offset = 0;
   } else {
     return null; // unsupported link type
   }

@@ -19,6 +19,7 @@ Rein clientseitige Web-App, die Wireshark-Capture-Dateien (`.pcap`/`.pcapng`) im
 
 - [x] Klassisches libpcap-Format und pcapng (Block-Struktur)
 - [x] Link-Layer: Ethernet II und Linux Cooked Capture (SLL)
+- [x] Link-Layer: Raw IP (LinkType 101/12/228/229, ohne Link-Layer-Header, z. B. VPN-/Tunnel-Interfaces) – nachträglich ergänzt
 - [x] Link-Layer: IEEE 802.11 (WLAN), mit und ohne Radiotap-Header – nur Datenframes, Endgeräte statt Access Point als Kommunikationspartner (nachträglich ergänzt, über ursprünglichen Anforderungsumfang hinaus)
 - [x] Layer 3: IPv4 und IPv6
 - [x] Layer 4: TCP, UDP, ICMP/ICMPv6

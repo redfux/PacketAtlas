@@ -86,6 +86,7 @@ Beide Formate sind offen spezifiziert und im hier benötigten Umfang (nur die ob
 
 - **Ethernet II** (LinkType 1): 6 Byte Ziel-MAC, 6 Byte Quell-MAC, 2 Byte Ethertype.
 - **Linux Cooked Capture / SLL** (LinkType 113): 16-Byte-Header, Protokollfeld an Offset 14.
+- **Raw IP** (LinkType 101, außerdem 12/228/229): kein Link-Layer-Header, der Frame beginnt direkt mit dem IP-Header; die IP-Version wird aus dem ersten Nibble gelesen (4 → IPv4, 6 → IPv6). Es gibt keine MAC-Adressen, Geräte werden rein über ihre IP identifiziert. Typisch für Captures auf VPN-/Tunnel-Interfaces.
 - **IEEE 802.11 mit Radiotap-Header** (LinkType 127) und **reines IEEE 802.11** (LinkType 105): siehe eigener Abschnitt unten.
 - **Ethertype** bestimmt die weitere Verarbeitung: `0x0800` → IPv4, `0x86DD` → IPv6, `0x0806` → ARP.
 - **IPv4**: Header-Länge aus IHL, Protokollfeld (TCP=6, UDP=17, ICMP=1) bestimmt L4-Parsing, Quell-/Ziel-Adresse.
