@@ -5,6 +5,12 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [1.4.0] – 2026-10-14
+
+### Added
+
+- Zeitleiste: Balken werden wie im Verbindungen-Tab nach Qualität eingefärbt (blau = unauffällig, gelb = auffällig, rot = instabil). Innerhalb eines Balkens markieren helle Striche die einzelnen Probleme (Retransmit, Lücke, RST, Zero-Window) an ihrem Zeitpunkt und bleiben beim Zoomen/Verschieben exakt an ihrer Position. Eine Legende über dem Diagramm erklärt Farben und Striche.
+
 ## [1.3.0] – 2026-10-14
 
 ### Added

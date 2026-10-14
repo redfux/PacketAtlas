@@ -621,6 +621,11 @@ body {
 .timeline-axis-label { fill: var(--md-on-surface-variant); font-size: 10px; }
 .timeline-bar { fill: var(--md-primary); cursor: pointer; }
 .timeline-bar:hover { fill: color-mix(in srgb, var(--md-primary) 80%, black); }
+.timeline-bar--warn { fill: var(--stats-warn); }
+.timeline-bar--bad { fill: var(--stats-bad); }
+.timeline-bar--warn:hover { fill: color-mix(in srgb, var(--stats-warn) 80%, black); }
+.timeline-bar--bad:hover { fill: color-mix(in srgb, var(--stats-bad) 80%, black); }
+.timeline-problem-mark { stroke: var(--md-surface); stroke-width: 1.5; stroke-opacity: 0.9; }
 
 /* Tooltip */
 .tooltip {

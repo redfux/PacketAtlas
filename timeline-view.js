@@ -5,7 +5,7 @@
 // provides the time scale, axis rendering and zoom/pan behavior.
 // thought up by human, created by ai
 
-import { deviceLabel } from './data-model.js';
+import { deviceLabel, healthOf } from './data-model.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -154,11 +154,27 @@ export function renderTimeline(container, { connections, deviceIndex, onHover, o
     rect.setAttribute('height', BAR_HEIGHT);
     rect.setAttribute('rx', 3);
     rect.classList.add('timeline-bar');
+    // Same quality verdict as the Connections view: yellow = auffällig, red = instabil.
+    const level = healthOf(connection).level;
+    if (level !== 'ok') rect.classList.add(`timeline-bar--${level}`);
     rect.addEventListener('mousemove', (e) => onHover(e, connection));
     rect.addEventListener('mouseleave', onLeave);
     rect.addEventListener('click', (e) => onClick(e, connection));
     barGroup.appendChild(rect);
-    return { rect, connection };
+
+    // One thin mark per retransmit/gap/reset/zero-window event (timestamps are
+    // capped per connection by the parser), so you can see WHEN inside the
+    // bar's lifetime things went wrong, not just that they did.
+    const marks = (connection.tcp && connection.tcp.problemTimes ? connection.tcp.problemTimes : []).map((time) => {
+      const mark = document.createElementNS(SVG_NS, 'line');
+      mark.setAttribute('y1', y + 2);
+      mark.setAttribute('y2', y + BAR_HEIGHT - 2);
+      mark.classList.add('timeline-problem-mark');
+      mark.setAttribute('pointer-events', 'none');
+      barGroup.appendChild(mark);
+      return { mark, time };
+    });
+    return { rect, connection, marks };
   });
 
   function drawAxis(scale) {
@@ -185,12 +201,17 @@ export function renderTimeline(container, { connections, deviceIndex, onHover, o
   }
 
   function drawBars(scale) {
-    for (const { rect, connection } of bars) {
+    for (const { rect, connection, marks } of bars) {
       const x1 = scale(new Date(connection.firstSeen * 1000));
       const x2 = scale(new Date(connection.lastSeen * 1000));
       const w = Math.max(MIN_BAR_WIDTH, x2 - x1);
       rect.setAttribute('x', x1);
       rect.setAttribute('width', w);
+      for (const { mark, time } of marks) {
+        const x = scale(new Date(time * 1000));
+        mark.setAttribute('x1', x);
+        mark.setAttribute('x2', x);
+      }
     }
   }
 
