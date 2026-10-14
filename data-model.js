@@ -41,6 +41,23 @@ export function icmpTypeLabel(protocol, types) {
   return [...new Set(types.map((t) => names[t] || `Typ ${t}`))].join(', ');
 }
 
+// Codes worth naming for "Destination Unreachable" - the other types' codes are rare enough to just show as "Code N".
+const ICMP_UNREACHABLE_CODES = {
+  ICMP: { 0: 'Netz', 1: 'Host', 2: 'Protokoll', 3: 'Port', 4: 'Fragmentierung nötig', 9: 'Netz gesperrt', 10: 'Host gesperrt', 13: 'Administrativ gefiltert' },
+  ICMPv6: { 0: 'Keine Route', 1: 'Administrativ gefiltert', 3: 'Adresse', 4: 'Port' },
+};
+
+/** "Destination Unreachable (Port)" / "Echo Request" - one specific ICMP type + code, for the statistics view. */
+export function icmpTypeCodeLabel(protocol, type, code) {
+  const typeName = (ICMP_TYPE_NAMES[protocol] || {})[type] || `Typ ${type}`;
+  const unreachableType = protocol === 'ICMPv6' ? 1 : 3;
+  if (type === unreachableType) {
+    const codeName = ICMP_UNREACHABLE_CODES[protocol][code];
+    return `${typeName} (${codeName || `Code ${code}`})`;
+  }
+  return typeName;
+}
+
 /** 'ipv4' | 'ipv6' | 'mac' (device known only by MAC address, e.g. from malformed ARP). */
 export function addressFamilyOf(device) {
   if (device.kind !== 'ip' || !device.ip) return 'mac';

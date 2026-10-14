@@ -24,6 +24,7 @@ importScripts(
   `pcapng-parser.js?v=${WORKER_VERSION}`,
   `packet-decoder.js?v=${WORKER_VERSION}`,
   `dns-resolver.js?v=${WORKER_VERSION}`,
+  `traffic-stats.js?v=${WORKER_VERSION}`,
 );
 
 function pairKey(idA, idB) {
@@ -295,6 +296,7 @@ function processBuffer(buffer) {
   }
 
   const aggregator = new Aggregator();
+  const trafficStats = new TrafficStats();
   const totalBytes = buffer.byteLength || 1;
   let processedBytes = 0;
   let packetCount = 0;
@@ -304,6 +306,7 @@ function processBuffer(buffer) {
     const decoded = decodeFrame(buffer, frame.offset, frame.length, frame.linkType, frame.timestamp, frame.origLen);
     if (decoded) {
       aggregator.addPacket(decoded);
+      trafficStats.add(decoded);
       if (decoded.udpPayloadOffset != null && (decoded.srcPort === DNS_PORT || decoded.dstPort === DNS_PORT)) {
         for (const { ip, hostname } of extractDnsHostnames(buffer, decoded.udpPayloadOffset, decoded.udpPayloadLength)) {
           aggregator.addHostname(ip, hostname);
@@ -329,6 +332,7 @@ function processBuffer(buffer) {
     devices: result.devices,
     pairs: result.pairs,
     connections: result.connections,
+    stats: { ...trafficStats.toResult(), totalPackets: packetCount },
     packetCount,
   });
 }

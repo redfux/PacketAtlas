@@ -69,6 +69,12 @@ function isMacMulticast(mac) {
   return (parseInt(mac.slice(0, 2), 16) & 0x01) === 1;
 }
 
+function classifyMacCast(mac) {
+  if (mac === null) return 'unicast';
+  if (mac === BROADCAST_MAC) return 'broadcast';
+  return isMacMulticast(mac) ? 'multicast' : 'unicast';
+}
+
 function isIPv4MulticastOrBroadcast(view, offset) {
   const first = view.getUint8(offset);
   if (first >= 224 && first <= 239) return true;
@@ -154,7 +160,23 @@ function decodeFrame(buffer, offset, length, linkType, timestamp, origLen) {
     srcPort: null,
     dstPort: null,
     protocol: null,
+    // 4 | 6 | null (null = no IP layer, i.e. ARP).
+    ipVersion: null,
+    // 'unicast' | 'multicast' | 'broadcast' - decided by the destination
+    // address (L2 and L3), purely for the statistics view; unlike
+    // multicastOrBroadcast below it does not count IPv6 link-local unicast.
+    castType: classifyMacCast(dstMac),
     icmpType: null,
+    icmpCode: null,
+    // TCP details for the statistics view (null for everything else, or if
+    // the capture's snaplen cut the frame off before the 20-byte fixed header).
+    tcpFlags: null,
+    tcpSeq: null,
+    tcpAck: null,
+    tcpWindow: null,
+    tcpPayloadLength: null,
+    // IPv4 only: this packet is part of a fragmented datagram.
+    isFragment: false,
     // Absolute buffer offset where this frame's headers end and any payload
     // begins - used only by the "PCAP ohne Payload" export (pcap-export.worker.js)
     // to truncate a frame right after its L4 header. `null` means "don't
@@ -262,28 +284,51 @@ function decodeIPv4(view, offset, length, result, baseOffset) {
   if (length < offset + 20) return null;
   const ihl = (view.getUint8(offset) & 0x0f) * 4;
   const proto = view.getUint8(offset + 9);
+  result.ipVersion = 4;
   result.srcIp = formatIPv4(view, offset + 12);
   result.dstIp = formatIPv4(view, offset + 16);
   if (isIPv4MulticastOrBroadcast(view, offset + 16)) result.multicastOrBroadcast = true;
+  const firstDstOctet = view.getUint8(offset + 16);
+  if (firstDstOctet >= 224 && firstDstOctet <= 239) result.castType = 'multicast';
+  else if (isIPv4MulticastOrBroadcast(view, offset + 16)) result.castType = 'broadcast';
+
+  const totalLength = view.getUint16(offset + 2);
+  // 0 happens with TCP segmentation offload on the capturing host - then the
+  // captured length is the best available estimate.
+  const ipPayloadLength = totalLength >= ihl ? totalLength - ihl : null;
+  const fragmentField = view.getUint16(offset + 6);
+  const moreFragments = (fragmentField & 0x2000) !== 0;
+  const fragmentOffset = fragmentField & 0x1fff;
+  if (moreFragments || fragmentOffset > 0) result.isFragment = true;
 
   const l4Offset = offset + ihl;
-  applyL4(view, l4Offset, length, proto, result, false, baseOffset);
+  if (fragmentOffset > 0) {
+    // Non-first fragment: the bytes at l4Offset are mid-datagram payload, not an
+    // L4 header, so reading "ports" from them would produce bogus connections.
+    result.protocol = 'OTHER';
+    result.headerEndOffset = baseOffset + l4Offset;
+    return result;
+  }
+  applyL4(view, l4Offset, length, proto, result, false, baseOffset, ipPayloadLength);
   return result;
 }
 
 function decodeIPv6(view, offset, length, result, baseOffset) {
   if (length < offset + 40) return null;
   const nextHeader = view.getUint8(offset + 6);
+  result.ipVersion = 6;
   result.srcIp = formatIPv6(view, offset + 8);
   result.dstIp = formatIPv6(view, offset + 24);
   if (isIPv6MulticastOrLinkLocal(view, offset + 24)) result.multicastOrBroadcast = true;
+  if (view.getUint8(offset + 24) === 0xff) result.castType = 'multicast';
 
+  const payloadLength = view.getUint16(offset + 4); // 0 = jumbogram / segmentation offload, fall back to captured length
   const l4Offset = offset + 40;
-  applyL4(view, l4Offset, length, nextHeader, result, true, baseOffset);
+  applyL4(view, l4Offset, length, nextHeader, result, true, baseOffset, payloadLength > 0 ? payloadLength : null);
   return result;
 }
 
-function applyL4(view, offset, length, proto, result, isV6, baseOffset) {
+function applyL4(view, offset, length, proto, result, isV6, baseOffset, ipPayloadLength) {
   if (proto === IP_PROTO_TCP && length >= offset + 4) {
     result.protocol = 'TCP';
     result.srcPort = view.getUint16(offset);
@@ -295,6 +340,17 @@ function applyL4(view, offset, length, proto, result, isV6, baseOffset) {
     if (length >= offset + 13) {
       const tcpHeaderLen = (view.getUint8(offset + 12) >> 4) * 4;
       result.headerEndOffset = baseOffset + offset + Math.max(20, tcpHeaderLen);
+    }
+    if (length >= offset + 20) {
+      const tcpHeaderLen = Math.max(20, (view.getUint8(offset + 12) >> 4) * 4);
+      result.tcpSeq = view.getUint32(offset + 4);
+      result.tcpAck = view.getUint32(offset + 8);
+      result.tcpFlags = view.getUint8(offset + 13);
+      result.tcpWindow = view.getUint16(offset + 14);
+      // Prefer the IP header's own length over the captured length: Ethernet
+      // padding / trailers would otherwise count as TCP payload.
+      const l4Length = ipPayloadLength != null ? ipPayloadLength : length - offset;
+      result.tcpPayloadLength = Math.max(0, l4Length - tcpHeaderLen);
     }
   } else if (proto === IP_PROTO_UDP && length >= offset + 4) {
     result.protocol = 'UDP';
@@ -310,10 +366,12 @@ function applyL4(view, offset, length, proto, result, isV6, baseOffset) {
   } else if (proto === IP_PROTO_ICMP && !isV6) {
     result.protocol = 'ICMP';
     if (length >= offset + 1) result.icmpType = view.getUint8(offset);
+    if (length >= offset + 2) result.icmpCode = view.getUint8(offset + 1);
     result.headerEndOffset = baseOffset + offset + 8; // type/code/checksum + 4-byte rest-of-header (e.g. echo id/seq)
   } else if (proto === IP_PROTO_ICMPV6 && isV6) {
     result.protocol = 'ICMPv6';
     if (length >= offset + 1) result.icmpType = view.getUint8(offset);
+    if (length >= offset + 2) result.icmpCode = view.getUint8(offset + 1);
     result.headerEndOffset = baseOffset + offset + 8;
   } else {
     result.protocol = 'OTHER';

@@ -119,6 +119,10 @@
               <span class="material-symbols-outlined" aria-hidden="true">view_timeline</span>
               Zeitleiste
             </button>
+            <button type="button" class="tab" id="tab-stats" role="tab" aria-selected="false" aria-controls="view-stats">
+              <span class="material-symbols-outlined" aria-hidden="true">bar_chart</span>
+              Statistik
+            </button>
           </div>
 
           <div class="toolbar__spacer"></div>
@@ -189,6 +193,10 @@
 
         <div id="view-timeline" class="view" role="tabpanel" aria-labelledby="tab-timeline" hidden>
           <div id="timeline-container" class="timeline-container"></div>
+        </div>
+
+        <div id="view-stats" class="view" role="tabpanel" aria-labelledby="tab-stats" hidden>
+          <div id="stats-container" class="stats-container"></div>
         </div>
       </section>
 

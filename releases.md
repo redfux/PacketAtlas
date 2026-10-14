@@ -5,6 +5,21 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [1.1.0] – 2026-10-14
+
+### Added
+
+- Neuer Tab **Statistik** mit Kennzahlen über den gesamten Capture (die Filter der Seitenleiste wirken dort bewusst nicht):
+  - Kennzahlen-Kacheln: Pakete, Datenmenge, Dauer, TCP-Retransmit-Rate.
+  - **Protokollverteilung** mit drei gestapelten Anteilsbalken: Transportprotokoll (TCP/UDP/ICMP/ARP/Sonstige), Adressierung (Unicast/Multicast/Broadcast) und IP-Version (IPv4/IPv6/kein IP). Der Umschalter „Pakete / Bytes" bestimmt, ob nach Paketanzahl oder Datenvolumen gerechnet wird.
+  - **TCP-Gesundheit**: Retransmits (inkl. Fast Retransmits), Dup-ACKs, Lücken (fehlende Segmente), Out-of-Order, RST, Zero-Window und Keep-Alives – ermittelt per Sequenznummern-Tracking pro TCP-Stream nach den Heuristiken von Wiresharks „TCP Analysis".
+  - **ICMP-Typen** (inkl. Code bei „Destination Unreachable"), **TCP-Flag-Kombinationen**, **häufigste Ports**, **Paketgrößen-Verteilung**, **Pakete/Datenvolumen über die Zeit** und eine Tabelle der **auffälligsten TCP-Streams**.
+- Der Decoder liefert zusätzlich TCP-Flags, Sequenz-/ACK-Nummer, Fenstergröße, TCP-Nutzdatenlänge, ICMP-Code, IP-Version und die Adressierungsart (Unicast/Multicast/Broadcast). Die Auswertung selbst liegt in der neuen Datei `traffic-stats.js` (läuft im Parse-Worker), die Darstellung in `stats-view.js`.
+
+### Fixed
+
+- Nicht-erste IPv4-Fragmente (Fragment-Offset > 0) wurden bisher so behandelt, als stünde an der Stelle des L4-Headers ein TCP-/UDP-Header, und erzeugten dadurch Verbindungen mit zufälligen „Ports". Sie werden jetzt als Protokoll „Sonstige" ohne Ports eingeordnet.
+
 ## [1.0.3] – 2026-10-14
 
 ### Added

@@ -20,6 +20,7 @@ import { renderMatrix } from './matrix-view.js';
 import { renderGraph, updateForces } from './graph-view.js';
 import { renderConnections } from './connections-view.js';
 import { renderTimeline } from './timeline-view.js';
+import { renderStats } from './stats-view.js';
 import { exportActiveViewAsImage } from './export-image.js';
 import { exportToExcel, exportSelectionToExcel } from './export-excel.js';
 
@@ -33,12 +34,13 @@ const MAX_TIMELINE_RENDER = 300;
 // browser. Appending the version as a query string changes the request URL
 // whenever the app updates, forcing a fresh fetch instead of silently
 // running old worker code after an update.
-const APP_VERSION = '1.0.3';
+const APP_VERSION = '1.1.0';
 
 const state = {
   devices: [],
   pairs: [],
   connections: [],
+  stats: null,
   deviceIndex: new Map(),
   selectedIds: new Set(),
   search: '',
@@ -94,14 +96,17 @@ const el = {
   tabGraph: document.getElementById('tab-graph'),
   tabConnections: document.getElementById('tab-connections'),
   tabTimeline: document.getElementById('tab-timeline'),
+  tabStats: document.getElementById('tab-stats'),
   viewMatrix: document.getElementById('view-matrix'),
   viewGraph: document.getElementById('view-graph'),
   viewConnections: document.getElementById('view-connections'),
   viewTimeline: document.getElementById('view-timeline'),
+  viewStats: document.getElementById('view-stats'),
   matrixContainer: document.getElementById('matrix-container'),
   graphContainer: document.getElementById('graph-container'),
   connectionsContainer: document.getElementById('connections-container'),
   timelineContainer: document.getElementById('timeline-container'),
+  statsContainer: document.getElementById('stats-container'),
   graphControls: document.getElementById('graph-controls'),
   forceCharge: document.getElementById('force-charge'),
   forceDistance: document.getElementById('force-distance'),
@@ -112,6 +117,7 @@ const el = {
   connectionsTruncatedMessage: document.getElementById('connections-truncated-message'),
   timelineTruncatedWarning: document.getElementById('timeline-truncated-warning'),
   timelineTruncatedMessage: document.getElementById('timeline-truncated-message'),
+  addressFamilyGroup: document.getElementById('address-family-group'),
   familyIpv4: document.getElementById('family-ipv4'),
   familyIpv6: document.getElementById('family-ipv6'),
   familyMac: document.getElementById('family-mac'),
@@ -217,6 +223,7 @@ function onParseComplete(msg) {
   state.devices = msg.devices;
   state.pairs = msg.pairs;
   state.connections = msg.connections;
+  state.stats = msg.stats;
   state.deviceIndex = new Map(state.devices.map((d) => [d.id, d]));
   state.selectedIds = new Set(state.devices.map((d) => d.id));
   state.search = '';
@@ -484,8 +491,11 @@ const TABS = {
   graph: { tabButton: () => el.tabGraph, view: () => el.viewGraph },
   connections: { tabButton: () => el.tabConnections, view: () => el.viewConnections },
   timeline: { tabButton: () => el.tabTimeline, view: () => el.viewTimeline },
+  stats: { tabButton: () => el.tabStats, view: () => el.viewStats },
 };
 const TABS_WITHOUT_METRIC = new Set(['connections', 'timeline']);
+// The statistics cover the whole capture, so the device-address-family toggle has no meaning there.
+const TABS_WITHOUT_ADDRESS_FAMILY = new Set(['stats']);
 
 function setActiveTab(tab) {
   state.activeTab = tab;
@@ -497,6 +507,10 @@ function setActiveTab(tab) {
   }
   el.graphControls.hidden = tab !== 'graph';
   el.metricGroup.hidden = TABS_WITHOUT_METRIC.has(tab);
+  el.addressFamilyGroup.hidden = TABS_WITHOUT_ADDRESS_FAMILY.has(tab);
+  // The statistics tab is HTML, not an SVG, so there is nothing to export as an image.
+  el.exportPng.disabled = tab === 'stats';
+  el.exportSvg.disabled = tab === 'stats';
   renderActiveView();
 }
 
@@ -504,6 +518,7 @@ el.tabMatrix.addEventListener('click', () => setActiveTab('matrix'));
 el.tabGraph.addEventListener('click', () => setActiveTab('graph'));
 el.tabConnections.addEventListener('click', () => setActiveTab('connections'));
 el.tabTimeline.addEventListener('click', () => setActiveTab('timeline'));
+el.tabStats.addEventListener('click', () => setActiveTab('stats'));
 
 function setMetric(metric) {
   state.metric = metric;
@@ -575,7 +590,7 @@ function renderActiveView() {
 
   const { devices: selectedDevices, pairs: visiblePairs, familyIds } = getVisibleDevicesAndPairs();
 
-  el.largeSelectionWarning.hidden = selectedDevices.length <= LARGE_SELECTION_THRESHOLD;
+  el.largeSelectionWarning.hidden = state.activeTab === 'stats' || selectedDevices.length <= LARGE_SELECTION_THRESHOLD;
   el.connectionsTruncatedWarning.hidden = true;
   el.timelineTruncatedWarning.hidden = true;
 
@@ -619,6 +634,10 @@ function renderActiveView() {
       onLeave: hideTooltip,
       onClick: (event, connection) => pinConnection(connection),
     });
+    state.graphSimulation = null;
+  } else if (state.activeTab === 'stats') {
+    renderStats(el.statsContainer, { stats: state.stats, metric: state.metric });
+    state.activeSvg = null;
     state.graphSimulation = null;
   } else {
     const allConnections = getVisibleConnections(familyIds, 'timeline');
