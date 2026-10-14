@@ -219,6 +219,35 @@ export function relatedDeviceIds(pairs, deviceId) {
 }
 
 /** 'problems' = retransmits + sequence gaps + resets + zero-window events + ICMP errors (see problemCountOf() in parser.worker.js). */
+/**
+ * Per-device sent/received totals over ALL pairs (the statistics view covers the
+ * whole capture, independent of the sidebar filters). A pair's aToB traffic was
+ * sent by pair.a and received by pair.b, bToA the other way round.
+ */
+export function computeDeviceTraffic(pairs) {
+  const byId = new Map();
+  const entry = (id) => {
+    let e = byId.get(id);
+    if (!e) {
+      e = { id, sentPackets: 0, sentBytes: 0, receivedPackets: 0, receivedBytes: 0 };
+      byId.set(id, e);
+    }
+    return e;
+  };
+  for (const pair of pairs) {
+    for (const [sender, receiver, directional] of [[pair.a, pair.b, pair.aToB], [pair.b, pair.a, pair.bToA]]) {
+      if (!directional || directional.packets === 0) continue;
+      const s = entry(sender);
+      const r = entry(receiver);
+      s.sentPackets += directional.packets;
+      s.sentBytes += directional.bytes;
+      r.receivedPackets += directional.packets;
+      r.receivedBytes += directional.bytes;
+    }
+  }
+  return Array.from(byId.values());
+}
+
 export function metricValue(pair, metric) {
   if (metric === 'bytes') return pair.bytes;
   if (metric === 'problems') return pair.problems || 0;

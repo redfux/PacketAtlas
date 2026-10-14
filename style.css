@@ -224,6 +224,7 @@ body {
   overflow: hidden;
 }
 .progress-bar__fill {
+  width: 0;
   height: 100%;
   background: var(--md-primary);
   transition: width 0.15s ease-out;
@@ -761,6 +762,12 @@ body {
 .export-step__check:not([hidden]) { display: inline-flex; }
 .progress-bar__fill--success { background: var(--md-success); }
 
+/* Formerly inline style="" attributes, which the CSP (style-src 'self') blocks. */
+.icon--small { font-size: 16px; }
+.icon--inline { font-size: 16px; vertical-align: -3px; }
+.modal__success-text { margin: 0; }
+.modal__hint--tight { margin: 4px 0 0; }
+
 .modal__success {
   display: flex;
   align-items: flex-start;
@@ -870,6 +877,12 @@ body {
 .stats-row { display: grid; grid-template-columns: 210px 1fr 110px; align-items: center; gap: var(--space-2); padding: 3px 0; font-size: 12px; }
 .stats-row__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stats-row__value { text-align: right; color: var(--md-on-surface-variant); font-variant-numeric: tabular-nums; }
+.stats-row--wide { grid-template-columns: 210px 1fr 230px; }
+/* Two lists one below the other: side by side, the 210px label + 230px value columns would leave the bar no room. */
+.stats-columns { display: grid; grid-template-columns: minmax(0, 1fr); }
+.stats-bar--split { display: flex; }
+.stats-bar--split i { flex: none; border-radius: 0; }
+.stats-swatch--inline { display: inline-block; vertical-align: middle; }
 .stats-bar { height: 8px; border-radius: 4px; background: var(--md-surface-container); overflow: hidden; }
 .stats-bar i { display: block; height: 100%; border-radius: 4px; }
 

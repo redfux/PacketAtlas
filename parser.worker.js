@@ -25,6 +25,7 @@ importScripts(
   `packet-decoder.js?v=${WORKER_VERSION}`,
   `dns-resolver.js?v=${WORKER_VERSION}`,
   `traffic-stats.js?v=${WORKER_VERSION}`,
+  `tls-parser.js?v=${WORKER_VERSION}`,
 );
 
 function pairKey(idA, idB) {
@@ -396,7 +397,15 @@ function processBuffer(buffer) {
   for (const frame of frames) {
     const decoded = decodeFrame(buffer, frame.offset, frame.length, frame.linkType, frame.timestamp, frame.origLen);
     if (decoded) {
-      aggregator.addPacket(decoded, trafficStats.add(decoded));
+      const tcpEvents = trafficStats.add(decoded);
+      aggregator.addPacket(decoded, tcpEvents);
+      // TLS handshake sniffing: a TCP payload that starts with a ClientHello/ServerHello record.
+      // Retransmitted segments are skipped so one handshake isn't counted twice.
+      if (tcpEvents && tcpEvents.dataSegment && !tcpEvents.retransmission && decoded.headerEndOffset != null) {
+        const available = Math.min(decoded.tcpPayloadLength, frame.offset + frame.length - decoded.headerEndOffset);
+        const tls = available > 0 ? parseTlsHello(buffer, decoded.headerEndOffset, available) : null;
+        if (tls) trafficStats.addTls(decoded, tls);
+      }
       if (decoded.udpPayloadOffset != null && (decoded.srcPort === DNS_PORT || decoded.dstPort === DNS_PORT)) {
         const dnsMessage = parseDnsMessage(buffer, decoded.udpPayloadOffset, decoded.udpPayloadLength);
         if (dnsMessage) trafficStats.addDns(decoded, dnsMessage);

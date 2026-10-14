@@ -31,6 +31,7 @@ const TIME_BUCKETS_MAX = 120;
 const DNS_MAX_PENDING_QUERIES = 50000;
 const DNS_MAX_TRACKED_NAMES = 5000;
 const DNS_TOP_LIMIT = 10;
+const TLS_MAX_TRACKED_SERVERS = 2000;
 
 // Upper bounds (inclusive, bytes on the wire) of the packet-size histogram buckets.
 const SIZE_BUCKET_LIMITS = [64, 127, 255, 511, 1023, 1518];
@@ -113,6 +114,13 @@ class TrafficStats {
     };
     this.streams = new Map();
     this.handshakes = { count: 0, sum: 0, min: null, max: null };
+    this.tls = {
+      clientHellos: 0,
+      serverHellos: 0,
+      versions: new Map(), // negotiated version (number) -> ServerHellos
+      ciphers: new Map(), // cipher suite id -> ServerHellos
+      outdatedServers: new Map(), // `${ip}:${port}|${version}` -> ServerHellos that negotiated a deprecated version
+    };
     this.dns = {
       queries: 0,
       responses: 0,
@@ -167,6 +175,39 @@ class TrafficStats {
     if (decoded.protocol === 'ICMP' || decoded.protocol === 'ICMPv6') this.addIcmp(decoded);
     if (decoded.protocol === 'TCP' && decoded.tcpSeq !== null) return this.addTcp(decoded);
     return null;
+  }
+
+  /** One TLS ClientHello / ServerHello found at the start of a TCP payload (see parseTlsHello() in tls-parser.js). */
+  addTls(decoded, hello) {
+    const t = this.tls;
+    if (hello.kind === 'client') {
+      t.clientHellos++;
+      return;
+    }
+    t.serverHellos++;
+    t.versions.set(hello.version, (t.versions.get(hello.version) || 0) + 1);
+    if (hello.cipher !== null) t.ciphers.set(hello.cipher, (t.ciphers.get(hello.cipher) || 0) + 1);
+    if (isOutdatedTlsVersion(hello.version)) {
+      const key = `${decoded.srcIp}:${decoded.srcPort}|${hello.version}`;
+      if (t.outdatedServers.has(key) || t.outdatedServers.size < TLS_MAX_TRACKED_SERVERS) {
+        t.outdatedServers.set(key, (t.outdatedServers.get(key) || 0) + 1);
+      }
+    }
+  }
+
+  tlsResult() {
+    const t = this.tls;
+    if (t.clientHellos === 0 && t.serverHellos === 0) return null;
+    return {
+      clientHellos: t.clientHellos,
+      serverHellos: t.serverHellos,
+      versions: Array.from(t.versions, ([version, count]) => ({ version, name: tlsVersionName(version), outdated: isOutdatedTlsVersion(version), count })).sort((x, y) => y.version - x.version),
+      ciphers: Array.from(t.ciphers, ([id, count]) => ({ ...tlsCipherInfo(id), count })).sort((x, y) => y.count - x.count).slice(0, 8),
+      outdatedServers: Array.from(t.outdatedServers, ([key, count]) => {
+        const sep = key.lastIndexOf('|');
+        return { server: key.slice(0, sep), name: tlsVersionName(Number(key.slice(sep + 1))), count };
+      }).sort((x, y) => y.count - x.count).slice(0, 8),
+    };
   }
 
   /** One parsed DNS message on UDP port 53 (see parseDnsMessage() in dns-resolver.js). */
@@ -447,6 +488,7 @@ class TrafficStats {
       tcp: { ...this.tcp, streams: this.streams.size },
       handshakes: { ...this.handshakes },
       dns: this.dnsResult(),
+      tls: this.tlsResult(),
       fragmentation: { ...this.fragmentation },
       mtu: {
         maxIpPacketLength: this.maxIpPacketLength,

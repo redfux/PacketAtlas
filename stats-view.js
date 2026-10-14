@@ -5,7 +5,7 @@
 // parser.worker.js (traffic-stats.js), so this only formats and lays it out.
 // thought up by human, created by ai
 
-import { dnsRcodeName, formatBytes, icmpTypeCodeLabel, portListLabel } from './data-model.js?v=1.6.0';
+import { deviceLabel, dnsRcodeName, formatBytes, icmpTypeCodeLabel, portListLabel } from './data-model.js?v=1.7.0';
 
 const percentFormat = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 });
 const countFormat = new Intl.NumberFormat('de-DE');
@@ -98,6 +98,21 @@ function barRows(rows, emptyText) {
     .join('');
 }
 
+/** Like barRows(), but each bar is split in two parts: rows = [{ label, first, second, display }], colors fixed (sent / received). */
+function splitBarRows(rows, emptyText) {
+  if (!rows.length) return `<p class="stats-empty">${esc(emptyText)}</p>`;
+  const max = Math.max(...rows.map((r) => r.first + r.second), 1);
+  return rows
+    .map(
+      (r) => `<div class="stats-row stats-row--wide">
+      <span class="stats-row__label" title="${esc(r.label)}">${esc(r.label)}</span>
+      <span class="stats-bar stats-bar--split"><i data-w="${(r.first / max) * 100}" data-bg="--stats-tcp"></i><i data-w="${(r.second / max) * 100}" data-bg="--stats-udp"></i></span>
+      <span class="stats-row__value">${esc(r.display)}</span>
+    </div>`,
+    )
+    .join('');
+}
+
 function card(title, body, extraClass = '', note = '') {
   return `<section class="stats-card ${extraClass}"><h3 class="stats-card__title">${esc(title)}</h3>${body}${note ? `<p class="stats-card__note">${esc(note)}</p>` : ''}</section>`;
 }
@@ -163,6 +178,73 @@ function portsCard(stats, metric) {
     display: formatValue(valueOf(entry, metric), metric),
   }));
   return card('Häufigste Ports', barRows(rows, 'Keine TCP-/UDP-Pakete im Capture.'), '', 'Als Dienst-Port gilt der jeweils niedrigere der beiden Ports.');
+}
+
+function talkersCard(talkers, deviceIndex, metric) {
+  const labelOf = (id) => {
+    const device = deviceIndex.get(id);
+    return device ? deviceLabel(device) : id;
+  };
+  const sentOf = (d) => (metric === 'bytes' ? d.sentBytes : d.sentPackets);
+  const receivedOf = (d) => (metric === 'bytes' ? d.receivedBytes : d.receivedPackets);
+  const deviceRows = [...talkers.devices]
+    .sort((x, y) => sentOf(y) + receivedOf(y) - (sentOf(x) + receivedOf(x)))
+    .slice(0, 10)
+    .map((d) => ({
+      label: labelOf(d.id),
+      first: sentOf(d),
+      second: receivedOf(d),
+      display: `${formatValue(sentOf(d) + receivedOf(d), metric)} (↑ ${formatValue(sentOf(d), metric)} · ↓ ${formatValue(receivedOf(d), metric)})`,
+    }));
+  const pairRows = [...talkers.pairs]
+    .sort((x, y) => valueOf(y, metric) - valueOf(x, metric))
+    .slice(0, 10)
+    .map((p) => ({
+      label: `${labelOf(p.a)} ⇄ ${labelOf(p.b)}`,
+      value: valueOf(p, metric),
+      color: '--stats-neutral',
+      display: formatValue(valueOf(p, metric), metric),
+    }));
+  const legend = `<p class="stats-card__summary"><span class="stats-swatch stats-swatch--inline" data-bg="--stats-tcp"></span> gesendet &nbsp; <span class="stats-swatch stats-swatch--inline" data-bg="--stats-udp"></span> empfangen · Rangfolge nach ${metric === 'bytes' ? 'Datenvolumen' : 'Paketanzahl'} (Umschalter oben)</p>`;
+  const body = `${legend}<div class="stats-columns">
+    <div><div class="stats-subtitle">Top-Talker (Geräte)</div>${splitBarRows(deviceRows, 'Keine Geräte im Capture.')}</div>
+    <div><div class="stats-subtitle">Aktivste Gerätepaare</div>${barRows(pairRows, 'Keine Kommunikation im Capture.').replace(/class="stats-row"/g, 'class="stats-row stats-row--wide"')}</div>
+  </div>`;
+  return card('Top-Talker', body, 'stats-card--wide', 'Geräte, die nur als Ziel von Broadcast/Multicast auftauchen (z. B. 224.0.0.251), erscheinen ebenfalls – sie zählen als Empfänger.');
+}
+
+function tlsCard(stats) {
+  const tls = stats.tls;
+  if (!tls) return '';
+  const versionRows = tls.versions.map((v) => ({
+    label: v.name,
+    value: v.count,
+    color: v.outdated ? '--stats-bad' : v.name === 'TLS 1.3' ? '--stats-udp' : '--stats-tcp',
+    hint: v.outdated ? 'Veraltet (RFC 8996): TLS 1.0/1.1 und SSL 3.0 sollten nicht mehr ausgehandelt werden.' : '',
+    display: `${countFormat.format(v.count)} (${formatPercent(v.count, tls.serverHellos)})`,
+  }));
+  const qualityColor = { ok: '--stats-udp', nopfs: '--stats-warn', weak: '--stats-bad' };
+  const qualityHint = { ok: '', nopfs: 'Statischer RSA-Schlüsselaustausch: kein Forward Secrecy – mitgeschnittener Verkehr ist später entschlüsselbar, wenn der Server-Schlüssel bekannt wird.', weak: 'Kryptographisch gebrochen oder veraltet (RC4, 3DES).' };
+  const cipherRows = tls.ciphers.map((c) => ({
+    label: c.name,
+    value: c.count,
+    color: qualityColor[c.quality],
+    hint: qualityHint[c.quality],
+    display: countFormat.format(c.count),
+  }));
+  const outdatedRows = tls.outdatedServers.map((s) => ({
+    label: `${s.server} · ${s.name}`,
+    value: s.count,
+    color: '--stats-bad',
+    display: countFormat.format(s.count),
+  }));
+  const summary = `<p class="stats-card__summary">${countFormat.format(tls.serverHellos)} ServerHellos (ausgehandelte Version) · ${countFormat.format(tls.clientHellos)} ClientHellos im Capture</p>`;
+  const body =
+    summary +
+    barRows(versionRows, 'Keine TLS-ServerHellos im Capture.') +
+    (outdatedRows.length ? '<div class="stats-subtitle">Server mit veralteter Version</div>' + barRows(outdatedRows, '') : '') +
+    (cipherRows.length ? '<div class="stats-subtitle">Ausgehandelte Cipher Suites</div>' + barRows(cipherRows, '') : '');
+  return card('TLS-Versionen', body, '', 'Erkannt am Anfang des TCP-Payloads, unabhängig vom Port. Nur TLS über TCP; Handshakes, die vor dem Capture-Start liefen, fehlen.');
 }
 
 function dnsCard(stats) {
@@ -295,7 +377,7 @@ function streamsCard(stats) {
 }
 
 /** Renders the whole statistics tab into `container`. `metric` is 'packets' | 'bytes'. */
-export function renderStats(container, { stats, metric }) {
+export function renderStats(container, { stats, metric, talkers, deviceIndex }) {
   if (!stats) {
     container.innerHTML = '<p class="stats-empty">Keine Statistikdaten vorhanden.</p>';
     return;
@@ -337,11 +419,13 @@ export function renderStats(container, { stats, metric }) {
     <div class="stats-kpis">${kpis}</div>
     <div class="stats-grid">
       ${distribution}
+      ${talkers ? talkersCard(talkers, deviceIndex, metric) : ''}
       ${tcpHealthCard(stats)}
       ${icmpCard(stats)}
       ${flagsCard(stats)}
       ${portsCard(stats, metric)}
       ${dnsCard(stats)}
+      ${tlsCard(stats)}
       ${sizesCard(stats, metric)}
       ${mtuFragmentationCard(stats)}
       ${timelineCard(stats, metric)}

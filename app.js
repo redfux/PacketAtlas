@@ -5,6 +5,7 @@ import {
   PROTOCOL_GROUPS,
   addressFamilyOf,
   compareDevicesByAddress,
+  computeDeviceTraffic,
   computePortEntries,
   computeVisibleConnections,
   computeVisiblePairs,
@@ -18,15 +19,15 @@ import {
   pairKey,
   portListLabel,
   relatedDeviceIds,
-} from './data-model.js?v=1.6.0';
-import { renderMatrix } from './matrix-view.js?v=1.6.0';
-import { renderGraph, updateForces } from './graph-view.js?v=1.6.0';
-import { renderConnections } from './connections-view.js?v=1.6.0';
-import { renderConnectionsTable } from './connections-table-view.js?v=1.6.0';
-import { renderTimeline } from './timeline-view.js?v=1.6.0';
-import { renderStats } from './stats-view.js?v=1.6.0';
-import { exportActiveViewAsImage } from './export-image.js?v=1.6.0';
-import { exportToExcel, exportSelectionToExcel } from './export-excel.js?v=1.6.0';
+} from './data-model.js?v=1.7.0';
+import { renderMatrix } from './matrix-view.js?v=1.7.0';
+import { renderGraph, updateForces } from './graph-view.js?v=1.7.0';
+import { renderConnections } from './connections-view.js?v=1.7.0';
+import { renderConnectionsTable } from './connections-table-view.js?v=1.7.0';
+import { renderTimeline } from './timeline-view.js?v=1.7.0';
+import { renderStats } from './stats-view.js?v=1.7.0';
+import { exportActiveViewAsImage } from './export-image.js?v=1.7.0';
+import { exportToExcel, exportSelectionToExcel } from './export-excel.js?v=1.7.0';
 
 const LARGE_SELECTION_THRESHOLD = 50;
 const MAX_CONNECTIONS_RENDER = 400;
@@ -38,7 +39,7 @@ const MAX_TIMELINE_RENDER = 300;
 // browser. Appending the version as a query string changes the request URL
 // whenever the app updates, forcing a fresh fetch instead of silently
 // running old worker code after an update.
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.7.0';
 
 const state = {
   devices: [],
@@ -730,7 +731,12 @@ function renderActiveView() {
     });
     state.graphSimulation = null;
   } else if (state.activeTab === 'stats') {
-    renderStats(el.statsContainer, { stats: state.stats, metric: state.metric });
+    renderStats(el.statsContainer, {
+      stats: state.stats,
+      metric: state.metric,
+      talkers: { devices: computeDeviceTraffic(state.pairs), pairs: state.pairs },
+      deviceIndex: state.deviceIndex,
+    });
     state.activeSvg = null;
     state.graphSimulation = null;
   } else {
@@ -1000,7 +1006,7 @@ function renderPinnedPanel() {
     closeBtn.type = 'button';
     closeBtn.className = 'pinned-card__close';
     closeBtn.setAttribute('aria-label', 'Kachel schließen');
-    closeBtn.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true" style="font-size:16px">close</span>';
+    closeBtn.innerHTML = '<span class="material-symbols-outlined icon--small" aria-hidden="true">close</span>';
     closeBtn.addEventListener('click', () => unpinItem(item.id));
     header.append(type, closeBtn);
 

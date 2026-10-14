@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: blob:; connect-src 'none'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';">
   <title>PacketAtlas</title>
-  <link rel="stylesheet" href="style.css?v=1.6.0">
+  <link rel="stylesheet" href="style.css?v=1.7.0">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Zum Hauptinhalt springen</a>
@@ -28,7 +28,7 @@
   <div id="progress-banner" class="progress-banner" hidden role="status" aria-live="polite">
     <span id="progress-label" class="progress-banner__label">Datei wird geparst …</span>
     <div class="progress-bar">
-      <div id="progress-bar-fill" class="progress-bar__fill" style="width:0%"></div>
+      <div id="progress-bar-fill" class="progress-bar__fill"></div>
     </div>
   </div>
 
@@ -269,7 +269,7 @@
       </div>
 
       <div id="pcap-cached-section" class="modal__section" hidden>
-        <p class="modal__hint"><span class="material-symbols-outlined" aria-hidden="true" style="font-size:16px;vertical-align:-3px">check_circle</span> Original-Datei aus dieser Sitzung bereits verifiziert.</p>
+        <p class="modal__hint"><span class="material-symbols-outlined icon--inline" aria-hidden="true">check_circle</span> Original-Datei aus dieser Sitzung bereits verifiziert.</p>
       </div>
 
       <div id="pcap-export-progress" class="modal__section" hidden>
@@ -279,7 +279,7 @@
             <span id="pcap-step-hash-check" class="export-step__check material-symbols-outlined" hidden aria-hidden="true">check_circle</span>
           </div>
           <div class="progress-bar">
-            <div id="pcap-step-hash-fill" class="progress-bar__fill" style="width:0%"></div>
+            <div id="pcap-step-hash-fill" class="progress-bar__fill"></div>
           </div>
         </div>
         <div id="pcap-step-build" class="export-step" hidden>
@@ -288,7 +288,7 @@
             <span id="pcap-step-build-check" class="export-step__check material-symbols-outlined" hidden aria-hidden="true">check_circle</span>
           </div>
           <div class="progress-bar">
-            <div id="pcap-step-build-fill" class="progress-bar__fill" style="width:0%"></div>
+            <div id="pcap-step-build-fill" class="progress-bar__fill"></div>
           </div>
         </div>
       </div>
@@ -296,8 +296,8 @@
       <div id="pcap-export-success" class="modal__success" hidden>
         <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
         <div>
-          <p style="margin:0">Export erfolgreich – Download gestartet.</p>
-          <p id="pcap-export-success-note" class="modal__hint" style="margin:4px 0 0" hidden></p>
+          <p class="modal__success-text">Export erfolgreich – Download gestartet.</p>
+          <p id="pcap-export-success-note" class="modal__hint modal__hint--tight" hidden></p>
         </div>
       </div>
 
@@ -314,6 +314,6 @@
 
   <script src="vendor/d3.min.js"></script>
   <script src="vendor/xlsx.full.min.js"></script>
-  <script type="module" src="app.js?v=1.6.0"></script>
+  <script type="module" src="app.js?v=1.7.0"></script>
 </body>
 </html>

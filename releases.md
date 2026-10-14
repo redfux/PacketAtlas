@@ -5,6 +5,17 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [1.7.0] – 2026-10-15
+
+### Added
+
+- Statistik-Tab: neue Kachel **Top-Talker** mit den zehn Geräten, die den meisten Verkehr erzeugen bzw. empfangen (gestapelter Balken gesendet/empfangen, Summe und Aufschlüsselung als Text), und den zehn aktivsten Geräte-Paaren. Die Rangfolge folgt dem Umschalter Pakete/Bytes. Die Auswertung läuft über alle Paare des Captures, unabhängig von den Sidebar-Filtern, und nutzt die vorhandenen Richtungsdaten der Paare (`computeDeviceTraffic()` in `data-model.js`).
+- Statistik-Tab: neue Kachel **TLS-Versionen**. Neue Datei `tls-parser.js` liest am Anfang jedes TCP-Payloads (portunabhängig) ClientHello/ServerHello und zeigt die ausgehandelte Version je ServerHello (TLS 1.3 per `supported_versions`-Extension, sonst Legacy-Feld), Server mit veralteter Version (SSL 3.0, TLS 1.0/1.1, rot), die ausgehandelten Cipher Suites mit Bewertung (grün = ok, gelb = kein Forward Secrecy durch statischen RSA-Schlüsselaustausch, rot = RC4/3DES) und die Anzahl gesehener Hellos. Retransmittierte Segmente werden nicht doppelt gezählt; die Erkennung gilt nur für TLS über TCP und für Handshakes, die im Capture beginnen.
+
+### Fixed
+
+- Inline-`style`-Attribute (Fortschrittsbalken, Icon-Größen im Export-Dialog und in den angehefteten Kacheln, Absatzränder im Export-Dialog) wurden von der CSP (`style-src 'self'`) geblockt und erzeugten Konsolenfehler; die Darstellung war an diesen Stellen unbeabsichtigt anders (z. B. zu große Icons). Sie sind jetzt CSS-Klassen in `style.css`.
+
 ## [1.6.0] – 2026-10-14
 
 ### Added
