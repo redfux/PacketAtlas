@@ -15,15 +15,16 @@ if [[ -z "$version" ]]; then
 fi
 
 files=(./*.js index.html)
-# Indexed arrays only: macOS ships bash 3.2, which has no associative arrays.
-before=()
-for f in "${files[@]}"; do before+=("$(git hash-object "$f")"); done
 
 ./bump-version.sh "$version" > /dev/null
 
-for i in "${!files[@]}"; do
-  f="${files[$i]}"
-  if [[ "$(git hash-object "$f")" != "${before[$i]}" ]]; then
+# Stage every file whose only uncommitted change is the version strings - whether
+# this run rewrote them or an earlier manual ./bump-version.sh did. Files with any
+# other unstaged edit are left alone, so unfinished work never sneaks into a commit.
+for f in "${files[@]}"; do
+  git diff --quiet -- "$f" && continue
+  other_changes="$(git diff -U0 -- "$f" | grep -E '^[+-]' | grep -vE '^(\+\+\+|---)' | grep -vE "\?v=[0-9]|const APP_VERSION" || true)"
+  if [[ -z "$other_changes" ]]; then
     echo "pre-commit: Version ${version} in ${f#./} nachgezogen" >&2
     git add "$f"
   fi

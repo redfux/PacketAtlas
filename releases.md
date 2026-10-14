@@ -16,6 +16,10 @@ die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 - Inline-`style`-Attribute (Fortschrittsbalken, Icon-Größen im Export-Dialog und in den angehefteten Kacheln, Absatzränder im Export-Dialog) wurden von der CSP (`style-src 'self'`) geblockt und erzeugten Konsolenfehler; die Darstellung war an diesen Stellen unbeabsichtigt anders (z. B. zu große Icons). Sie sind jetzt CSS-Klassen in `style.css`.
 
+### Changed
+
+- Der Pre-Commit-Hook stellt jetzt auch Dateien in den Commit, deren einzige ungespeicherte Änderung die `?v=`-Versionsstrings sind (etwa nach einem manuellen `./bump-version.sh`); Dateien mit anderen Änderungen bleiben unberührt. Der erste 1.7.0-Commit enthielt wegen genau dieser Lücke noch Imports mit `?v=1.6.0` in den Ansichts-Modulen.
+
 ## [1.6.0] – 2026-10-14
 
 ### Added

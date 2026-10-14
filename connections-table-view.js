@@ -5,7 +5,7 @@
 // connections-view.js; both show the same, already filtered connection list.
 // thought up by human, created by ai
 
-import { deviceLabel, formatBytes, formatSeconds, formatTimestamp, healthOf, icmpTypeLabel } from './data-model.js?v=1.6.0';
+import { deviceLabel, formatBytes, formatSeconds, formatTimestamp, healthOf, icmpTypeLabel } from './data-model.js?v=1.7.0';
 
 const MAX_ROWS = 500;
 const PROTOCOL_CHIPS = [
