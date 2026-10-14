@@ -58,6 +58,22 @@ export function icmpTypeCodeLabel(protocol, type, code) {
   return typeName;
 }
 
+const DNS_RCODE_NAMES = { 0: 'NOERROR', 1: 'FORMERR', 2: 'SERVFAIL', 3: 'NXDOMAIN', 4: 'NOTIMP', 5: 'REFUSED' };
+
+export function dnsRcodeName(code) {
+  return DNS_RCODE_NAMES[code] || `RCODE ${code}`;
+}
+
+/**
+ * Escapes text that comes out of a capture file (DNS hostnames in particular
+ * are raw bytes chosen by whoever sent the packet) before it is put into an
+ * innerHTML string. The CSP already blocks script execution, but without
+ * escaping a crafted hostname could still inject markup into tooltips.
+ */
+export function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+
 /** 'ipv4' | 'ipv6' | 'mac' (device known only by MAC address, e.g. from malformed ARP). */
 export function addressFamilyOf(device) {
   if (device.kind !== 'ip' || !device.ip) return 'mac';

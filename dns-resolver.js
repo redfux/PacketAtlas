@@ -49,6 +49,28 @@ function readName(view, start) {
 }
 
 /**
+ * Parses just the header and first question of a DNS message for the statistics
+ * view (response code, query/response flag, queried name). Returns null for
+ * anything that does not look like DNS. The name is lower-cased; labels are raw
+ * bytes from the capture, so it must be escaped before it is put into HTML.
+ */
+function parseDnsMessage(buffer, offset, length) {
+  if (length < 12) return null;
+  try {
+    const view = new DataView(buffer, offset, length);
+    const flags = view.getUint16(2);
+    const opcode = (flags >> 11) & 0x0f;
+    if (opcode > 5) return null; // not a plausible DNS opcode - most likely some other protocol on port 53
+    const qdCount = view.getUint16(4);
+    let name = null;
+    if (qdCount > 0) name = readName(view, 12).name.toLowerCase() || '.';
+    return { id: view.getUint16(0), isResponse: (flags & 0x8000) !== 0, rcode: flags & 0x0f, name };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Extracts IP -> hostname mappings from a UDP/53 payload, if it looks like a
  * DNS response containing A/AAAA answers. Returns an empty array on anything
  * unexpected (truncated data, non-DNS payload, query without answers, ...).

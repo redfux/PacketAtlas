@@ -15,6 +15,10 @@
 # Touches: APP_VERSION in app.js, every `from './x.js'` import in the top-level
 # .js files, and the stylesheet / app.js tags in index.html. The workers already
 # derive their version from APP_VERSION at runtime. releases.md stays manual.
+#
+# Normally you don't run this yourself: .githooks/pre-commit calls it with the
+# APP_VERSION from app.js on every commit (enable once per clone with
+# `git config core.hooksPath .githooks`).
 set -euo pipefail
 cd "$(dirname "$0")"
 

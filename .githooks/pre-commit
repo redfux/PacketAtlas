@@ -1,0 +1,30 @@
+#!/bin/bash
+# Keeps the cache-busting `?v=` strings in sync with APP_VERSION (see
+# bump-version.sh for why they exist), so a release can't be committed with
+# stale ones. Release workflow: change only APP_VERSION in app.js and commit -
+# the files this rewrites are staged automatically.
+#
+# One-time setup per clone:  git config core.hooksPath .githooks
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+version="$(sed -n "s/^const APP_VERSION = '\([^']*\)';.*/\1/p" app.js)"
+if [[ -z "$version" ]]; then
+  echo "pre-commit: APP_VERSION in app.js nicht gefunden" >&2
+  exit 1
+fi
+
+files=(./*.js index.html)
+# Indexed arrays only: macOS ships bash 3.2, which has no associative arrays.
+before=()
+for f in "${files[@]}"; do before+=("$(git hash-object "$f")"); done
+
+./bump-version.sh "$version" > /dev/null
+
+for i in "${!files[@]}"; do
+  f="${files[$i]}"
+  if [[ "$(git hash-object "$f")" != "${before[$i]}" ]]; then
+    echo "pre-commit: Version ${version} in ${f#./} nachgezogen" >&2
+    git add "$f"
+  fi
+done

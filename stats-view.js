@@ -5,7 +5,7 @@
 // parser.worker.js (traffic-stats.js), so this only formats and lays it out.
 // thought up by human, created by ai
 
-import { formatBytes, icmpTypeCodeLabel, portListLabel } from './data-model.js?v=1.5.0';
+import { dnsRcodeName, formatBytes, icmpTypeCodeLabel, portListLabel } from './data-model.js?v=1.6.0';
 
 const percentFormat = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 });
 const countFormat = new Intl.NumberFormat('de-DE');
@@ -165,6 +165,48 @@ function portsCard(stats, metric) {
   return card('Häufigste Ports', barRows(rows, 'Keine TCP-/UDP-Pakete im Capture.'), '', 'Als Dienst-Port gilt der jeweils niedrigere der beiden Ports.');
 }
 
+function dnsCard(stats) {
+  const dns = stats.dns;
+  if (!dns) return '';
+  const failed = dns.rcodes.filter((r) => r.code !== 0).reduce((sum, r) => sum + r.count, 0);
+  const rcodeColor = (code) => (code === 0 ? '--stats-udp' : code === 3 ? '--stats-warn' : '--stats-bad');
+  const rcodeRows = dns.rcodes.slice(0, 8).map((r) => ({
+    label: dnsRcodeName(r.code),
+    value: r.count,
+    color: rcodeColor(r.code),
+    hint: r.code === 3 ? 'Der Name existiert nicht. Nicht immer ein Fehler, z. B. bei Suchdomain-Versuchen oder Reverse-Lookups.' : r.code === 2 ? 'Der Server konnte die Anfrage nicht beantworten (z. B. Upstream nicht erreichbar, DNSSEC-Fehler).' : r.code === 5 ? 'Der Server verweigert die Anfrage (ACL oder falscher Resolver).' : '',
+    display: `${countFormat.format(r.count)} (${formatPercent(r.count, dns.responses)})`,
+  }));
+  const nameRows = dns.failingNames.map((n) => ({
+    label: `${n.name} · ${dnsRcodeName(n.rcode)}`,
+    value: n.count,
+    color: rcodeColor(n.rcode),
+    display: countFormat.format(n.count),
+  }));
+  const resolverRows = dns.resolvers.map((r) => ({
+    label: r.ip,
+    value: r.failures,
+    color: '--stats-bad',
+    display: `${countFormat.format(r.failures)} von ${countFormat.format(r.responses)} (${formatPercent(r.failures, r.responses)})`,
+  }));
+  const clientRows = dns.clients.map((c) => ({
+    label: c.ip,
+    value: c.count,
+    color: '--stats-warn',
+    display: countFormat.format(c.count),
+  }));
+
+  const unansweredNote = dns.unanswered > 0 ? ` · <strong>${countFormat.format(dns.unanswered)}</strong> Anfragen ohne Antwort im Capture${dns.unansweredCapped ? ' (Zählung begrenzt)' : ''}` : '';
+  const summary = `<p class="stats-card__summary">${countFormat.format(dns.queries)} Anfragen · ${countFormat.format(dns.responses)} Antworten, davon <strong>${countFormat.format(failed)}</strong> mit Fehlercode (${formatPercent(failed, dns.responses)})${unansweredNote}</p>`;
+  const body =
+    summary +
+    barRows(rcodeRows, 'Keine DNS-Antworten im Capture.') +
+    (nameRows.length ? '<div class="stats-subtitle">Häufigste fehlgeschlagene Namen</div>' + barRows(nameRows, '') : '') +
+    (resolverRows.length ? '<div class="stats-subtitle">Resolver mit Fehlern</div>' + barRows(resolverRows, '') : '') +
+    (clientRows.length ? '<div class="stats-subtitle">Clients mit den meisten Fehlern</div>' + barRows(clientRows, '') : '');
+  return card('DNS', body, '', 'Nur DNS über UDP/53. Anfragen ohne Antwort können auch Antworten sein, die der Messpunkt nicht gesehen hat.');
+}
+
 function sizesCard(stats, metric) {
   const labels = ['≤ 64 B', '65–127 B', '128–255 B', '256–511 B', '512–1023 B', '1024–1518 B', '> 1518 B'];
   const rows = stats.sizeBuckets.map((bucket, i) => ({
@@ -299,6 +341,7 @@ export function renderStats(container, { stats, metric }) {
       ${icmpCard(stats)}
       ${flagsCard(stats)}
       ${portsCard(stats, metric)}
+      ${dnsCard(stats)}
       ${sizesCard(stats, metric)}
       ${mtuFragmentationCard(stats)}
       ${timelineCard(stats, metric)}

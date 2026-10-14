@@ -27,6 +27,10 @@ const OUT_OF_ORDER_WINDOW_SECONDS = 0.003;
 const TOP_PORTS_LIMIT = 50;
 const TOP_STREAMS_LIMIT = 15;
 const TIME_BUCKETS_MAX = 120;
+// Bounds for the DNS bookkeeping so a huge capture can't blow up memory.
+const DNS_MAX_PENDING_QUERIES = 50000;
+const DNS_MAX_TRACKED_NAMES = 5000;
+const DNS_TOP_LIMIT = 10;
 
 // Upper bounds (inclusive, bytes on the wire) of the packet-size histogram buckets.
 const SIZE_BUCKET_LIMITS = [64, 127, 255, 511, 1023, 1518];
@@ -109,6 +113,16 @@ class TrafficStats {
     };
     this.streams = new Map();
     this.handshakes = { count: 0, sum: 0, min: null, max: null };
+    this.dns = {
+      queries: 0,
+      responses: 0,
+      rcodes: new Map(), // response code -> count
+      pending: new Map(), // `${client}|${server}|${id}` -> true, queries still waiting for their response
+      failingNames: new Map(), // `${rcode}|${name}` -> count
+      resolvers: new Map(), // server ip -> { responses, failures }
+      clients: new Map(), // client ip -> failures
+      pendingCapped: false,
+    };
     this.fragmentation = {
       ipv4Packets: 0,
       ipv4Fragments: 0,
@@ -153,6 +167,34 @@ class TrafficStats {
     if (decoded.protocol === 'ICMP' || decoded.protocol === 'ICMPv6') this.addIcmp(decoded);
     if (decoded.protocol === 'TCP' && decoded.tcpSeq !== null) return this.addTcp(decoded);
     return null;
+  }
+
+  /** One parsed DNS message on UDP port 53 (see parseDnsMessage() in dns-resolver.js). */
+  addDns(decoded, message) {
+    const d = this.dns;
+    if (!message.isResponse) {
+      if (decoded.dstPort !== 53) return;
+      d.queries++;
+      if (d.pending.size < DNS_MAX_PENDING_QUERIES) d.pending.set(`${decoded.srcIp}|${decoded.dstIp}|${message.id}`, true);
+      else d.pendingCapped = true;
+      return;
+    }
+    if (decoded.srcPort !== 53) return;
+    d.responses++;
+    d.pending.delete(`${decoded.dstIp}|${decoded.srcIp}|${message.id}`);
+    d.rcodes.set(message.rcode, (d.rcodes.get(message.rcode) || 0) + 1);
+
+    const resolver = d.resolvers.get(decoded.srcIp) || { responses: 0, failures: 0 };
+    resolver.responses++;
+    d.resolvers.set(decoded.srcIp, resolver);
+    if (message.rcode === 0) return;
+
+    resolver.failures++;
+    d.clients.set(decoded.dstIp, (d.clients.get(decoded.dstIp) || 0) + 1);
+    const nameKey = `${message.rcode}|${message.name || '?'}`;
+    if (d.failingNames.has(nameKey) || d.failingNames.size < DNS_MAX_TRACKED_NAMES) {
+      d.failingNames.set(nameKey, (d.failingNames.get(nameKey) || 0) + 1);
+    }
   }
 
   addSizeAndFragmentation(decoded, size) {
@@ -404,6 +446,7 @@ class TrafficStats {
       tcpFlags: Array.from(this.tcpFlagCombos, ([label, packets]) => ({ label, packets })).sort((x, y) => y.packets - x.packets),
       tcp: { ...this.tcp, streams: this.streams.size },
       handshakes: { ...this.handshakes },
+      dns: this.dnsResult(),
       fragmentation: { ...this.fragmentation },
       mtu: {
         maxIpPacketLength: this.maxIpPacketLength,
@@ -419,6 +462,28 @@ class TrafficStats {
         }).sort((x, y) => y.packets - x.packets),
       },
       problemStreams,
+    };
+  }
+
+  dnsResult() {
+    const d = this.dns;
+    if (d.queries === 0 && d.responses === 0) return null;
+    const top = (entries, limit) => entries.sort((x, y) => y.count - x.count).slice(0, limit);
+    return {
+      queries: d.queries,
+      responses: d.responses,
+      unanswered: d.pending.size,
+      unansweredCapped: d.pendingCapped,
+      rcodes: Array.from(d.rcodes, ([code, count]) => ({ code, count })).sort((x, y) => y.count - x.count),
+      failingNames: top(Array.from(d.failingNames, ([key, count]) => {
+        const sep = key.indexOf('|');
+        return { rcode: Number(key.slice(0, sep)), name: key.slice(sep + 1), count };
+      }), DNS_TOP_LIMIT),
+      resolvers: Array.from(d.resolvers, ([ip, r]) => ({ ip, responses: r.responses, failures: r.failures }))
+        .filter((r) => r.failures > 0)
+        .sort((x, y) => y.failures - x.failures)
+        .slice(0, 5),
+      clients: top(Array.from(d.clients, ([ip, count]) => ({ ip, count })), 5),
     };
   }
 

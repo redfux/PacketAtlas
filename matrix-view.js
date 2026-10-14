@@ -3,7 +3,7 @@
 // used here only for its color interpolator.
 // thought up by human, created by ai
 
-import { pairKey, metricValue, deviceLabel } from './data-model.js?v=1.5.0';
+import { pairKey, metricValue, deviceLabel } from './data-model.js?v=1.6.0';
 
 const CELL_SIZE = 26;
 const MIN_LABEL_SPACE = 60;

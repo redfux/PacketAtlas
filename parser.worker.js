@@ -398,6 +398,8 @@ function processBuffer(buffer) {
     if (decoded) {
       aggregator.addPacket(decoded, trafficStats.add(decoded));
       if (decoded.udpPayloadOffset != null && (decoded.srcPort === DNS_PORT || decoded.dstPort === DNS_PORT)) {
+        const dnsMessage = parseDnsMessage(buffer, decoded.udpPayloadOffset, decoded.udpPayloadLength);
+        if (dnsMessage) trafficStats.addDns(decoded, dnsMessage);
         for (const { ip, hostname } of extractDnsHostnames(buffer, decoded.udpPayloadOffset, decoded.udpPayloadLength)) {
           aggregator.addHostname(ip, hostname);
         }

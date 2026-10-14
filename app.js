@@ -9,6 +9,7 @@ import {
   computeVisibleConnections,
   computeVisiblePairs,
   deviceLabel,
+  escapeHtml,
   formatBytes,
   formatSeconds,
   healthOf,
@@ -17,15 +18,15 @@ import {
   pairKey,
   portListLabel,
   relatedDeviceIds,
-} from './data-model.js?v=1.5.0';
-import { renderMatrix } from './matrix-view.js?v=1.5.0';
-import { renderGraph, updateForces } from './graph-view.js?v=1.5.0';
-import { renderConnections } from './connections-view.js?v=1.5.0';
-import { renderConnectionsTable } from './connections-table-view.js?v=1.5.0';
-import { renderTimeline } from './timeline-view.js?v=1.5.0';
-import { renderStats } from './stats-view.js?v=1.5.0';
-import { exportActiveViewAsImage } from './export-image.js?v=1.5.0';
-import { exportToExcel, exportSelectionToExcel } from './export-excel.js?v=1.5.0';
+} from './data-model.js?v=1.6.0';
+import { renderMatrix } from './matrix-view.js?v=1.6.0';
+import { renderGraph, updateForces } from './graph-view.js?v=1.6.0';
+import { renderConnections } from './connections-view.js?v=1.6.0';
+import { renderConnectionsTable } from './connections-table-view.js?v=1.6.0';
+import { renderTimeline } from './timeline-view.js?v=1.6.0';
+import { renderStats } from './stats-view.js?v=1.6.0';
+import { exportActiveViewAsImage } from './export-image.js?v=1.6.0';
+import { exportToExcel, exportSelectionToExcel } from './export-excel.js?v=1.6.0';
 
 const LARGE_SELECTION_THRESHOLD = 50;
 const MAX_CONNECTIONS_RENDER = 400;
@@ -37,7 +38,7 @@ const MAX_TIMELINE_RENDER = 300;
 // browser. Appending the version as a query string changes the request URL
 // whenever the app updates, forcing a fresh fetch instead of silently
 // running old worker code after an update.
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.6.0';
 
 const state = {
   devices: [],
@@ -809,14 +810,14 @@ function qualityHtml(entry, { connectionLevel = false } = {}) {
  */
 function pairDetailsHtml(pair, fallbackDeviceA, fallbackDeviceB) {
   if (!pair) {
-    return `<div><strong>${deviceLabel(fallbackDeviceA)}</strong> → <strong>${deviceLabel(fallbackDeviceB)}</strong></div><div>Keine Kommunikation</div>`;
+    return `<div><strong>${escapeHtml(deviceLabel(fallbackDeviceA))}</strong> → <strong>${escapeHtml(deviceLabel(fallbackDeviceB))}</strong></div><div>Keine Kommunikation</div>`;
   }
   const sourceDevice = state.deviceIndex.get(pair.a) || fallbackDeviceA;
   const destDevice = state.deviceIndex.get(pair.b) || fallbackDeviceB;
   const value = metricValue(pair, state.metric);
   const sourcePorts = pair.portsA.length ? pair.portsA.slice(0, 12).join(', ') : '–';
   const destPorts = pair.portsB.length ? pair.portsB.slice(0, 12).join(', ') : '–';
-  return `<div><strong>${deviceLabel(sourceDevice)}</strong> → <strong>${deviceLabel(destDevice)}</strong></div>
+  return `<div><strong>${escapeHtml(deviceLabel(sourceDevice))}</strong> → <strong>${escapeHtml(deviceLabel(destDevice))}</strong></div>
     <div>Protokolle: ${pair.protocols.join(', ') || '–'}</div>
     <div>Source Port: ${sourcePorts}</div>
     <div>Destination Port: ${destPorts}</div>
@@ -837,7 +838,7 @@ function pairDetailsHtml(pair, fallbackDeviceA, fallbackDeviceB) {
  */
 function matrixCellDetailsHtml(pair, rowDevice, colDevice) {
   if (!pair) {
-    return `<div><strong>${deviceLabel(rowDevice)}</strong> → <strong>${deviceLabel(colDevice)}</strong></div><div>Keine Kommunikation</div>`;
+    return `<div><strong>${escapeHtml(deviceLabel(rowDevice))}</strong> → <strong>${escapeHtml(deviceLabel(colDevice))}</strong></div><div>Keine Kommunikation</div>`;
   }
   const isInitiatorDirection = rowDevice.id === pair.a;
   const directional = isInitiatorDirection ? pair.aToB : pair.bToA;
@@ -848,7 +849,7 @@ function matrixCellDetailsHtml(pair, rowDevice, colDevice) {
   const zeitraum = directional.firstSeen != null
     ? `${formatTimestamp(directional.firstSeen)} – ${formatTimestamp(directional.lastSeen)}`
     : '–';
-  return `<div><strong>${deviceLabel(rowDevice)}</strong> → <strong>${deviceLabel(colDevice)}</strong> · ${directionLabel}</div>
+  return `<div><strong>${escapeHtml(deviceLabel(rowDevice))}</strong> → <strong>${escapeHtml(deviceLabel(colDevice))}</strong> · ${directionLabel}</div>
     <div>Protokolle: ${pair.protocols.join(', ') || '–'}</div>
     <div>Source Port: ${sourcePorts}</div>
     <div>Destination Port: ${destPorts}</div>
@@ -860,7 +861,7 @@ function matrixCellDetailsHtml(pair, rowDevice, colDevice) {
 }
 
 function deviceDetailsHtml(device) {
-  return `<div><strong>${deviceLabel(device)}</strong></div>
+  return `<div><strong>${escapeHtml(deviceLabel(device))}</strong></div>
     <div>MAC: ${device.mac || '–'}</div>
     <div>Pakete: ${device.packetCount.toLocaleString('de-DE')} · Bytes: ${formatBytes(device.byteCount)}</div>`;
 }
@@ -877,7 +878,7 @@ function connectionDetailsHtml(connection) {
   const ports = connection.srcPort != null
     ? `<div>Source Port: ${connection.srcPort} · Destination Port: ${connection.dstPort}</div>`
     : '';
-  return `<div><strong>${deviceLabel(deviceA)}</strong> → <strong>${deviceLabel(deviceB)}</strong></div>
+  return `<div><strong>${escapeHtml(deviceLabel(deviceA))}</strong> → <strong>${escapeHtml(deviceLabel(deviceB))}</strong></div>
     <div>Protokoll: ${connection.protocol || '–'}</div>
     ${ports}
     <div>Pakete: ${connection.packets.toLocaleString('de-DE')} · Bytes: ${formatBytes(connection.bytes)}</div>

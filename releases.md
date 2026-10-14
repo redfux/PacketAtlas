@@ -5,6 +5,17 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [1.6.0] – 2026-10-14
+
+### Added
+
+- Statistik-Tab: neue Kachel **DNS** (UDP/53) mit Anzahl Anfragen und Antworten, Anteil der Antworten mit Fehlercode, Verteilung der Antwortcodes (NOERROR, NXDOMAIN, SERVFAIL, REFUSED, …), Anfragen ohne Antwort im Capture, den häufigsten fehlgeschlagenen Namen, den Resolvern mit Fehlern (Fehler von Antworten) und den Clients mit den meisten Fehlern. NXDOMAIN ist nicht immer ein Fehler (z. B. Suchdomain-Versuche), deshalb nur gelb, SERVFAIL/REFUSED rot.
+- Git-Hook `.githooks/pre-commit`: gleicht beim Commit die `?v=`-Versionsstrings automatisch mit `APP_VERSION` ab und fügt die angepassten Dateien dem Commit hinzu. Ein Release besteht damit nur noch aus der Änderung von `APP_VERSION` in `app.js`; `bump-version.sh` muss nicht mehr von Hand ausgeführt werden. Einmalig pro Clone aktivieren: `git config core.hooksPath .githooks`.
+
+### Security
+
+- Hostnamen aus DNS-Antworten (rohe Bytes, vom Absender frei wählbar) wurden bisher ungeprüft in die Tooltips und angehefteten Kacheln geschrieben. Die CSP verhinderte zwar die Ausführung von Skripten, aber eine präparierte Capture-Datei konnte damit Markup in die Oberfläche einschleusen. Alle Geräte-Beschriftungen in den HTML-Bausteinen werden jetzt escaped (`escapeHtml()` in `data-model.js`).
+
 ## [1.5.0] – 2026-10-14
 
 ### Added
