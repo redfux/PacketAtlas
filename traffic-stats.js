@@ -59,6 +59,23 @@ function createCounter() {
   return { packets: 0, bytes: 0 };
 }
 
+/** What the TCP analysis found for ONE packet; handed to the Aggregator so issues can be attributed to pairs/connections. */
+function createTcpEvents(payload) {
+  return {
+    dataSegment: payload > 0,
+    retransmission: false,
+    fastRetransmission: false,
+    duplicateAck: false,
+    outOfOrder: false,
+    lostSegment: false,
+    zeroWindow: false,
+    reset: false,
+    fin: false,
+    keepAlive: false,
+    handshakeRtt: null, // seconds, set on the SYN/ACK that completes a SYN -> SYN/ACK exchange
+  };
+}
+
 function createTcpDirection() {
   return { init: false, nextSeq: 0, lastAck: null, lastWindow: null, dupAcks: 0, lastDataTs: 0 };
 }
@@ -91,6 +108,7 @@ class TrafficStats {
       keepAlives: 0,
     };
     this.streams = new Map();
+    this.handshakes = { count: 0, sum: 0, min: null, max: null };
     this.fragmentation = {
       ipv4Packets: 0,
       ipv4Fragments: 0,
@@ -105,6 +123,7 @@ class TrafficStats {
     this.icmpMtuValues = new Map(); // `${protocol}|${mtu}` -> packets reporting it
   }
 
+  /** Returns the TCP analysis events for this packet (null for non-TCP packets). */
   add(decoded) {
     const size = decoded.frameLength;
     this.decodedPackets++;
@@ -132,7 +151,8 @@ class TrafficStats {
     this.addSizeAndFragmentation(decoded, size);
     if (decoded.protocol === 'TCP' || decoded.protocol === 'UDP') this.addPort(decoded, size);
     if (decoded.protocol === 'ICMP' || decoded.protocol === 'ICMPv6') this.addIcmp(decoded);
-    if (decoded.protocol === 'TCP' && decoded.tcpSeq !== null) this.addTcp(decoded);
+    if (decoded.protocol === 'TCP' && decoded.tcpSeq !== null) return this.addTcp(decoded);
+    return null;
   }
 
   addSizeAndFragmentation(decoded, size) {
@@ -203,6 +223,8 @@ class TrafficStats {
         lostSegments: 0,
         zeroWindow: 0,
         resets: 0,
+        synTs: null,
+        handshakeDone: false,
         a: createTcpDirection(),
         b: createTcpDirection(),
       };
@@ -222,6 +244,8 @@ class TrafficStats {
     const payload = decoded.tcpPayloadLength;
     const segmentLength = payload + (syn ? 1 : 0) + (fin ? 1 : 0);
 
+    const events = createTcpEvents(payload);
+    events.fin = fin;
     const t = this.tcp;
     t.packets++;
     const flagsLabel = tcpFlagsLabel(flags);
@@ -234,7 +258,8 @@ class TrafficStats {
     if (rst) {
       t.resets++;
       stream.resets++;
-      return; // a reset carries no meaningful sequence/ack state for the checks below
+      events.reset = true;
+      return events; // a reset carries no meaningful sequence/ack state for the checks below
     }
 
     // A fresh SYN that isn't a retransmission of the previous one starts a new
@@ -243,9 +268,26 @@ class TrafficStats {
       this.resetStreamState(stream);
     }
 
+    // Handshake time: first SYN of the stream until the matching SYN/ACK.
+    if (syn && !hasAck && stream.synTs === null) {
+      stream.synTs = ts;
+    } else if (syn && hasAck && stream.synTs !== null && !stream.handshakeDone) {
+      const rtt = ts - stream.synTs;
+      if (rtt >= 0) {
+        stream.handshakeDone = true;
+        events.handshakeRtt = rtt;
+        const h = this.handshakes;
+        h.count++;
+        h.sum += rtt;
+        h.min = h.min === null ? rtt : Math.min(h.min, rtt);
+        h.max = h.max === null ? rtt : Math.max(h.max, rtt);
+      }
+    }
+
     if (decoded.tcpWindow === 0 && !syn && !fin) {
       t.zeroWindow++;
       stream.zeroWindow++;
+      events.zeroWindow = true;
     }
 
     // Duplicate ACK: a pure ACK that repeats the previous ack/window while the
@@ -262,6 +304,7 @@ class TrafficStats {
         me.dupAcks++;
         t.duplicateAcks++;
         stream.duplicateAcks++;
+        events.duplicateAck = true;
       } else if (me.lastAck !== decoded.tcpAck) {
         me.dupAcks = 0;
       }
@@ -276,7 +319,7 @@ class TrafficStats {
         me.nextSeq = seq;
         me.lastDataTs = ts;
       }
-      return;
+      return events;
     }
 
     const end = (seq + segmentLength) >>> 0;
@@ -284,7 +327,7 @@ class TrafficStats {
       me.init = true;
       me.nextSeq = end;
       me.lastDataTs = ts;
-      return;
+      return events;
     }
 
     const diff = (seq - me.nextSeq) | 0;
@@ -295,24 +338,34 @@ class TrafficStats {
       // Sequence jumped ahead: the segment(s) in between were never seen in this capture.
       t.lostSegments++;
       stream.lostSegments++;
+      events.lostSegment = true;
       me.nextSeq = end;
       me.lastDataTs = ts;
     } else if (payload <= 1 && !syn && !fin && diff === -1) {
       t.keepAlives++; // keep-alive probe (one garbage byte at nextSeq-1), not a real retransmission
+      events.keepAlive = true;
     } else if (ts - me.lastDataTs < OUT_OF_ORDER_WINDOW_SECONDS) {
       t.outOfOrder++;
       stream.outOfOrder++;
+      events.outOfOrder = true;
     } else {
       t.retransmissions++;
       stream.retransmissions++;
-      if (other.dupAcks >= 3 && other.lastAck === seq) t.fastRetransmissions++;
+      events.retransmission = true;
+      if (other.dupAcks >= 3 && other.lastAck === seq) {
+        t.fastRetransmissions++;
+        events.fastRetransmission = true;
+      }
       if (((end - me.nextSeq) | 0) > 0) me.nextSeq = end; // retransmission that also carries new bytes
     }
+    return events;
   }
 
   resetStreamState(stream) {
     stream.a = createTcpDirection();
     stream.b = createTcpDirection();
+    stream.synTs = null;
+    stream.handshakeDone = false;
   }
 
   /** Plain, structured-clone-friendly snapshot for postMessage. */
@@ -350,6 +403,7 @@ class TrafficStats {
       icmp: Array.from(this.icmp.values()).sort((x, y) => y.packets - x.packets),
       tcpFlags: Array.from(this.tcpFlagCombos, ([label, packets]) => ({ label, packets })).sort((x, y) => y.packets - x.packets),
       tcp: { ...this.tcp, streams: this.streams.size },
+      handshakes: { ...this.handshakes },
       fragmentation: { ...this.fragmentation },
       mtu: {
         maxIpPacketLength: this.maxIpPacketLength,

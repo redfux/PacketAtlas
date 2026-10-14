@@ -47,6 +47,8 @@ export function renderGraph(container, {
   const edgeElements = links.map((link) => {
     const line = document.createElementNS(SVG_NS, 'line');
     line.classList.add('graph-edge');
+    // In the problems metric, edges without any problem fade into the background and the rest turn red.
+    if (metric === 'problems') line.classList.add(link.pair.problems > 0 ? 'graph-edge--problem' : 'graph-edge--quiet');
     line.setAttribute('stroke-width', edgeWidth(link.pair));
     line.addEventListener('mousemove', (e) => onHoverEdge(e, link.pair, nodeById.get(link.pair.a), nodeById.get(link.pair.b)));
     line.addEventListener('mouseleave', onLeave);

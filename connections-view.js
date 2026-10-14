@@ -6,7 +6,7 @@
 // provides d3-zoom for panning/zooming large diagrams.
 // thought up by human, created by ai
 
-import { deviceLabel, icmpTypeLabel } from './data-model.js';
+import { deviceLabel, healthOf, icmpTypeLabel } from './data-model.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -43,7 +43,28 @@ function directionView(connection, reversed) {
     lastSeen: directional.lastSeen,
     multicastOrBroadcast: connection.multicastOrBroadcast,
     isReply: reversed,
+    // Quality data lives on the connection as a whole (both directions), so every
+    // direction view carries a reference to it for the tooltip / pinned card.
+    problems: directional.problems,
+    connection,
+    health: healthOf(connection),
   };
+}
+
+/** Short problem summary appended to the initiator arrow's label, e.g. " · ⚠ 187 Retrans., 3× RST". */
+function problemSuffix(view) {
+  const c = view.connection;
+  if (!c.problems) return '';
+  const parts = [];
+  if (c.tcp) {
+    if (c.tcp.retransmissions) parts.push(`${c.tcp.retransmissions.toLocaleString('de-DE')} Retrans.`);
+    if (c.tcp.lostSegments) parts.push(`${c.tcp.lostSegments.toLocaleString('de-DE')} Lücken`);
+    if (c.tcp.resets) parts.push(`${c.tcp.resets.toLocaleString('de-DE')}× RST`);
+    if (c.tcp.zeroWindow) parts.push(`${c.tcp.zeroWindow.toLocaleString('de-DE')}× Zero-Window`);
+  } else {
+    parts.push(`${c.problems.toLocaleString('de-DE')}× Fehlermeldung`);
+  }
+  return parts.length ? ` · ⚠ ${parts.join(', ')}` : '';
 }
 
 /**
@@ -61,7 +82,7 @@ function connectionLabel(view) {
   const protocolPart = icmpLabel ? `${view.protocol} (${icmpLabel})` : (view.protocol || 'IP');
   const portPart = view.dstPort != null ? ` ${view.dstPort}` : (icmpLabel ? '' : (view.port != null ? ` ${view.port}` : ''));
   const icon = view.isReply ? '○' : '▲';
-  return `${icon} ${protocolPart}${portPart} — ${view.packets.toLocaleString('de-DE')}×`;
+  return `${icon} ${protocolPart}${portPart} — ${view.packets.toLocaleString('de-DE')}×${view.isReply ? '' : problemSuffix(view)}`;
 }
 
 /**
@@ -135,19 +156,24 @@ export function renderConnections(container, { devices, connections, onHover, on
   marker.appendChild(arrowPath);
   defs.appendChild(marker);
 
-  const replyMarker = document.createElementNS(SVG_NS, 'marker');
-  replyMarker.setAttribute('id', 'sequence-arrowhead-reply');
-  replyMarker.setAttribute('viewBox', '0 0 10 10');
-  replyMarker.setAttribute('refX', '9');
-  replyMarker.setAttribute('refY', '5');
-  replyMarker.setAttribute('markerWidth', '7');
-  replyMarker.setAttribute('markerHeight', '7');
-  replyMarker.setAttribute('orient', 'auto-start-reverse');
-  const replyArrowPath = document.createElementNS(SVG_NS, 'path');
-  replyArrowPath.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z');
-  replyArrowPath.classList.add('sequence-arrowhead-fill--reply');
-  replyMarker.appendChild(replyArrowPath);
-  defs.appendChild(replyMarker);
+  const addMarker = (id, fillClass) => {
+    const m = document.createElementNS(SVG_NS, 'marker');
+    m.setAttribute('id', id);
+    m.setAttribute('viewBox', '0 0 10 10');
+    m.setAttribute('refX', '9');
+    m.setAttribute('refY', '5');
+    m.setAttribute('markerWidth', '7');
+    m.setAttribute('markerHeight', '7');
+    m.setAttribute('orient', 'auto-start-reverse');
+    const path = document.createElementNS(SVG_NS, 'path');
+    path.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z');
+    path.classList.add(fillClass);
+    m.appendChild(path);
+    defs.appendChild(m);
+  };
+  addMarker('sequence-arrowhead-reply', 'sequence-arrowhead-fill--reply');
+  addMarker('sequence-arrowhead-warn', 'sequence-arrowhead-fill--warn');
+  addMarker('sequence-arrowhead-bad', 'sequence-arrowhead-fill--bad');
   svg.appendChild(defs);
 
   const zoomLayer = document.createElementNS(SVG_NS, 'g');
@@ -205,6 +231,7 @@ export function renderConnections(container, { devices, connections, onHover, on
       band.setAttribute('height', group.bottom - group.top);
       band.setAttribute('rx', 6);
       band.classList.add('sequence-group-band');
+      if (firstArrow.view.health.level !== 'ok') band.classList.add(`sequence-group-band--${firstArrow.view.health.level}`);
       zoomLayer.appendChild(band);
     }
 
@@ -221,9 +248,12 @@ export function renderConnections(container, { devices, connections, onHover, on
       line.setAttribute('y1', y);
       line.setAttribute('x2', ax2);
       line.setAttribute('y2', y);
-      line.setAttribute('marker-end', view.isReply ? 'url(#sequence-arrowhead-reply)' : 'url(#sequence-arrowhead)');
+      const level = view.health.level;
+      const markerId = level !== 'ok' ? `sequence-arrowhead-${level}` : view.isReply ? 'sequence-arrowhead-reply' : 'sequence-arrowhead';
+      line.setAttribute('marker-end', `url(#${markerId})`);
       line.classList.add('sequence-arrow');
       if (view.isReply) line.classList.add('sequence-arrow--reply');
+      if (level !== 'ok') line.classList.add(`sequence-arrow--${level}`);
       arrowGroup.appendChild(line);
 
       const text = document.createElementNS(SVG_NS, 'text');
@@ -232,6 +262,7 @@ export function renderConnections(container, { devices, connections, onHover, on
       text.setAttribute('text-anchor', 'middle');
       text.classList.add('sequence-event-label');
       if (view.isReply) text.classList.add('sequence-event-label--reply');
+      if (level !== 'ok') text.classList.add(`sequence-event-label--${level}`);
       text.textContent = connectionLabel(view);
       arrowGroup.appendChild(text);
 

@@ -33,9 +33,10 @@ function createLabel(device, x, y, rotate, anchor) {
   return text;
 }
 
-function colorForValue(value, maxValue) {
+function colorForValue(value, maxValue, metric) {
   const t = maxValue > 0 ? Math.log1p(value) / Math.log1p(maxValue) : 0;
-  return d3.interpolateBlues(0.15 + t * 0.8);
+  // Problems get their own (red) scale so they can't be mistaken for plain traffic volume.
+  return (metric === 'problems' ? d3.interpolateReds : d3.interpolateBlues)(0.15 + t * 0.8);
 }
 
 /**
@@ -114,7 +115,7 @@ export function renderMatrix(container, { devices, pairs, metric, onHover, onLea
       rect.setAttribute('y', cellY);
       rect.setAttribute('width', CELL_SIZE - 1);
       rect.setAttribute('height', CELL_SIZE - 1);
-      rect.setAttribute('fill', value > 0 ? colorForValue(value, maxValue) : 'var(--md-surface-container)');
+      rect.setAttribute('fill', value > 0 ? colorForValue(value, maxValue, metric) : 'var(--md-surface-container)');
       rect.classList.add('matrix-cell');
       rect.addEventListener('mousemove', (e) => onHover(e, pair, rowDevice, colDevice));
       rect.addEventListener('mouseleave', onLeave);

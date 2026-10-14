@@ -5,6 +5,20 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [1.3.0] – 2026-10-14
+
+### Added
+
+- **Qualität pro Verbindung (Verbindungen-Tab):** Der TCP-Analyse-Kern aus der Statistik ordnet Retransmits, Lücken (fehlende Segmente), RST, Zero-Window, Dup-ACKs und Out-of-Order jetzt den einzelnen Verbindungen (Geräte-Paar + Protokoll + Port) und Geräte-Paaren zu. Auffällige Verbindungen werden im Diagramm farbig markiert (gelb = auffällig, rot = instabil, d. h. mindestens 3 Retransmits und mindestens 2 % der Datensegmente), die Beschriftung des Pfeils nennt die Ursache, z. B. „⚠ 187 Retrans., 3× RST“. ICMP-Fehlermeldungen (Destination Unreachable, Time Exceeded, Parameter Problem, Packet Too Big) zählen ebenfalls als Problem.
+- **Tooltip und angeheftete Kachel:** Neuer Block „Qualität“ mit Status-Chip (OK / Auffällig / Instabil), Zählern für Retransmits (mit Anteil), Dup-ACKs, Lücken, RST, Zero-Window und Out-of-Order, Handshake-Zeit (SYN → SYN/ACK, Ø und Maximum), „Beendet durch“ (FIN / RST / offen) und – bei Verbindungen – einer kleinen Zeitleiste, wann die Probleme auftraten. In Graph-Kanten und Matrix-Zellen erscheint dieselbe Auswertung auf Paar-Ebene (Matrix zusätzlich „Probleme in dieser Richtung“).
+- **Neuer Filter „Nur Probleme anzeigen“** (Seitenleiste): blendet in Matrix, Graph, Verbindungen und Zeitleiste alle Paare/Verbindungen ohne Problem-Ereignis aus. Er wirkt nicht auf den PCAP-Export.
+- **Neue Metrik „Probleme“** (Umschalter Pakete / Bytes / Probleme) für Matrix und Graph: Matrixzellen werden je Richtung rot nach Anzahl der Probleme eingefärbt; im Graph werden Kanten mit Problemen rot und umso dicker, je mehr es sind, Kanten ohne Problem verblassen. Als „Problem“ zählen Retransmits, Lücken, RST, Zero-Window und ICMP-Fehlermeldungen (Dup-ACKs und Out-of-Order bewusst nicht, da sie Folgen desselben Verlusts sind und ihn doppelt zählen würden). Die Metrik gilt auch für den Excel-Export der Matrix.
+- Statistik-Tab: TCP-Gesundheit zeigt zusätzlich die Handshake-Zeit (Ø, Minimum, Maximum) über alle TCP-Verbindungen mit sichtbarem SYN/SYN-ACK.
+
+### Changed
+
+- Tooltips nennen die Metrik jetzt auf Deutsch („Pakete“, „Bytes“, „Probleme“) statt mit dem internen Schlüssel.
+
 ## [1.2.0] – 2026-10-14
 
 ### Added

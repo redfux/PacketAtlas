@@ -167,10 +167,11 @@ export function pairMatchesProtocolFilter(pair, activeGroups) {
  * Derives the filtered set of pairs visible in both views from the full
  * result, the current device selection, protocol filter and metric.
  */
-export function computeVisiblePairs(pairs, selectedIds, activeGroups, hideMulticast) {
+export function computeVisiblePairs(pairs, selectedIds, activeGroups, hideMulticast, onlyProblems = false) {
   return pairs.filter((pair) => {
     if (!selectedIds.has(pair.a) || !selectedIds.has(pair.b)) return false;
     if (hideMulticast && pair.multicastOrBroadcast) return false;
+    if (onlyProblems && !(pair.problems > 0)) return false;
     if (!pairMatchesProtocolFilter(pair, activeGroups)) return false;
     return true;
   });
@@ -181,10 +182,11 @@ export function computeVisiblePairs(pairs, selectedIds, activeGroups, hideMultic
  * visible in the connections view, using the same selection/protocol/multicast
  * filters as computeVisiblePairs() so all views stay consistent with each other.
  */
-export function computeVisibleConnections(connections, selectedIds, activeGroups, hideMulticast) {
+export function computeVisibleConnections(connections, selectedIds, activeGroups, hideMulticast, onlyProblems = false) {
   return connections.filter((connection) => {
     if (!selectedIds.has(connection.a) || !selectedIds.has(connection.b)) return false;
     if (hideMulticast && connection.multicastOrBroadcast) return false;
+    if (onlyProblems && !(connection.problems > 0)) return false;
     if (!activeGroups.has(protocolGroupOf(connection.protocol))) return false;
     return true;
   });
@@ -200,8 +202,33 @@ export function relatedDeviceIds(pairs, deviceId) {
   return related;
 }
 
+/** 'problems' = retransmits + sequence gaps + resets + zero-window events + ICMP errors (see problemCountOf() in parser.worker.js). */
 export function metricValue(pair, metric) {
-  return metric === 'bytes' ? pair.bytes : pair.packets;
+  if (metric === 'bytes') return pair.bytes;
+  if (metric === 'problems') return pair.problems || 0;
+  return pair.packets;
+}
+
+/**
+ * Traffic-quality verdict for a pair or connection (anything carrying
+ * `problems` and, for TCP, a `tcp` summary): 'ok' without any problem event,
+ * 'bad' ("Instabil") once retransmits are frequent (>= 3 and >= 2 % of the
+ * data segments - an unanswered, endlessly retried SYN counts as 100 %), 'warn'
+ * ("Auffällig") for anything else that produced a problem event.
+ */
+export function healthOf(entry) {
+  const problems = entry.problems || 0;
+  if (problems === 0) return { level: 'ok', label: 'OK', retransmitRate: 0 };
+  const tcp = entry.tcp;
+  if (!tcp) return { level: 'warn', label: 'ICMP-Fehler', retransmitRate: 0 };
+  const retransmitRate = tcp.retransmissions / Math.max(tcp.dataSegments, tcp.retransmissions, 1);
+  if (tcp.retransmissions >= 3 && retransmitRate >= 0.02) return { level: 'bad', label: 'Instabil', retransmitRate };
+  let label = 'Auffällig';
+  if (tcp.retransmissions > 0) label = 'Retransmits';
+  else if (tcp.resets > 0) label = 'Reset';
+  else if (tcp.lostSegments > 0) label = 'Lücken';
+  else if (tcp.zeroWindow > 0) label = 'Zero-Window';
+  return { level: 'warn', label, retransmitRate };
 }
 
 export function formatBytes(bytes) {

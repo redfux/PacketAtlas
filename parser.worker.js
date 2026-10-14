@@ -44,16 +44,89 @@ function servicePortOf(decoded) {
   return Math.min(decoded.srcPort, decoded.dstPort);
 }
 
+// Per pair / connection TCP quality counters (see traffic-stats.js for how the
+// events are detected). `problemTimes` (timestamps of retransmits/gaps/resets/
+// zero-window events, capped) is only kept on connections, where the detail
+// view draws it as a mini timeline; pair-level summaries only need the totals.
+const MAX_PROBLEM_TIMES = 200;
+
+function createTcpSummary(withTimes) {
+  return {
+    dataSegments: 0,
+    retransmissions: 0,
+    fastRetransmissions: 0,
+    duplicateAcks: 0,
+    outOfOrder: 0,
+    lostSegments: 0,
+    zeroWindow: 0,
+    resets: 0,
+    fins: 0,
+    handshakeCount: 0,
+    handshakeSum: 0,
+    handshakeMax: 0,
+    problemTimes: withTimes ? [] : null,
+  };
+}
+
+function accumulateTcpEvents(summary, events, timestamp) {
+  if (events.dataSegment) summary.dataSegments++;
+  if (events.retransmission) summary.retransmissions++;
+  if (events.fastRetransmission) summary.fastRetransmissions++;
+  if (events.duplicateAck) summary.duplicateAcks++;
+  if (events.outOfOrder) summary.outOfOrder++;
+  if (events.lostSegment) summary.lostSegments++;
+  if (events.zeroWindow) summary.zeroWindow++;
+  if (events.reset) summary.resets++;
+  if (events.fin) summary.fins++;
+  if (events.handshakeRtt !== null) {
+    summary.handshakeCount++;
+    summary.handshakeSum += events.handshakeRtt;
+    summary.handshakeMax = Math.max(summary.handshakeMax, events.handshakeRtt);
+  }
+  if (
+    summary.problemTimes &&
+    summary.problemTimes.length < MAX_PROBLEM_TIMES &&
+    (events.retransmission || events.lostSegment || events.reset || events.zeroWindow)
+  ) {
+    summary.problemTimes.push(timestamp);
+  }
+}
+
+/** ICMP/ICMPv6 error messages (unreachable, time exceeded, parameter problem, packet too big) count as problems too. */
+function isIcmpError(decoded) {
+  if (decoded.protocol === 'ICMP') return decoded.icmpType === 3 || decoded.icmpType === 11 || decoded.icmpType === 12;
+  if (decoded.protocol === 'ICMPv6') return decoded.icmpType >= 1 && decoded.icmpType <= 4;
+  return false;
+}
+
+/**
+ * How many "problem events" one packet represents: TCP retransmission, missing
+ * segment (sequence gap), reset, zero window, or an ICMP error message. Dup-ACKs
+ * and reordering are deliberately NOT counted - they are symptoms of the same
+ * loss/reordering and would double count it.
+ */
+function problemCountOf(decoded, tcpEvents) {
+  let count = isIcmpError(decoded) ? 1 : 0;
+  if (tcpEvents) {
+    if (tcpEvents.retransmission) count++;
+    if (tcpEvents.lostSegment) count++;
+    if (tcpEvents.reset) count++;
+    if (tcpEvents.zeroWindow) count++;
+  }
+  return count;
+}
+
 function createDirectionalEntry(timestamp) {
-  return { packets: 0, bytes: 0, srcPorts: new Set(), dstPorts: new Set(), firstSeen: timestamp, lastSeen: timestamp };
+  return { packets: 0, bytes: 0, problems: 0, srcPorts: new Set(), dstPorts: new Set(), firstSeen: timestamp, lastSeen: timestamp };
 }
 
 /** `null` (never any traffic that way) serializes to an explicit zero entry, not `null`, so callers never need a null-check. */
 function serializeDirectional(entry) {
-  if (!entry) return { packets: 0, bytes: 0, srcPorts: [], dstPorts: [], firstSeen: null, lastSeen: null };
+  if (!entry) return { packets: 0, bytes: 0, problems: 0, srcPorts: [], dstPorts: [], firstSeen: null, lastSeen: null };
   return {
     packets: entry.packets,
     bytes: entry.bytes,
+    problems: entry.problems,
     srcPorts: Array.from(entry.srcPorts),
     dstPorts: Array.from(entry.dstPorts),
     firstSeen: entry.firstSeen,
@@ -69,11 +142,11 @@ function createConnectionDirectional(decoded) {
   // ICMP traffic together regardless of type (echo request, echo reply, ...);
   // icmpTypes tracks the distinct types actually seen in this direction so
   // the Connections view can show e.g. "Echo Request" instead of just "ICMP".
-  return { packets: 0, bytes: 0, srcPort: decoded.srcPort, dstPort: decoded.dstPort, icmpTypes: new Set(), firstSeen: decoded.timestamp, lastSeen: decoded.timestamp };
+  return { packets: 0, bytes: 0, problems: 0, srcPort: decoded.srcPort, dstPort: decoded.dstPort, icmpTypes: new Set(), firstSeen: decoded.timestamp, lastSeen: decoded.timestamp };
 }
 
 function serializeConnectionDirectional(entry) {
-  if (!entry) return { packets: 0, bytes: 0, srcPort: null, dstPort: null, icmpTypes: [], firstSeen: null, lastSeen: null };
+  if (!entry) return { packets: 0, bytes: 0, problems: 0, srcPort: null, dstPort: null, icmpTypes: [], firstSeen: null, lastSeen: null };
   return { ...entry, icmpTypes: Array.from(entry.icmpTypes) };
 }
 
@@ -102,7 +175,7 @@ class Aggregator {
     return device;
   }
 
-  addPacket(decoded) {
+  addPacket(decoded, tcpEvents) {
     const hasSrc = Boolean(decoded.srcIp || decoded.srcMac);
     const hasDst = Boolean(decoded.dstIp || decoded.dstMac);
     if (!hasSrc || !hasDst) return;
@@ -126,6 +199,8 @@ class Aggregator {
         b: dstId,
         packets: 0,
         bytes: 0,
+        problems: 0,
+        tcp: null,
         protocols: new Set(),
         // Ports are tracked per device (not per src/dst direction): a pair
         // aggregates traffic both ways, so "source port" flips depending on
@@ -161,11 +236,19 @@ class Aggregator {
     if (decoded.timestamp > pair.lastSeen) pair.lastSeen = decoded.timestamp;
     if (decoded.multicastOrBroadcast) pair.multicastOrBroadcast = true;
 
+    const problems = problemCountOf(decoded, tcpEvents);
+    pair.problems += problems;
+    if (tcpEvents) {
+      if (!pair.tcp) pair.tcp = createTcpSummary(false);
+      accumulateTcpEvents(pair.tcp, tcpEvents, decoded.timestamp);
+    }
+
     const directionKey = srcId === pair.a ? 'aToB' : 'bToA';
     if (!pair[directionKey]) pair[directionKey] = createDirectionalEntry(decoded.timestamp);
     const directional = pair[directionKey];
     directional.packets++;
     directional.bytes += decoded.frameLength;
+    directional.problems += problems;
     if (decoded.srcPort != null) directional.srcPorts.add(decoded.srcPort);
     if (decoded.dstPort != null) directional.dstPorts.add(decoded.dstPort);
     if (decoded.timestamp < directional.firstSeen) directional.firstSeen = decoded.timestamp;
@@ -211,6 +294,8 @@ class Aggregator {
         dstPort: decoded.dstPort,
         packets: 0,
         bytes: 0,
+        problems: 0,
+        tcp: null,
         firstSeen: decoded.timestamp,
         lastSeen: decoded.timestamp,
         multicastOrBroadcast: false,
@@ -225,6 +310,11 @@ class Aggregator {
     }
     connection.packets++;
     connection.bytes += decoded.frameLength;
+    connection.problems += problems;
+    if (tcpEvents) {
+      if (!connection.tcp) connection.tcp = createTcpSummary(true);
+      accumulateTcpEvents(connection.tcp, tcpEvents, decoded.timestamp);
+    }
     if (decoded.timestamp < connection.firstSeen) connection.firstSeen = decoded.timestamp;
     if (decoded.timestamp > connection.lastSeen) connection.lastSeen = decoded.timestamp;
     if (decoded.multicastOrBroadcast) connection.multicastOrBroadcast = true;
@@ -234,6 +324,7 @@ class Aggregator {
     const connectionDirectional = connection[connectionDirectionKey];
     connectionDirectional.packets++;
     connectionDirectional.bytes += decoded.frameLength;
+    connectionDirectional.problems += problems;
     if (decoded.icmpType != null) connectionDirectional.icmpTypes.add(decoded.icmpType);
     if (decoded.timestamp < connectionDirectional.firstSeen) connectionDirectional.firstSeen = decoded.timestamp;
     if (decoded.timestamp > connectionDirectional.lastSeen) connectionDirectional.lastSeen = decoded.timestamp;
@@ -305,8 +396,7 @@ function processBuffer(buffer) {
   for (const frame of frames) {
     const decoded = decodeFrame(buffer, frame.offset, frame.length, frame.linkType, frame.timestamp, frame.origLen);
     if (decoded) {
-      aggregator.addPacket(decoded);
-      trafficStats.add(decoded);
+      aggregator.addPacket(decoded, trafficStats.add(decoded));
       if (decoded.udpPayloadOffset != null && (decoded.srcPort === DNS_PORT || decoded.dstPort === DNS_PORT)) {
         for (const { ip, hostname } of extractDnsHostnames(buffer, decoded.udpPayloadOffset, decoded.udpPayloadLength)) {
           aggregator.addHostname(ip, hostname);

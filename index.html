@@ -72,6 +72,11 @@
             <button type="button" class="chip is-active" data-protocol="ICMP">ICMP</button>
             <button type="button" class="chip is-active" data-protocol="OTHER">Sonstige</button>
           </div>
+          <label class="switch sidebar__switch">
+            <input type="checkbox" id="toggle-only-problems">
+            <span class="switch__track" aria-hidden="true"></span>
+            Nur Probleme anzeigen
+          </label>
         </div>
 
         <div class="sidebar__section sidebar-subtabs" role="tablist" aria-label="Filterliste">
@@ -136,6 +141,7 @@
           <div class="segmented" role="radiogroup" aria-label="Metrik" id="metric-group">
             <button type="button" class="segmented__option is-active" id="metric-packets" role="radio" aria-checked="true">Pakete</button>
             <button type="button" class="segmented__option" id="metric-bytes" role="radio" aria-checked="false">Bytes</button>
+            <button type="button" class="segmented__option" id="metric-problems" role="radio" aria-checked="false" title="Retransmits, Lücken, RST, Zero-Window und ICMP-Fehlermeldungen">Probleme</button>
           </div>
 
           <div class="toolbar__menu">
@@ -158,6 +164,7 @@
           <input type="range" id="force-charge" min="50" max="1200" value="300">
           <label class="field-label" for="force-distance">Kantenlänge</label>
           <input type="range" id="force-distance" min="20" max="400" value="120">
+          <span id="graph-problems-note" class="graph-controls__note" hidden>Rote Kanten = Probleme (Retransmits, Lücken, RST, Zero-Window, ICMP-Fehler), Dicke = Anzahl</span>
         </div>
 
         <div id="large-selection-warning" class="warning-banner" hidden>
@@ -179,6 +186,7 @@
           <div class="matrix-legend">
             <span><span class="matrix-legend__icon matrix-legend__icon--initiator">▲</span> Verbindungsaufbau (Zeile → Spalte initiiert)</span>
             <span><span class="matrix-legend__icon matrix-legend__icon--responder">○</span> Antwort auf die jeweils andere Zelle</span>
+            <span id="matrix-problems-note" hidden>Farbe (rot) = Probleme je Richtung: Retransmits, Lücken, RST, Zero-Window, ICMP-Fehler</span>
           </div>
           <div id="matrix-container" class="matrix-container"></div>
         </div>

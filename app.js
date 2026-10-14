@@ -10,6 +10,7 @@ import {
   computeVisiblePairs,
   deviceLabel,
   formatBytes,
+  healthOf,
   formatTimestamp,
   metricValue,
   pairKey,
@@ -34,7 +35,7 @@ const MAX_TIMELINE_RENDER = 300;
 // browser. Appending the version as a query string changes the request URL
 // whenever the app updates, forcing a fresh fetch instead of silently
 // running old worker code after an update.
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.3.0';
 
 const state = {
   devices: [],
@@ -46,6 +47,7 @@ const state = {
   search: '',
   activeGroups: new Set(Object.keys(PROTOCOL_GROUPS)),
   hideMulticast: false,
+  onlyProblems: false,
   sidebarTab: 'devices', // 'devices' | 'ports'
   activeTab: 'matrix',
   metric: 'packets',
@@ -87,6 +89,7 @@ const el = {
   btnSelectNone: document.getElementById('btn-select-none'),
   protocolFilters: document.getElementById('protocol-filters'),
   toggleHideBroadcast: document.getElementById('toggle-hide-broadcast'),
+  toggleOnlyProblems: document.getElementById('toggle-only-problems'),
   subtabDevices: document.getElementById('subtab-devices'),
   subtabPorts: document.getElementById('subtab-ports'),
   portListSection: document.getElementById('port-list-section'),
@@ -113,6 +116,9 @@ const el = {
   metricGroup: document.getElementById('metric-group'),
   metricPackets: document.getElementById('metric-packets'),
   metricBytes: document.getElementById('metric-bytes'),
+  metricProblems: document.getElementById('metric-problems'),
+  matrixProblemsNote: document.getElementById('matrix-problems-note'),
+  graphProblemsNote: document.getElementById('graph-problems-note'),
   connectionsTruncatedWarning: document.getElementById('connections-truncated-warning'),
   connectionsTruncatedMessage: document.getElementById('connections-truncated-message'),
   timelineTruncatedWarning: document.getElementById('timeline-truncated-warning'),
@@ -484,6 +490,13 @@ el.toggleHideBroadcast.addEventListener('change', () => {
   renderActiveView();
 });
 
+// Not applied to the PCAP export (its worker re-derives the filter from the raw
+// capture and has no notion of per-connection quality), only to the views and the Excel export.
+el.toggleOnlyProblems.addEventListener('change', () => {
+  state.onlyProblems = el.toggleOnlyProblems.checked;
+  renderActiveView();
+});
+
 // --- Tabs / metric ------------------------------------------------------------
 
 const TABS = {
@@ -508,6 +521,9 @@ function setActiveTab(tab) {
   el.graphControls.hidden = tab !== 'graph';
   el.metricGroup.hidden = TABS_WITHOUT_METRIC.has(tab);
   el.addressFamilyGroup.hidden = TABS_WITHOUT_ADDRESS_FAMILY.has(tab);
+  // The statistics tab only knows packets/bytes (it always shows every problem type separately anyway).
+  el.metricProblems.hidden = tab === 'stats';
+  if (tab === 'stats' && state.metric === 'problems') setMetric('packets');
   // The statistics tab is HTML, not an SVG, so there is nothing to export as an image.
   el.exportPng.disabled = tab === 'stats';
   el.exportSvg.disabled = tab === 'stats';
@@ -526,11 +542,16 @@ function setMetric(metric) {
   el.metricPackets.setAttribute('aria-checked', String(metric === 'packets'));
   el.metricBytes.classList.toggle('is-active', metric === 'bytes');
   el.metricBytes.setAttribute('aria-checked', String(metric === 'bytes'));
+  el.metricProblems.classList.toggle('is-active', metric === 'problems');
+  el.metricProblems.setAttribute('aria-checked', String(metric === 'problems'));
+  el.matrixProblemsNote.hidden = metric !== 'problems';
+  el.graphProblemsNote.hidden = metric !== 'problems';
   renderActiveView();
 }
 
 el.metricPackets.addEventListener('click', () => setMetric('packets'));
 el.metricBytes.addEventListener('click', () => setMetric('bytes'));
+el.metricProblems.addEventListener('click', () => setMetric('problems'));
 
 function setAddressFamily(family) {
   state.addressFamily = family;
@@ -566,7 +587,7 @@ function getVisibleDevicesAndPairs() {
   const familyDevices = state.devices.filter((d) => state.selectedIds.has(d.id) && addressFamilyOf(d) === state.addressFamily);
   const familyIds = new Set(familyDevices.map((d) => d.id));
   const devices = [...familyDevices].sort(compareDevicesByAddress);
-  const pairs = computeVisiblePairs(state.pairs, familyIds, state.activeGroups, state.hideMulticast);
+  const pairs = computeVisiblePairs(state.pairs, familyIds, state.activeGroups, state.hideMulticast, state.onlyProblems);
   return { devices, pairs, familyIds };
 }
 
@@ -578,7 +599,7 @@ function getVisibleDevicesAndPairs() {
  * connection began).
  */
 function getVisibleConnections(familyIds, order) {
-  const filtered = computeVisibleConnections(state.connections, familyIds, state.activeGroups, state.hideMulticast);
+  const filtered = computeVisibleConnections(state.connections, familyIds, state.activeGroups, state.hideMulticast, state.onlyProblems);
   if (order === 'timeline') {
     return filtered.sort((a, b) => a.firstSeen - b.firstSeen);
   }
@@ -660,6 +681,59 @@ function renderActiveView() {
 
 // --- Detail content (shared by hover tooltips and pinned cards) ------------------
 
+const METRIC_LABELS = { packets: 'Pakete', bytes: 'Bytes', problems: 'Probleme' };
+
+const percentFormat = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 });
+
+function formatSeconds(seconds) {
+  if (seconds < 1) return `${percentFormat.format(seconds * 1000)} ms`;
+  return `${percentFormat.format(seconds)} s`;
+}
+
+/** Marks for every problem event on a plain-SVG strip spanning the connection's lifetime (attributes only - inline styles are blocked by the CSP). */
+function problemTimelineHtml(times, from, to) {
+  if (!times || times.length === 0 || from == null || !(to >= from)) return '';
+  const span = Math.max(to - from, 1e-6);
+  const marks = times
+    .map((ts) => {
+      const x = (((ts - from) / span) * 200).toFixed(1);
+      return `<line class="mini-timeline__mark" x1="${x}" x2="${x}" y1="2" y2="12"/>`;
+    })
+    .join('');
+  return `<svg class="mini-timeline" viewBox="0 0 200 14" preserveAspectRatio="none" role="img" aria-label="Probleme über die Zeit"><rect class="mini-timeline__bg" x="0" y="0" width="200" height="14" rx="3"/>${marks}</svg>
+    <div class="quality__axis"><span>Probleme über die Zeit</span><span>${times.length >= 200 ? 'erste 200 ' : ''}${times.length.toLocaleString('de-DE')} Ereignisse</span></div>`;
+}
+
+/**
+ * Traffic-quality block for a pair or connection (anything with `problems`
+ * and, for TCP, a `tcp` summary - see parser.worker.js): verdict chip,
+ * retransmit/dup-ACK/gap/RST/zero-window counts, handshake time and, on
+ * connection level only, how it ended plus a strip of when problems occurred.
+ */
+function qualityHtml(entry, { connectionLevel = false } = {}) {
+  const problems = entry.problems || 0;
+  if (!problems && !entry.tcp) return '';
+  const health = healthOf(entry);
+  const t = entry.tcp;
+  let lines = '';
+  if (t) {
+    const rate = t.dataSegments ? ` (${percentFormat.format((t.retransmissions / t.dataSegments) * 100)} %)` : '';
+    lines += `<div>Retransmits: ${t.retransmissions.toLocaleString('de-DE')}${rate} · Dup-ACKs: ${t.duplicateAcks.toLocaleString('de-DE')} · Lücken: ${t.lostSegments.toLocaleString('de-DE')}</div>
+      <div>RST: ${t.resets.toLocaleString('de-DE')} · Zero-Window: ${t.zeroWindow.toLocaleString('de-DE')} · Out-of-Order: ${t.outOfOrder.toLocaleString('de-DE')}</div>`;
+    if (t.handshakeCount) {
+      lines += `<div>Handshake: Ø ${formatSeconds(t.handshakeSum / t.handshakeCount)} (max. ${formatSeconds(t.handshakeMax)}, ${t.handshakeCount.toLocaleString('de-DE')}×)</div>`;
+    }
+    if (connectionLevel) {
+      const ended = t.resets ? 'RST (abgebrochen)' : t.fins ? 'FIN (regulär)' : 'nicht beendet (im Capture offen)';
+      lines += `<div>Beendet durch: ${ended}</div>`;
+    }
+  } else {
+    lines += `<div>ICMP-Fehlermeldungen: ${problems.toLocaleString('de-DE')}</div>`;
+  }
+  const timeline = connectionLevel && t ? problemTimelineHtml(t.problemTimes, entry.firstSeen, entry.lastSeen) : '';
+  return `<div class="quality"><div>Qualität: <span class="health-chip health-chip--${health.level}">${health.label}</span></div>${lines}${timeline}</div>`;
+}
+
 /**
  * `pair.a`/`pair.b` are set from whichever device sent the very first packet
  * of that pair (see parser.worker.js), so they already encode who initiated
@@ -681,7 +755,8 @@ function pairDetailsHtml(pair, fallbackDeviceA, fallbackDeviceB) {
     <div>Destination Port: ${destPorts}</div>
     <div>Pakete: ${pair.packets.toLocaleString('de-DE')} · Bytes: ${formatBytes(pair.bytes)}</div>
     <div>Zeitraum: ${formatTimestamp(pair.firstSeen)} – ${formatTimestamp(pair.lastSeen)}</div>
-    <div>Metrik (${state.metric}): ${value.toLocaleString('de-DE')}</div>`;
+    <div>Metrik (${METRIC_LABELS[state.metric]}): ${value.toLocaleString('de-DE')}</div>
+    ${qualityHtml(pair)}`;
 }
 
 /**
@@ -712,7 +787,9 @@ function matrixCellDetailsHtml(pair, rowDevice, colDevice) {
     <div>Destination Port: ${destPorts}</div>
     <div>Pakete: ${directional.packets.toLocaleString('de-DE')} · Bytes: ${formatBytes(directional.bytes)}</div>
     <div>Zeitraum: ${zeitraum}</div>
-    <div>Metrik (${state.metric}): ${value.toLocaleString('de-DE')}</div>`;
+    <div>Metrik (${METRIC_LABELS[state.metric]}): ${value.toLocaleString('de-DE')}</div>
+    ${directional.problems ? `<div>Probleme in dieser Richtung: ${directional.problems.toLocaleString('de-DE')}</div>` : ''}
+    ${qualityHtml(pair)}`;
 }
 
 function deviceDetailsHtml(device) {
@@ -737,7 +814,8 @@ function connectionDetailsHtml(connection) {
     <div>Protokoll: ${connection.protocol || '–'}</div>
     ${ports}
     <div>Pakete: ${connection.packets.toLocaleString('de-DE')} · Bytes: ${formatBytes(connection.bytes)}</div>
-    <div>Zeitraum: ${formatTimestamp(connection.firstSeen)} – ${formatTimestamp(connection.lastSeen)}</div>`;
+    <div>Zeitraum: ${formatTimestamp(connection.firstSeen)} – ${formatTimestamp(connection.lastSeen)}</div>
+    ${qualityHtml(connection.connection || connection, { connectionLevel: true })}`;
 }
 
 // --- Tooltip ---------------------------------------------------------------------

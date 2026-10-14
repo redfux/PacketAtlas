@@ -32,6 +32,10 @@ function formatDuration(seconds) {
   return `${m} min ${s} s`;
 }
 
+function formatMs(seconds) {
+  return seconds < 1 ? `${percentFormat.format(seconds * 1000)} ms` : `${percentFormat.format(seconds)} s`;
+}
+
 function formatClock(epochSeconds) {
   return new Date(epochSeconds * 1000).toLocaleTimeString('de-DE');
 }
@@ -121,8 +125,10 @@ function tcpHealthCard(stats) {
     row('Zero-Window', t.zeroWindow, '--stats-warn', 'Empfänger meldet Fenstergröße 0 – er kommt mit der Datenmenge nicht hinterher.'),
     row('Keep-Alives', t.keepAlives, '--stats-neutral', 'Keep-Alive-Probes, keine Fehler.'),
   ];
+  const h = stats.handshakes;
+  const handshake = h && h.count ? ` · Handshake (SYN → SYN/ACK): Ø ${formatMs(h.sum / h.count)}, ${formatMs(h.min)}–${formatMs(h.max)} bei ${countFormat.format(h.count)} Verbindungen` : '';
   const rate = t.dataSegments ? formatPercent(t.retransmissions, t.dataSegments) : '–';
-  const summary = `<p class="stats-card__summary">Retransmit-Rate: <strong>${rate}</strong> der ${countFormat.format(t.dataSegments)} Datensegmente · ${countFormat.format(t.streams)} TCP-Streams · Prozentwerte beziehen sich auf alle ${countFormat.format(t.packets)} TCP-Pakete</p>`;
+  const summary = `<p class="stats-card__summary">Retransmit-Rate: <strong>${rate}</strong> der ${countFormat.format(t.dataSegments)} Datensegmente · ${countFormat.format(t.streams)} TCP-Streams${handshake} · Prozentwerte beziehen sich auf alle ${countFormat.format(t.packets)} TCP-Pakete</p>`;
   return card('TCP-Gesundheit', summary + barRows(rows, ''), '', 'Heuristik auf Sequenznummern (wie Wireshark „TCP Analysis“). Beginnt der Capture mitten in einer Verbindung oder liegt der Messpunkt abseits des Verlusts, kann das Ergebnis abweichen.');
 }
 
