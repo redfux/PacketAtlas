@@ -33,7 +33,7 @@ const MAX_TIMELINE_RENDER = 300;
 // browser. Appending the version as a query string changes the request URL
 // whenever the app updates, forcing a fresh fetch instead of silently
 // running old worker code after an update.
-const APP_VERSION = '1.0.2';
+const APP_VERSION = '1.0.3';
 
 const state = {
   devices: [],
@@ -76,6 +76,7 @@ const el = {
   errorMessage: document.getElementById('error-message'),
   btnDismissError: document.getElementById('btn-dismiss-error'),
   deviceSearch: document.getElementById('device-search'),
+  deviceSearchClear: document.getElementById('device-search-clear'),
   deviceList: document.getElementById('device-list'),
   deviceCount: document.getElementById('device-count'),
   deviceListSection: document.getElementById('device-list-section'),
@@ -220,6 +221,7 @@ function onParseComplete(msg) {
   state.selectedIds = new Set(state.devices.map((d) => d.id));
   state.search = '';
   el.deviceSearch.value = '';
+  el.deviceSearchClear.hidden = true;
   state.pinnedItems = [];
   renderPinnedPanel();
 
@@ -426,10 +428,24 @@ function setSidebarTab(tab) {
 el.subtabDevices.addEventListener('click', () => setSidebarTab('devices'));
 el.subtabPorts.addEventListener('click', () => setSidebarTab('ports'));
 
-el.deviceSearch.addEventListener('input', () => {
+function applyDeviceSearch() {
   state.search = el.deviceSearch.value;
+  el.deviceSearchClear.hidden = !el.deviceSearch.value;
   renderDeviceList();
   renderPortList();
+}
+
+el.deviceSearch.addEventListener('input', applyDeviceSearch);
+el.deviceSearch.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && el.deviceSearch.value) {
+    el.deviceSearch.value = '';
+    applyDeviceSearch();
+  }
+});
+el.deviceSearchClear.addEventListener('click', () => {
+  el.deviceSearch.value = '';
+  applyDeviceSearch();
+  el.deviceSearch.focus();
 });
 
 el.btnSelectAll.addEventListener('click', () => {

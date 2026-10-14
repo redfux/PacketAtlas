@@ -51,7 +51,12 @@
       <aside class="sidebar" aria-label="Geräte-/Port-Filter">
         <div class="sidebar__section">
           <label class="field-label" for="device-search">Suche</label>
-          <input type="search" id="device-search" class="text-input" placeholder="IP-Teilstring …" autocomplete="off">
+          <div class="search-field">
+            <input type="search" id="device-search" class="text-input" placeholder="IP-Teilstring …" autocomplete="off">
+            <button type="button" id="device-search-clear" class="search-field__clear" aria-label="Suche löschen" title="Suche löschen" hidden>
+              <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button>
+          </div>
         </div>
 
         <div class="sidebar__section sidebar__section--row">

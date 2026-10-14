@@ -5,6 +5,12 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [1.0.3] – 2026-10-14
+
+### Added
+
+- Suchfeld in der Seitenleiste: Sobald Text im Feld steht, erscheint rechts ein „×"-Button, der das Feld leert (Geräte- und Portliste werden sofort wieder ungefiltert angezeigt, der Fokus bleibt im Feld). Zusätzlich leert die Escape-Taste das Feld. Das native Such-„×" des Browsers ist ausgeblendet, damit es nicht doppelt erscheint.
+
 ## [1.0.2] – 2026-10-14
 
 ### Fixed

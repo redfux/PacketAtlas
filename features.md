@@ -51,7 +51,7 @@ Rein clientseitige Web-App, die Wireshark-Capture-Dateien (`.pcap`/`.pcapng`) im
 - [x] Geräteliste mit Checkboxen (IP, Hostname, Paketanzahl)
 - [x] Live-Update von Matrix/Graph bei Auswahländerung
 - [x] „Alle auswählen" / „Alle abwählen"
-- [x] Freitext-Suche über Geräteliste
+- [x] Freitext-Suche über Geräteliste, mit „×"-Button und Escape zum schnellen Leeren
 - [x] Filter nach Protokoll (TCP/UDP/ICMP/Sonstige)
 - [x] Geräteliste aufsteigend nach Adresse sortiert, ausgewählte Geräte dauerhaft oben und optisch abgesetzt (nachträglich ergänzt)
 - [x] Bei leerer Auswahl wählt ein einzelnes Gerät automatisch auch alle direkten Kommunikationspartner mit aus; einzeln wieder abwählbar (nachträglich ergänzt)

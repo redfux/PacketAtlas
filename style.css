@@ -307,6 +307,32 @@ body {
 }
 .text-input:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 1px; }
 
+/* Search field with its own clear (x) button; the browser-native one is hidden
+   so the look is identical across browsers. */
+.search-field { position: relative; display: flex; }
+.search-field .text-input { width: 100%; padding-right: 36px; }
+.search-field input::-webkit-search-cancel-button { display: none; }
+.search-field__clear {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  cursor: pointer;
+}
+.search-field__clear[hidden] { display: none; }
+.search-field__clear:hover { background: var(--md-surface-container-high); }
+.search-field__clear .material-symbols-outlined { font-size: 18px; }
+
 .chip-group { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .chip {
   font: inherit;
