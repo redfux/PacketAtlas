@@ -10,20 +10,22 @@ import {
   computeVisiblePairs,
   deviceLabel,
   formatBytes,
+  formatSeconds,
   healthOf,
   formatTimestamp,
   metricValue,
   pairKey,
   portListLabel,
   relatedDeviceIds,
-} from './data-model.js';
-import { renderMatrix } from './matrix-view.js';
-import { renderGraph, updateForces } from './graph-view.js';
-import { renderConnections } from './connections-view.js';
-import { renderTimeline } from './timeline-view.js';
-import { renderStats } from './stats-view.js';
-import { exportActiveViewAsImage } from './export-image.js';
-import { exportToExcel, exportSelectionToExcel } from './export-excel.js';
+} from './data-model.js?v=1.5.0';
+import { renderMatrix } from './matrix-view.js?v=1.5.0';
+import { renderGraph, updateForces } from './graph-view.js?v=1.5.0';
+import { renderConnections } from './connections-view.js?v=1.5.0';
+import { renderConnectionsTable } from './connections-table-view.js?v=1.5.0';
+import { renderTimeline } from './timeline-view.js?v=1.5.0';
+import { renderStats } from './stats-view.js?v=1.5.0';
+import { exportActiveViewAsImage } from './export-image.js?v=1.5.0';
+import { exportToExcel, exportSelectionToExcel } from './export-excel.js?v=1.5.0';
 
 const LARGE_SELECTION_THRESHOLD = 50;
 const MAX_CONNECTIONS_RENDER = 400;
@@ -35,7 +37,7 @@ const MAX_TIMELINE_RENDER = 300;
 // browser. Appending the version as a query string changes the request URL
 // whenever the app updates, forcing a fresh fetch instead of silently
 // running old worker code after an update.
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.5.0';
 
 const state = {
   devices: [],
@@ -48,6 +50,9 @@ const state = {
   activeGroups: new Set(Object.keys(PROTOCOL_GROUPS)),
   hideMulticast: false,
   onlyProblems: false,
+  connectionsView: 'diagram', // 'diagram' | 'table'
+  connectionSort: { key: 'status', dir: 'desc' },
+  expandedConnectionIds: new Set(),
   sidebarTab: 'devices', // 'devices' | 'ports'
   activeTab: 'matrix',
   metric: 'packets',
@@ -108,6 +113,9 @@ const el = {
   matrixContainer: document.getElementById('matrix-container'),
   graphContainer: document.getElementById('graph-container'),
   connectionsContainer: document.getElementById('connections-container'),
+  connectionsTable: document.getElementById('connections-table'),
+  connectionsViewDiagram: document.getElementById('connections-view-diagram'),
+  connectionsViewTable: document.getElementById('connections-view-table'),
   timelineContainer: document.getElementById('timeline-container'),
   statsContainer: document.getElementById('stats-container'),
   graphControls: document.getElementById('graph-controls'),
@@ -230,6 +238,7 @@ function onParseComplete(msg) {
   state.pairs = msg.pairs;
   state.connections = msg.connections;
   state.stats = msg.stats;
+  state.expandedConnectionIds = new Set();
   state.deviceIndex = new Map(state.devices.map((d) => [d.id, d]));
   state.selectedIds = new Set(state.devices.map((d) => d.id));
   state.search = '';
@@ -474,15 +483,31 @@ el.btnSelectNone.addEventListener('click', () => {
   renderActiveView();
 });
 
-el.protocolFilters.addEventListener('click', (e) => {
-  const chip = e.target.closest('.chip');
-  if (!chip) return;
-  const group = chip.dataset.protocol;
+/** The protocol chips and the "Nur Probleme" switch exist twice (sidebar, connections table) - both are driven from `state`. */
+function syncSidebarFilterControls() {
+  for (const chip of el.protocolFilters.querySelectorAll('.chip')) {
+    chip.classList.toggle('is-active', state.activeGroups.has(chip.dataset.protocol));
+  }
+  el.toggleOnlyProblems.checked = state.onlyProblems;
+}
+
+function toggleProtocolGroup(group) {
   if (state.activeGroups.has(group)) state.activeGroups.delete(group);
   else state.activeGroups.add(group);
-  chip.classList.toggle('is-active');
+  syncSidebarFilterControls();
   renderPortList();
   renderActiveView();
+}
+
+function setOnlyProblems(value) {
+  state.onlyProblems = value;
+  syncSidebarFilterControls();
+  renderActiveView();
+}
+
+el.protocolFilters.addEventListener('click', (e) => {
+  const chip = e.target.closest('.chip');
+  if (chip) toggleProtocolGroup(chip.dataset.protocol);
 });
 
 el.toggleHideBroadcast.addEventListener('change', () => {
@@ -492,10 +517,7 @@ el.toggleHideBroadcast.addEventListener('change', () => {
 
 // Not applied to the PCAP export (its worker re-derives the filter from the raw
 // capture and has no notion of per-connection quality), only to the views and the Excel export.
-el.toggleOnlyProblems.addEventListener('change', () => {
-  state.onlyProblems = el.toggleOnlyProblems.checked;
-  renderActiveView();
-});
+el.toggleOnlyProblems.addEventListener('change', () => setOnlyProblems(el.toggleOnlyProblems.checked));
 
 // --- Tabs / metric ------------------------------------------------------------
 
@@ -524,11 +546,29 @@ function setActiveTab(tab) {
   // The statistics tab only knows packets/bytes (it always shows every problem type separately anyway).
   el.metricProblems.hidden = tab === 'stats';
   if (tab === 'stats' && state.metric === 'problems') setMetric('packets');
-  // The statistics tab is HTML, not an SVG, so there is nothing to export as an image.
-  el.exportPng.disabled = tab === 'stats';
-  el.exportSvg.disabled = tab === 'stats';
+  updateImageExportAvailability();
   renderActiveView();
 }
+
+// The statistics tab and the connections table are HTML, not SVG, so there is nothing to export as an image there.
+function updateImageExportAvailability() {
+  const noSvg = state.activeTab === 'stats' || (state.activeTab === 'connections' && state.connectionsView === 'table');
+  el.exportPng.disabled = noSvg;
+  el.exportSvg.disabled = noSvg;
+}
+
+function setConnectionsView(mode) {
+  state.connectionsView = mode;
+  el.connectionsViewDiagram.classList.toggle('is-active', mode === 'diagram');
+  el.connectionsViewDiagram.setAttribute('aria-checked', String(mode === 'diagram'));
+  el.connectionsViewTable.classList.toggle('is-active', mode === 'table');
+  el.connectionsViewTable.setAttribute('aria-checked', String(mode === 'table'));
+  updateImageExportAvailability();
+  renderActiveView();
+}
+
+el.connectionsViewDiagram.addEventListener('click', () => setConnectionsView('diagram'));
+el.connectionsViewTable.addEventListener('click', () => setConnectionsView('table'));
 
 el.tabMatrix.addEventListener('click', () => setActiveTab('matrix'));
 el.tabGraph.addEventListener('click', () => setActiveTab('graph'));
@@ -598,8 +638,8 @@ function getVisibleDevicesAndPairs() {
  * start time first, so the Gantt chart reads top-to-bottom by when each
  * connection began).
  */
-function getVisibleConnections(familyIds, order) {
-  const filtered = computeVisibleConnections(state.connections, familyIds, state.activeGroups, state.hideMulticast, state.onlyProblems);
+function getVisibleConnections(familyIds, order, onlyProblems = state.onlyProblems) {
+  const filtered = computeVisibleConnections(state.connections, familyIds, state.activeGroups, state.hideMulticast, onlyProblems);
   if (order === 'timeline') {
     return filtered.sort((a, b) => a.firstSeen - b.firstSeen);
   }
@@ -640,7 +680,39 @@ function renderActiveView() {
     });
     state.activeSvg = svg;
     state.graphSimulation = simulation;
+  } else if (state.activeTab === 'connections' && state.connectionsView === 'table') {
+    el.connectionsContainer.hidden = true;
+    el.connectionsTable.hidden = false;
+    const shown = getVisibleConnections(familyIds, 'packets');
+    renderConnectionsTable(el.connectionsTable, {
+      connections: shown,
+      totalCount: state.onlyProblems ? getVisibleConnections(familyIds, 'packets', false).length : shown.length,
+      deviceIndex: state.deviceIndex,
+      idOf: connectionId,
+      expandedIds: state.expandedConnectionIds,
+      sort: state.connectionSort,
+      activeGroups: state.activeGroups,
+      onlyProblems: state.onlyProblems,
+      handlers: {
+        onToggleProblems: () => setOnlyProblems(!state.onlyProblems),
+        onToggleGroup: toggleProtocolGroup,
+        onSort: (key) => {
+          const same = state.connectionSort.key === key;
+          state.connectionSort = { key, dir: same ? (state.connectionSort.dir === 'asc' ? 'desc' : 'asc') : key === 'name' || key === 'protocol' ? 'asc' : 'desc' };
+          renderActiveView();
+        },
+        onToggleRow: (id) => {
+          if (state.expandedConnectionIds.has(id)) state.expandedConnectionIds.delete(id);
+          else state.expandedConnectionIds.add(id);
+          renderActiveView();
+        },
+      },
+    });
+    state.activeSvg = null;
+    state.graphSimulation = null;
   } else if (state.activeTab === 'connections') {
+    el.connectionsContainer.hidden = false;
+    el.connectionsTable.hidden = true;
     const allConnections = getVisibleConnections(familyIds, 'packets');
     const renderedConnections = allConnections.slice(0, MAX_CONNECTIONS_RENDER);
     const isTruncated = allConnections.length > renderedConnections.length;
@@ -684,11 +756,6 @@ function renderActiveView() {
 const METRIC_LABELS = { packets: 'Pakete', bytes: 'Bytes', problems: 'Probleme' };
 
 const percentFormat = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 });
-
-function formatSeconds(seconds) {
-  if (seconds < 1) return `${percentFormat.format(seconds * 1000)} ms`;
-  return `${percentFormat.format(seconds)} s`;
-}
 
 /** Marks for every problem event on a plain-SVG strip spanning the connection's lifetime (attributes only - inline styles are blocked by the CSP). */
 function problemTimelineHtml(times, from, to) {

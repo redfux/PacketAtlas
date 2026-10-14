@@ -243,6 +243,14 @@ export function formatBytes(bytes) {
   return `${value.toFixed(1)} ${units[unitIndex]}`;
 }
 
+const secondsFormat = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 });
+
+/** "84 ms" below one second, otherwise "1,5 s" - for handshake times and similar short intervals. */
+export function formatSeconds(seconds) {
+  if (seconds < 1) return `${secondsFormat.format(seconds * 1000)} ms`;
+  return `${secondsFormat.format(seconds)} s`;
+}
+
 export function formatTimestamp(seconds) {
   if (!Number.isFinite(seconds)) return '–';
   return new Date(seconds * 1000).toLocaleString('de-DE');

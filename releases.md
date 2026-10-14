@@ -5,6 +5,20 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [1.5.0] – 2026-10-14
+
+### Added
+
+- **Verbindungen als Tabelle:** Der Verbindungen-Tab hat einen Umschalter „Diagramm / Tabelle“. Die Tabelle zeigt pro Verbindung Verbindung (Quelle → Ziel:Port), Protokoll, Pakete, Retransmits (mit Anteil), Dup-ACKs, RST und einen Status-Chip (OK / Auffällig / Instabil, bei ICMP „n× ICMP-Fehler“). Spaltenköpfe sortieren (Standard: schlechtester Status zuerst), ein Klick auf eine Zeile klappt Details auf: Retransmit-Rate, Handshake-Zeit, Beendet durch, Lücken/Zero-Window/Out-of-Order, Pakete und Bytes, Zeitraum und eine Zeitleiste der Problem-Ereignisse. Über der Tabelle stehen die Filter-Chips „Nur Probleme“, TCP, UDP, ICMP und Sonstige (synchron mit der Seitenleiste) sowie der Zähler „12 von 148 Verbindungen“. Es werden höchstens 500 Zeilen gezeichnet (Hinweis darunter). PNG-/SVG-Export ist in der Tabellenansicht deaktiviert.
+
+### Fixed
+
+- **Veraltete Module nach einem Update:** Browser cachen jedes ES-Modul einzeln (GitHub Pages sendet `max-age=600`), sodass nach einem Update kurzzeitig eine neue `app.js` mit einer alten `data-model.js` laufen konnte und die App mit „does not provide an export named …“ gar nicht startete. Alle Modul-Importe, `style.css` und `app.js` im HTML tragen jetzt die Version als Query-String (`…?v=1.5.0`), sodass der gesamte Dateisatz gemeinsam umschaltet.
+
+### Changed
+
+- Neues Skript `bump-version.sh` setzt die Version an allen Stellen in einem Schritt (`./bump-version.sh 1.5.1`): `APP_VERSION` in `app.js`, alle `import … from './x.js?v=…'` und die Tags in `index.html`. Statische Imports lassen sich nicht aus einer Konstante zusammensetzen, und die CSP verbietet Inline-Skripte/Import-Maps, deshalb steht die Version dort im Klartext und wird per Skript gepflegt. `releases.md` bleibt manuell.
+
 ## [1.4.0] – 2026-10-14
 
 ### Added
