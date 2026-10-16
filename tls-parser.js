@@ -77,7 +77,7 @@ function parseTlsHello(buffer, offset, length) {
   const legacyVersion = view.getUint16(9);
   if (legacyVersion < 0x0300 || legacyVersion > 0x0304) return null;
 
-  const result = { kind: handshakeType === 2 ? 'server' : 'client', version: handshakeType === 2 ? legacyVersion : null, cipher: null };
+  const result = { kind: handshakeType === 2 ? 'server' : 'client', version: handshakeType === 2 ? legacyVersion : null, cipher: null, sni: null };
   try {
     let pos = 11 + 32; // skip the 32-byte random
     pos += 1 + view.getUint8(pos); // session id
@@ -106,7 +106,16 @@ function parseTlsHello(buffer, offset, length) {
           }
           if (highest) result.version = highest;
         }
-        break;
+      } else if (type === 0x0000 && handshakeType === 1 && extLength >= 5 && body + extLength <= length) {
+        // server_name: list length (2), then { name type (1, 0 = host_name), length (2), name }.
+        if (view.getUint8(body + 2) === 0) {
+          const nameLength = view.getUint16(body + 3);
+          if (nameLength > 0 && body + 5 + nameLength <= body + extLength) {
+            let name = '';
+            for (let i = 0; i < nameLength && i < 255; i++) name += String.fromCharCode(view.getUint8(body + 5 + i));
+            result.sni = name.toLowerCase();
+          }
+        }
       }
       pos = body + extLength;
     }

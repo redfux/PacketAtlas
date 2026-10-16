@@ -24,6 +24,88 @@ const IP_PROTO_ICMPV6 = 58;
 
 const BROADCAST_MAC = 'ff:ff:ff:ff:ff:ff';
 
+// Layer-2 control protocols (STP, CDP, LLDP, LACP, ...) are recognised so they
+// show up in the statistics; they carry no IP, so they never become devices,
+// pairs or connections (see parser.worker.js).
+const ETHERTYPE_VLAN_QINQ = 0x88a8;
+const ETHERTYPE_VLAN_QINQ_OLD = 0x9100;
+const L2_ETHERTYPE_NAMES = {
+  0x88cc: 'LLDP',
+  0x888e: 'EAPOL (802.1X)',
+  0x8808: 'Pause / MAC Control',
+  0x8902: 'CFM (802.1ag)',
+  0x88f7: 'PTP',
+  0x88f5: 'MVRP',
+  0x88f6: 'MMRP',
+  0x8035: 'RARP',
+  0x9000: 'Loopback (Config Test)',
+  0x8847: 'MPLS',
+  0x8848: 'MPLS (Multicast)',
+  0x8863: 'PPPoE Discovery',
+  0x8864: 'PPPoE Session',
+  0x8906: 'FCoE',
+  0x88e5: 'MACsec',
+  0x22f0: 'AVTP',
+  0x88b5: 'Lokal-experimentell',
+  0x88b6: 'Lokal-experimentell',
+};
+const CISCO_OUI = '00:00:0c';
+const CISCO_SNAP_NAMES = {
+  0x2000: 'CDP',
+  0x2003: 'VTP',
+  0x2004: 'DTP',
+  0x010b: 'PVST+ / Rapid-PVST+',
+  0x0111: 'UDLD',
+  0x0104: 'PAgP',
+  0x200a: 'Cisco Spanning Tree',
+};
+
+function hex4(value) {
+  return `0x${value.toString(16).padStart(4, '0')}`;
+}
+
+/** STP/RSTP/MSTP name from the BPDU's version byte (offset 2 of the BPDU). */
+function stpName(view, length, bpduOffset) {
+  const version = length > bpduOffset + 2 ? view.getUint8(bpduOffset + 2) : 0;
+  return version === 3 ? 'MSTP' : version === 2 ? 'RSTP' : 'STP';
+}
+
+/**
+ * IEEE 802.3 frame (the Ethernet "type" field is a length): LLC header follows.
+ * Returns { ethertype, offset } if it is just a bridged Ethernet frame in SNAP
+ * (OUI 00:00:00, PID = Ethertype - carry on normally), otherwise
+ * { l2: { name, offset } } for a layer-2 protocol.
+ */
+function decodeLlc(view, length, offset) {
+  if (length < offset + 3) return { l2: { name: 'LLC', offset } };
+  const dsap = view.getUint8(offset);
+  const ssap = view.getUint8(offset + 1);
+  if (dsap === 0xaa && ssap === 0xaa && length >= offset + 8) {
+    const oui = [3, 4, 5].map((n) => view.getUint8(offset + n).toString(16).padStart(2, '0')).join(':');
+    const pid = view.getUint16(offset + 6);
+    if (oui === '00:00:00') return { ethertype: pid, offset: offset + 8 };
+    if (oui === CISCO_OUI) return { l2: { name: CISCO_SNAP_NAMES[pid] || `Cisco-SNAP ${hex4(pid)}`, offset: offset + 8 } };
+    return { l2: { name: `SNAP ${oui} ${hex4(pid)}`, offset: offset + 8 } };
+  }
+  if (dsap === 0x42 && ssap === 0x42) return { l2: { name: stpName(view, length, offset + 3), offset: offset + 3 } };
+  if (dsap === 0xfe) return { l2: { name: 'IS-IS / OSI (CLNS)', offset: offset + 3 } };
+  if (dsap === 0xe0) return { l2: { name: 'IPX (LLC)', offset: offset + 3 } };
+  if (dsap === 0xf0) return { l2: { name: 'NetBIOS (LLC)', offset: offset + 3 } };
+  return { l2: { name: `LLC 0x${dsap.toString(16).padStart(2, '0')}/0x${ssap.toString(16).padStart(2, '0')}`, offset: offset + 3 } };
+}
+
+/** Any Ethertype that is not IPv4/IPv6/ARP: name it, flag the ones nobody knows. */
+function classifyEthertype(view, length, offset, ethertype) {
+  if (ethertype === 0x8809) {
+    const subtype = length > offset ? view.getUint8(offset) : 0;
+    const name = subtype === 1 ? 'LACP' : subtype === 2 ? 'LACP Marker' : subtype === 3 ? 'Ethernet OAM' : 'Slow Protocols';
+    return { name, offset };
+  }
+  const known = L2_ETHERTYPE_NAMES[ethertype];
+  if (known) return { name: known, offset };
+  return { name: `Ethertyp ${hex4(ethertype)}`, offset };
+}
+
 function formatMac(view, offset) {
   let out = '';
   for (let i = 0; i < 6; i++) {
@@ -144,10 +226,27 @@ function decodeFrame(buffer, offset, length, linkType, timestamp, origLen) {
     return null; // unsupported link type
   }
 
-  // Skip a single 802.1Q VLAN tag if present.
-  if (ethertype === ETHERTYPE_VLAN && length >= l3Offset + 4) {
+  // Skip up to two VLAN tags (802.1Q, and Q-in-Q service tags) and remember the outer VLAN ID.
+  let vlanId = null;
+  for (let tags = 0; tags < 2 && length >= l3Offset + 4 && (ethertype === ETHERTYPE_VLAN || ethertype === ETHERTYPE_VLAN_QINQ || ethertype === ETHERTYPE_VLAN_QINQ_OLD); tags++) {
+    if (vlanId === null) vlanId = view.getUint16(l3Offset) & 0x0fff;
     ethertype = view.getUint16(l3Offset + 2);
     l3Offset += 4;
+  }
+
+  // 802.3 frame (the Ethernet type field holds a length): decide by the LLC header.
+  let l2 = null;
+  if (linkType === LINKTYPE_ETHERNET && ethertype < 0x0600) {
+    const llc = decodeLlc(view, length, l3Offset);
+    if (llc.l2) {
+      l2 = llc.l2;
+    } else {
+      ethertype = llc.ethertype;
+      l3Offset = llc.offset;
+    }
+  }
+  if (!l2 && ethertype !== ETHERTYPE_IPV4 && ethertype !== ETHERTYPE_IPV6 && ethertype !== ETHERTYPE_ARP) {
+    l2 = classifyEthertype(view, length, l3Offset, ethertype);
   }
 
   const result = {
@@ -197,7 +296,18 @@ function decodeFrame(buffer, offset, length, linkType, timestamp, origLen) {
     // couldn't be decoded is excluded from export filtering entirely anyway).
     headerEndOffset: null,
     multicastOrBroadcast: dstMac === BROADCAST_MAC || (dstMac !== null && isMacMulticast(dstMac)),
+    // Outer VLAN ID of a tagged frame, null if untagged.
+    vlanId,
+    // Set for layer-2 protocols without IP (STP, CDP, LLDP, LACP, ...):
+    // { name, offset (absolute buffer offset of the protocol data), length }.
+    l2: null,
   };
+
+  if (l2) {
+    result.protocol = 'L2';
+    result.l2 = { name: l2.name, offset: baseOffset + l2.offset, length: Math.max(0, length - l2.offset) };
+    return result;
+  }
 
   if (ethertype === ETHERTYPE_ARP) {
     return decodeArp(view, l3Offset, length, result);

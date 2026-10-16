@@ -46,6 +46,7 @@
   --stats-udp: #2e8b57;
   --stats-icmp: #c77d00;
   --stats-arp: #8a5cb5;
+  --stats-l2: #00838f;
   --stats-neutral: #8a8f98;
   --stats-warn: #c77d00;
   --stats-bad: #ba1a1a;
@@ -94,6 +95,7 @@
     --stats-udp: #5cc98a;
     --stats-icmp: #f0b04a;
     --stats-arp: #c4a0e8;
+    --stats-l2: #4dd0e1;
     --stats-neutral: #8d9199;
     --stats-warn: #f0b04a;
     --stats-bad: #ffb4ab;
@@ -648,6 +650,7 @@ body {
 .quality { margin-top: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--md-outline-variant); }
 .health-chip { display: inline-block; padding: 0 8px; border-radius: var(--radius-full); font-size: 11px; font-weight: 500; line-height: 18px; background: var(--md-success-container); color: var(--md-on-success-container); }
 .health-chip--warn { background: color-mix(in srgb, var(--stats-warn) 22%, transparent); color: var(--stats-warn); }
+.health-chip--neutral { background: var(--md-surface-container-high); color: var(--md-on-surface-variant); }
 .health-chip--bad { background: var(--md-error-container); color: var(--md-on-error-container); }
 .mini-timeline { display: block; width: 100%; height: 14px; margin-top: var(--space-1); }
 .mini-timeline__bg { fill: var(--md-surface-container); }

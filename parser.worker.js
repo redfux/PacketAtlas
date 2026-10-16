@@ -26,6 +26,8 @@ importScripts(
   `dns-resolver.js?v=${WORKER_VERSION}`,
   `traffic-stats.js?v=${WORKER_VERSION}`,
   `tls-parser.js?v=${WORKER_VERSION}`,
+  `l2-parser.js?v=${WORKER_VERSION}`,
+  `classification.js?v=${WORKER_VERSION}`,
 );
 
 function pairKey(idA, idB) {
@@ -163,6 +165,7 @@ class Aggregator {
     this.pairs = new Map();
     this.connections = new Map();
     this.hostnames = new Map();
+    this.macNames = new Map(); // MAC -> name announced via CDP/LLDP
   }
 
   getOrCreateDevice(id, kind, ip, mac) {
@@ -177,6 +180,9 @@ class Aggregator {
   }
 
   addPacket(decoded, tcpEvents) {
+    // Layer-2 control frames (STP, CDP, LLDP, ...) only feed the statistics: their
+    // multicast destination MACs must not become "devices" in the matrix.
+    if (decoded.protocol === 'L2') return;
     const hasSrc = Boolean(decoded.srcIp || decoded.srcMac);
     const hasDst = Boolean(decoded.dstIp || decoded.dstMac);
     if (!hasSrc || !hasDst) return;
@@ -331,6 +337,14 @@ class Aggregator {
     if (decoded.timestamp > connectionDirectional.lastSeen) connectionDirectional.lastSeen = decoded.timestamp;
   }
 
+  /** Names switches/APs announce about themselves (CDP/LLDP) as fallback labels; DNS names win. */
+  addAnnouncedNames(list) {
+    for (const { mac, ip, name } of list) {
+      if (mac && !this.macNames.has(mac)) this.macNames.set(mac, name);
+      if (ip && !this.hostnames.has(ip)) this.addHostname(ip, name);
+    }
+  }
+
   addHostname(ip, hostname) {
     if (!ip || !hostname) return;
     this.hostnames.set(ip, hostname);
@@ -342,6 +356,9 @@ class Aggregator {
   toResult() {
     for (const device of this.devices.values()) {
       if (!device.hostname && device.ip) device.hostname = this.hostnames.get(device.ip) || null;
+      // Only for devices known by MAC alone: an IP device's `mac` is whatever frame was seen first
+      // (usually the router's), so naming it after that MAC would label whole subnets wrongly.
+      if (!device.hostname && device.kind === 'mac') device.hostname = this.macNames.get(device.id) || null;
     }
     return {
       devices: Array.from(this.devices.values()),
@@ -406,6 +423,11 @@ function processBuffer(buffer) {
         const tls = available > 0 ? parseTlsHello(buffer, decoded.headerEndOffset, available) : null;
         if (tls) trafficStats.addTls(decoded, tls);
       }
+      if (decoded.protocol === 'L2') trafficStats.addL2(decoded, parseL2Details(buffer, decoded));
+      if (decoded.udpPayloadOffset != null && (decoded.srcPort === 5353 || decoded.dstPort === 5353)) {
+        const mdns = parseMdnsNames(buffer, decoded.udpPayloadOffset, decoded.udpPayloadLength);
+        if (mdns) trafficStats.addMdns(decoded, mdns);
+      }
       if (decoded.udpPayloadOffset != null && (decoded.srcPort === DNS_PORT || decoded.dstPort === DNS_PORT)) {
         const dnsMessage = parseDnsMessage(buffer, decoded.udpPayloadOffset, decoded.udpPayloadLength);
         if (dnsMessage) trafficStats.addDns(decoded, dnsMessage);
@@ -427,6 +449,7 @@ function processBuffer(buffer) {
     }
   }
 
+  aggregator.addAnnouncedNames(trafficStats.l2DeviceNames());
   const result = aggregator.toResult();
   self.postMessage({
     type: 'result',

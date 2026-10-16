@@ -2,7 +2,7 @@
 // `XLSX` (vendor/xlsx.full.min.js) is loaded as a classic script before this module.
 // thought up by human, created by ai
 
-import { pairKey, metricValue, deviceLabel, formatBytes, formatTimestamp } from './data-model.js?v=1.7.0';
+import { pairKey, metricValue, deviceLabel, formatBytes, formatTimestamp } from './data-model.js?v=1.8.0';
 
 /** Exports the given (already filtered/selected) devices and pairs as a .xlsx file. */
 export function exportToExcel({ devices, pairs, metric, filenameBase }) {

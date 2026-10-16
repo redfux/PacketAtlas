@@ -7,6 +7,7 @@
 const DNS_PORT = 53;
 const TYPE_A = 1;
 const TYPE_AAAA = 28;
+const TYPE_CNAME = 5;
 const CLASS_IN = 1;
 
 function readName(view, start) {
@@ -49,10 +50,12 @@ function readName(view, start) {
 }
 
 /**
- * Parses just the header and first question of a DNS message for the statistics
- * view (response code, query/response flag, queried name). Returns null for
- * anything that does not look like DNS. The name is lower-cased; labels are raw
- * bytes from the capture, so it must be escaped before it is put into HTML.
+ * Parses header, first question and (for responses) the answer records of a
+ * DNS message for the statistics view: response code, query/response flag,
+ * queried name and type, and the addresses / CNAME targets of the answers.
+ * Returns null for anything that does not look like DNS. Names are lower-cased;
+ * labels are raw bytes from the capture, so they must be escaped before they
+ * are put into HTML.
  */
 function parseDnsMessage(buffer, offset, length) {
   if (length < 12) return null;
@@ -62,9 +65,81 @@ function parseDnsMessage(buffer, offset, length) {
     const opcode = (flags >> 11) & 0x0f;
     if (opcode > 5) return null; // not a plausible DNS opcode - most likely some other protocol on port 53
     const qdCount = view.getUint16(4);
-    let name = null;
-    if (qdCount > 0) name = readName(view, 12).name.toLowerCase() || '.';
-    return { id: view.getUint16(0), isResponse: (flags & 0x8000) !== 0, rcode: flags & 0x0f, name };
+    const anCount = view.getUint16(6);
+    const message = {
+      id: view.getUint16(0),
+      isResponse: (flags & 0x8000) !== 0,
+      rcode: flags & 0x0f,
+      name: null,
+      qtype: null,
+      answerCount: anCount,
+      addresses: [],
+      cnames: [],
+    };
+    let pos = 12;
+    for (let i = 0; i < qdCount && i < 8; i++) {
+      const question = readName(view, pos);
+      if (i === 0) {
+        message.name = question.name.toLowerCase() || '.';
+        if (question.nextPos + 2 <= view.byteLength) message.qtype = view.getUint16(question.nextPos);
+      }
+      pos = question.nextPos + 4;
+    }
+    if (message.isResponse && anCount > 0) {
+      for (let i = 0; i < anCount && i < 32; i++) {
+        const record = readName(view, pos);
+        pos = record.nextPos;
+        if (pos + 10 > view.byteLength) break;
+        const type = view.getUint16(pos);
+        const rdLength = view.getUint16(pos + 8);
+        const rdata = pos + 10;
+        if (rdata + rdLength > view.byteLength) break;
+        if (type === TYPE_A && rdLength === 4) {
+          message.addresses.push(`${view.getUint8(rdata)}.${view.getUint8(rdata + 1)}.${view.getUint8(rdata + 2)}.${view.getUint8(rdata + 3)}`);
+        } else if (type === TYPE_AAAA && rdLength === 16) {
+          message.addresses.push(formatIPv6(view, rdata));
+        } else if (type === TYPE_CNAME) {
+          message.cnames.push(readName(view, rdata).name.toLowerCase());
+        }
+        pos = rdata + rdLength;
+      }
+    }
+    return message;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Names found in an mDNS (UDP 5353) message: the questions and the owner names
+ * of all records (service types like `_airplay._tcp.local`, host names like
+ * `hannes-iphone.local`). Returns null if it does not look like DNS.
+ */
+function parseMdnsNames(buffer, offset, length) {
+  if (length < 12) return null;
+  try {
+    const view = new DataView(buffer, offset, length);
+    const flags = view.getUint16(2);
+    if (((flags >> 11) & 0x0f) !== 0) return null;
+    const qdCount = Math.min(view.getUint16(4), 16);
+    const recordCount = Math.min(view.getUint16(6) + view.getUint16(8) + view.getUint16(10), 48);
+    const names = [];
+    let pos = 12;
+    for (let i = 0; i < qdCount; i++) {
+      const question = readName(view, pos);
+      names.push(question.name.toLowerCase());
+      pos = question.nextPos + 4;
+    }
+    for (let i = 0; i < recordCount; i++) {
+      const record = readName(view, pos);
+      pos = record.nextPos;
+      if (pos + 10 > view.byteLength) break;
+      const rdLength = view.getUint16(pos + 8);
+      if (pos + 10 + rdLength > view.byteLength) break;
+      names.push(record.name.toLowerCase());
+      pos += 10 + rdLength;
+    }
+    return { isResponse: (flags & 0x8000) !== 0, names };
   } catch {
     return null;
   }
@@ -108,9 +183,8 @@ function extractDnsHostnames(buffer, offset, length) {
         const ip = `${view.getUint8(rdataOffset)}.${view.getUint8(rdataOffset + 1)}.${view.getUint8(rdataOffset + 2)}.${view.getUint8(rdataOffset + 3)}`;
         results.push({ ip, hostname: recordName || null });
       } else if (cls === CLASS_IN && type === TYPE_AAAA && rdLength === 16) {
-        const groups = [];
-        for (let g = 0; g < 8; g++) groups.push(view.getUint16(rdataOffset + g * 2).toString(16));
-        results.push({ ip: groups.join(':'), hostname: recordName || null });
+        // Same compressed form the packet decoder uses, so the address matches a device ID.
+        results.push({ ip: formatIPv6(view, rdataOffset), hostname: recordName || null });
       }
       pos = rdataOffset + rdLength;
     }

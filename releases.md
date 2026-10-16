@@ -5,6 +5,21 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [1.8.0] – 2026-10-16
+
+### Added
+
+- Statistik-Tab: neue Kachel **iCloud Private Relay**. Beobachtet die Namen `mask.icloud.com`, `mask-h2.icloud.com`, `mask-api.icloud.com` und `mask.apple-dns.net` (Quellen: Apple „Prepare your network or content filter for iCloud Private Relay“, Cisco „Enable Cisco Umbrella with iCloud Private Relay“, Problemanalyse „Verzögerungen bei der Mail-Synchronisation auf iPhones/iPads“ vom 22.07.2026). Je Name und je Client: Anzahl Abfragen (und pro Minute), Antwortform (NODATA, NXDOMAIN, Adressen, **Blockseiten-Adresse** aus dem Umbrella-Adressraum 146.112.0.0/16, SERVFAIL/REFUSED, ohne Antwort), Antwortzeiten (Ø/max, „langsam“ ab 1 s) und Relay-Nutzung (Verkehr zu einer aus DNS gelernten Relay-Adresse, QUIC, TLS-ClientHello mit Relay-SNI). Ein Hinweis erscheint, wenn Antworten auf Relay-Namen eine Blockseiten-Adresse statt NXDOMAIN/NODATA enthalten – genau die Konstellation, die laut Analyse zu Wiederholversuchen und Timeouts führt.
+- Statistik-Tab: neue Kachel **DNS-Server**. Ordnet jeden genutzten Resolver einem Anbieter zu (Cisco Umbrella/OpenDNS, Google, Cloudflare, Quad9, AdGuard, CleanBrowsing, Apple 17.0.0.0/8, privat, sonstiger öffentlicher DNS) mit Anfragen, Antworten und Fehlercodes je Server, zeigt Clients, die mehrere Anbieter nutzen (mit Hinweis, wenn zusätzlich zu einem verwalteten Resolver ein anderer Anbieter befragt wird), DNS über TLS (Port 853) und Verkehr zu bekannten Anbieteradressen auf Port 443 (möglicherweise DoH/DoQ).
+- Statistik-Tab: neue Kachel **Apple-Protokolle** (Apple-Anteil, Dienstgruppen, DNS-/SNI-Namen nach Apple-Dienst, Bonjour-Dienste und -Hostnamen, Clients) und neue Kachel **Layer-2-Protokolle** (STP/RSTP/MSTP, PVST+, CDP, VTP, DTP, UDLD, LLDP, LACP, EAPOL u. a.; STP-Root-Bridges, Topologieänderungen, Nachbartabelle aus CDP/LLDP, LACP-Zustand, VLAN-Verteilung). In der Protokollverteilung erscheint „Layer 2“ als eigener Anteil.
+- Geräte erhalten, sofern sie keinen DNS-Namen haben, ihren in CDP/LLDP angekündigten Namen als Beschriftung (über die Management-IP; reine MAC-Geräte über ihre MAC). Namen von IP-Geräten werden bewusst nicht über deren MAC vergeben, weil das bei Verkehr hinter einem Router den Router-Namen auf viele Adressen übertragen würde.
+- Neue Dateien: `classification.js` (versionierte Listen: DNS-Anbieter-Adressen, Apple-Namensregeln und -Ports, Relay-Namen; Stand im Kopf und in der Oberfläche), `l2-parser.js` (BPDU-, CDP-, LLDP-, LACP-Details). Der Decoder erkennt jetzt Layer-2-Protokolle (802.3-LLC/SNAP und Ethertypes), liest bis zu zwei VLAN-Tags und das SNI aus dem TLS-ClientHello.
+
+### Changed
+
+- Layer-2-Frames, die bisher nur als „nicht auswertbar“ gezählt wurden, sind jetzt dekodiert (`protocol: 'L2'`). Sie fließen nur in die Statistik ein und erzeugen keine Geräte, Paare oder Verbindungen; das Verhalten von Matrix, Graph und PCAP-Export ändert sich dadurch nicht.
+- Gelernte IPv6-Adressen aus DNS-Antworten werden jetzt in derselben verkürzten Schreibweise abgelegt wie die Geräte-IDs, sodass Hostnamen auch für IPv6-Geräte angezeigt werden.
+
 ## [1.7.0] – 2026-10-15
 
 ### Added

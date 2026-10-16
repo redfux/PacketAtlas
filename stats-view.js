@@ -5,7 +5,7 @@
 // parser.worker.js (traffic-stats.js), so this only formats and lays it out.
 // thought up by human, created by ai
 
-import { deviceLabel, dnsRcodeName, formatBytes, icmpTypeCodeLabel, portListLabel } from './data-model.js?v=1.7.0';
+import { deviceLabel, dnsRcodeName, formatBytes, icmpTypeCodeLabel, portListLabel } from './data-model.js?v=1.8.0';
 
 const percentFormat = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 });
 const countFormat = new Intl.NumberFormat('de-DE');
@@ -247,6 +247,221 @@ function tlsCard(stats) {
   return card('TLS-Versionen', body, '', 'Erkannt am Anfang des TCP-Payloads, unabhängig vom Port. Nur TLS über TCP; Handshakes, die vor dem Capture-Start liefen, fehlen.');
 }
 
+/** Plain table for the statistics cards: headers = [{ label, num }], rows = arrays of ready (escaped) cell HTML. */
+function statsTable(headers, rows) {
+  const head = headers.map((h) => `<th${h.num ? ' class="num"' : ''}>${esc(h.label)}</th>`).join('');
+  const body = rows.map((cells) => `<tr>${cells.map((cell, i) => `<td${headers[i] && headers[i].num ? ' class="num"' : ''}>${cell}</td>`).join('')}</tr>`).join('');
+  return `<div class="stats-table-wrap"><table class="stats-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
+function chip(level, text) {
+  return `<span class="health-chip health-chip--${level}">${esc(text)}</span>`;
+}
+
+function l2Card(stats, metric) {
+  const l2 = stats.l2;
+  if (!l2) return '';
+  const protocolRows = l2.protocols.map((p) => ({
+    label: p.name,
+    value: valueOf(p, metric),
+    color: '--stats-l2',
+    display: `${formatValue(valueOf(p, metric), metric)} · ${countFormat.format(p.devices)} ${p.devices === 1 ? 'Gerät' : 'Geräte'}`,
+  }));
+  let body = l2.protocols.length ? barRows(protocolRows, '') : '<p class="stats-empty">Keine Layer-2-Steuerframes im Capture.</p>';
+
+  const stp = l2.stp;
+  if (stp.bpdus > 0) {
+    const changes = stp.tcnBpdus + stp.tcFlagBpdus;
+    const byVlan = new Map();
+    for (const root of stp.roots) {
+      const key = root.vlan === null ? '–' : String(root.vlan);
+      if (!byVlan.has(key)) byVlan.set(key, new Set());
+      byVlan.get(key).add(root.rootId);
+    }
+    const multiRoot = Array.from(byVlan).filter(([, ids]) => ids.size > 1).map(([vlan]) => (vlan === '–' ? 'ohne VLAN-Angabe' : `VLAN ${vlan}`));
+    const flags = [
+      changes > 0 ? chip('warn', `${countFormat.format(changes)} Topologieänderung${changes === 1 ? '' : 'en'} (${countFormat.format(stp.tcnBpdus)} TCN, ${countFormat.format(stp.tcFlagBpdus)} mit TC-Flag)`) : chip('ok', 'keine Topologieänderungen'),
+      multiRoot.length ? chip('bad', `mehrere Root-Bridges: ${multiRoot.join(', ')}`) : '',
+    ].filter(Boolean).join(' ');
+    body += '<div class="stats-subtitle">Spanning Tree</div>';
+    body += `<p class="stats-card__summary">${countFormat.format(stp.bpdus)} BPDUs ${flags}</p>`;
+    body += statsTable(
+      [{ label: 'Root-Bridge (Priorität.MAC)' }, { label: 'VLAN' }, { label: 'BPDUs', num: true }, { label: 'Sender', num: true }],
+      stp.roots.map((r) => [esc(r.rootId), r.vlan === null ? '–' : esc(r.vlan), countFormat.format(r.count), countFormat.format(r.senders)]),
+    );
+    if (stp.tcSenders.length) {
+      body += `<p class="stats-card__note">Topologieänderungen gemeldet von: ${stp.tcSenders.map((s) => `${esc(s.mac)} (${countFormat.format(s.count)}×)`).join(', ')}</p>`;
+    }
+  }
+
+  if (l2.neighbors.length) {
+    body += '<div class="stats-subtitle">Nachbarn (CDP / LLDP)</div>';
+    body += statsTable(
+      [{ label: 'Protokoll' }, { label: 'Gerät' }, { label: 'Port' }, { label: 'Plattform' }, { label: 'Management-IP' }, { label: 'Fähigkeiten' }],
+      l2.neighbors.map((n) => [
+        esc(n.protocol),
+        esc(n.deviceId || n.mac),
+        esc(n.portId || n.portDescription || '–'),
+        esc(n.platform || '–'),
+        esc(n.mgmtIp || '–'),
+        esc(n.capabilities.length ? n.capabilities.join(', ') : '–'),
+      ]),
+    );
+    if (l2.neighborCount > l2.neighbors.length) body += `<p class="stats-card__note">${countFormat.format(l2.neighborCount - l2.neighbors.length)} weitere Nachbarn nicht angezeigt.</p>`;
+  }
+
+  if (l2.lacp.pdus > 0) {
+    const trouble = l2.lacp.outOfSync + l2.lacp.defaultedOrExpired;
+    body += '<div class="stats-subtitle">Link Aggregation (LACP)</div>';
+    body += `<p class="stats-card__summary">${countFormat.format(l2.lacp.pdus)} LACPDUs ${trouble > 0 ? chip('warn', `${countFormat.format(l2.lacp.outOfSync)} nicht synchron, ${countFormat.format(l2.lacp.defaultedOrExpired)} defaulted/expired`) : chip('ok', 'alle synchron')}</p>`;
+  }
+
+  if (l2.vlans.length) {
+    body += `<div class="stats-subtitle">VLANs (getaggte Frames)${l2.vlanCount > l2.vlans.length ? ` – ${countFormat.format(l2.vlanCount)} gesehen` : ''}</div>`;
+    body += barRows(l2.vlans.map((v) => ({ label: `VLAN ${v.id}`, value: valueOf(v, metric), color: '--stats-tcp', display: formatValue(valueOf(v, metric), metric) })), '');
+  }
+  return card('Layer-2-Protokolle', body, 'stats-card--wide', 'Nur was der Messpunkt sieht: Mirror-Ports und manche Netzwerkkarten filtern Steuerframes (STP, CDP, LLDP, LACP) heraus. Die Namen aus CDP/LLDP erscheinen zusätzlich als Beschriftung der Geräte, sofern deren Management-IP im Capture vorkommt.');
+}
+
+function appleCard(stats, metric) {
+  const a = stats.apple;
+  if (!a) return '';
+  const total = metric === 'bytes' ? stats.decodedBytes : stats.decodedPackets;
+  const appleValue = metric === 'bytes' ? a.bytes : a.packets;
+  const summary = `<p class="stats-card__summary">Apple-Verkehr: <strong>${formatValue(appleValue, metric)}</strong> (${formatPercent(appleValue, total)} des Captures) · ${countFormat.format(a.clientCount)} ${a.clientCount === 1 ? 'Client' : 'Clients'}</p>`;
+  const groupRows = a.groups.map((g) => ({
+    label: g.generic ? `${g.name} (herstellerübergreifend)` : g.name,
+    value: valueOf(g, metric),
+    color: g.generic ? '--stats-neutral' : '--stats-tcp',
+    hint: g.generic ? 'Bonjour/mDNS nutzen auch Drucker, Chromecast u. a.; nicht im Apple-Anteil enthalten.' : '',
+    display: formatValue(valueOf(g, metric), metric),
+  }));
+  let body = summary + (groupRows.length ? barRows(groupRows, '') : '');
+
+  if (a.dnsGroups.length) {
+    body += '<div class="stats-subtitle">DNS-Anfragen nach Apple-Dienst</div>';
+    body += barRows(a.dnsGroups.map((g) => ({ label: g.name, value: g.count, color: g.name === 'iCloud Private Relay' ? '--stats-warn' : '--stats-tcp', display: countFormat.format(g.count) })), '');
+  }
+  if (a.mdnsServices.length) {
+    body += '<div class="stats-subtitle">Bonjour-Dienste</div>';
+    body += barRows(a.mdnsServices.map((s) => ({
+      label: s.apple ? `${s.service} (Apple-typisch)` : s.service,
+      value: s.count,
+      color: s.apple ? '--stats-tcp' : '--stats-neutral',
+      display: countFormat.format(s.count),
+    })), '');
+  }
+  if (a.mdnsHosts.length) {
+    body += `<p class="stats-card__note">Bonjour-Hostnamen (${countFormat.format(a.mdnsHostCount)}): ${a.mdnsHosts.map((h) => esc(h.name)).join(', ')}${a.mdnsHostCount > a.mdnsHosts.length ? ' …' : ''}</p>`;
+  }
+  if (a.clients.length) {
+    body += '<div class="stats-subtitle">Clients mit dem meisten Apple-Verkehr</div>';
+    body += barRows(a.clients.map((c) => ({ label: c.address, value: valueOf(c, metric), color: '--stats-tcp', display: formatValue(valueOf(c, metric), metric) })), '');
+  }
+  return card('Apple-Protokolle', body, '', `Erkennung über Adressbereich 17.0.0.0/8, Ports, DNS-Namen und TLS-Servernamen (SNI) – Heuristik, Listenstand ${stats.classificationVersion}. Verkehr über Fremd-CDNs (z. B. Akamai) ohne sichtbares DNS wird nicht erkannt.`);
+}
+
+const RESOLVER_COLORS = { umbrella: '--stats-icmp', private: '--stats-tcp', google: '--stats-bad', cloudflare: '--stats-warn', quad9: '--stats-warn', adguard: '--stats-warn', cleanbrowsing: '--stats-warn', apple: '--stats-arp', public: '--stats-warn' };
+
+function dnsServersCard(stats) {
+  const r = stats.dnsServers;
+  if (!r) return '';
+  let body = '';
+  if (r.categories.length) {
+    body += '<div class="stats-subtitle">Genutzte DNS-Server nach Anbieter</div>';
+    body += barRows(r.categories.map((c) => ({
+      label: c.label,
+      value: c.queries,
+      color: RESOLVER_COLORS[c.category] || '--stats-neutral',
+      display: `${countFormat.format(c.queries)} Anfragen · ${countFormat.format(c.clients)} ${c.clients === 1 ? 'Client' : 'Clients'}`,
+    })), '');
+    body += '<div class="stats-subtitle">Einzelne Server</div>';
+    body += statsTable(
+      [{ label: 'Adresse' }, { label: 'Anbieter' }, { label: 'Anfragen', num: true }, { label: 'Antworten', num: true }, { label: 'Fehlercodes', num: true }, { label: 'Clients', num: true }],
+      r.resolvers.map((s) => [esc(s.ip), esc(s.label), countFormat.format(s.queries), countFormat.format(s.responses), s.failures ? `<span class="is-bad">${countFormat.format(s.failures)}</span>` : '0', countFormat.format(s.clients)]),
+    );
+    if (r.resolverCount > r.resolvers.length) body += `<p class="stats-card__note">${countFormat.format(r.resolverCount - r.resolvers.length)} weitere Server nicht angezeigt.</p>`;
+  }
+  if (r.mixedClients.length) {
+    body += `<div class="stats-subtitle">Clients mit mehreren DNS-Anbietern (${countFormat.format(r.mixedClientCount)})</div>`;
+    body += statsTable(
+      [{ label: 'Client' }, { label: 'Genutzte Anbieter (Anfragen)' }, { label: 'Hinweis' }],
+      r.mixedClients.map((c) => [
+        esc(c.client),
+        c.categories.map((k) => `${esc(k.label)} (${countFormat.format(k.queries)})`).join(', '),
+        c.bypassHint ? chip('warn', 'fragt zusätzlich einen anderen Anbieter – DNS-Filter wird ggf. umgangen') : '',
+      ]),
+    );
+  }
+  const encrypted = (title, list, hint) => {
+    if (!list.length) return '';
+    return `<div class="stats-subtitle">${esc(title)}</div>` +
+      statsTable(
+        [{ label: 'Client' }, { label: 'Server' }, { label: 'Anbieter' }, { label: 'Pakete', num: true }],
+        list.map((e) => [esc(e.client), esc(e.server), esc(e.label), countFormat.format(e.packets)]),
+      ) + `<p class="stats-card__note">${esc(hint)}</p>`;
+  };
+  body += encrypted('DNS über TLS (Port 853)', r.dot, 'Verschlüsseltes DNS an einen Resolver – am DNS-Filter vorbei, sofern dieser nicht selbst DoT anbietet.');
+  body += encrypted('Verkehr zu bekannten DNS-Anbietern auf Port 443', r.doh, 'Möglicherweise DNS über HTTPS/QUIC (DoH/DoQ) oder der Verwaltungszugriff eines Anbieters (z. B. Umbrella-Roaming-Client) – nicht eindeutig.');
+  return card('DNS-Server', body || '<p class="stats-empty">Keine DNS-Anfragen im Capture.</p>', 'stats-card--wide', `Zuordnung anhand der Serveradresse, Listenstand ${stats.classificationVersion}. Interne Resolver (z. B. Active Directory oder ein Umbrella-Forwarder) erscheinen als „privat“ – ob dahinter Umbrella steht, ist aus dem Capture nicht erkennbar.`);
+}
+
+const RELAY_STATE = {
+  active: { level: 'warn', text: 'Relay aktiv (Verkehr/SNI gesehen)' },
+  allowed: { level: 'neutral', text: 'erlaubt (Adressen geliefert)' },
+  broken: { level: 'bad', text: 'gestört (Blockseite/Fehler/Timeout)' },
+  blocked: { level: 'ok', text: 'abgeschaltet (NXDOMAIN/NODATA)' },
+};
+const RELAY_PROBLEM = { blockpage: 'Blockseiten-Antwort', errors: 'SERVFAIL/REFUSED', unanswered: 'ohne Antwort', slow: 'langsam (≥ 1 s)' };
+
+function relayCard(stats) {
+  const relay = stats.relay;
+  if (!relay) return '';
+  const blockpages = relay.names.reduce((sum, n) => sum + n.blockpage, 0);
+  const clientsBroken = relay.clients.filter((c) => c.state === 'broken' || c.problems.length > 0).length;
+  const active = relay.clients.filter((c) => c.state === 'active').length;
+  let verdict = '';
+  if (blockpages > 0) {
+    verdict = `<p class="stats-card__summary">${chip('bad', 'Blockseite statt NXDOMAIN/NODATA')} ${countFormat.format(blockpages)} Antworten auf Relay-Namen enthalten eine Adresse aus dem Umbrella-Adressraum (146.112.x.x). Apple und Cisco sehen für diese Namen NXDOMAIN oder NODATA vor; eine Blockseiten-Adresse lässt iOS/macOS wiederholt versuchen und führt zu Verzögerungen und Timeouts.</p>`;
+  } else if (relay.names.length && relay.names.every((n) => n.addresses === 0 && n.blockpage === 0 && n.errors === 0 && n.unanswered === 0)) {
+    verdict = `<p class="stats-card__summary">${chip('ok', 'Relay wird sauber abgeschaltet')} Alle Antworten auf Relay-Namen sind NXDOMAIN oder NODATA.</p>`;
+  }
+  const summary = `<p class="stats-card__summary">${countFormat.format(relay.clientCount)} ${relay.clientCount === 1 ? 'Client fragt' : 'Clients fragen'} Relay-Namen ab · ${countFormat.format(active)} mit sichtbarem Relay-Verkehr · ${countFormat.format(clientsBroken)} mit Auffälligkeiten · ${countFormat.format(relay.learnedAddresses)} Relay-Adressen aus DNS gelernt</p>`;
+
+  const nameTable = statsTable(
+    [{ label: 'Name' }, { label: 'Anfragen', num: true }, { label: 'NODATA', num: true }, { label: 'NXDOMAIN', num: true }, { label: 'Adressen', num: true }, { label: 'Blockseite', num: true }, { label: 'Fehler', num: true }, { label: 'ohne Antwort', num: true }, { label: 'Antwortzeit Ø / max', num: true }],
+    relay.names.map((n) => [
+      esc(n.name),
+      countFormat.format(n.queries),
+      countFormat.format(n.nodata),
+      countFormat.format(n.nxdomain),
+      countFormat.format(n.addresses),
+      n.blockpage ? `<span class="is-bad">${countFormat.format(n.blockpage)}</span>` : '0',
+      n.errors ? `<span class="is-bad">${countFormat.format(n.errors)}</span>` : '0',
+      n.unanswered ? `<span class="is-bad">${countFormat.format(n.unanswered)}</span>` : '0',
+      n.avgLatency === null ? '–' : `${formatMs(n.avgLatency)} / ${formatMs(n.maxLatency)}`,
+    ]),
+  );
+
+  const clientTable = statsTable(
+    [{ label: 'Client' }, { label: 'Status' }, { label: 'Abfragen' }, { label: 'Auffälligkeiten' }, { label: 'Relay-Verkehr', num: true }],
+    relay.clients.map((c) => {
+      const state = RELAY_STATE[c.state];
+      const rate = c.perMinute === null ? '' : ` (${percentFormat.format(c.perMinute)}/min)`;
+      const traffic = c.packets ? `${countFormat.format(c.packets)} Pakete · ${formatBytes(c.bytes)}${c.quicPackets ? ' · QUIC' : ''}` : c.sniHits ? `SNI ×${countFormat.format(c.sniHits)}` : '–';
+      return [
+        esc(c.address),
+        chip(state.level, state.text),
+        `${countFormat.format(c.queries)}${rate}`,
+        c.problems.length ? c.problems.map((p) => chip('bad', `${RELAY_PROBLEM[p]}${p === 'blockpage' ? ` ×${countFormat.format(c.blockpage)}` : p === 'unanswered' ? ` ×${countFormat.format(c.unanswered)}` : p === 'slow' ? ` ×${countFormat.format(c.slow)}` : ''}`)).join(' ') : '–',
+        traffic,
+      ];
+    }),
+  );
+  const body = `${verdict}${summary}<div class="stats-subtitle">Abgefragte Relay-Namen</div>${nameTable}<div class="stats-subtitle">Clients</div>${clientTable}`;
+  return card('iCloud Private Relay', body, 'stats-card--wide', `Beobachtet werden mask.icloud.com, mask-h2.icloud.com, mask-api.icloud.com und mask.apple-dns.net (Quelle: Apple- und Cisco-Dokumentation sowie Problemanalyse vom 22.07.2026). „Relay aktiv“ heißt: Verkehr zu einer Adresse, die ein Relay-Name aufgelöst hat, oder TLS-ClientHello mit Relay-SNI – nur sichtbar, wenn die DNS-Antwort im Capture liegt. Die Blockseiten-Erkennung (146.112.0.0/16) ist eine Heuristik, Listenstand ${stats.classificationVersion}.`);
+}
+
 function dnsCard(stats) {
   const dns = stats.dns;
   if (!dns) return '';
@@ -398,6 +613,7 @@ export function renderStats(container, { stats, metric, talkers, deviceIndex }) 
       { label: 'UDP', counter: stats.byProtocol.UDP, color: '--stats-udp' },
       { label: 'ICMP / ICMPv6', counter: stats.byProtocol.ICMP, color: '--stats-icmp' },
       { label: 'ARP', counter: stats.byProtocol.ARP, color: '--stats-arp' },
+      { label: 'Layer 2 (STP, CDP, LLDP …)', counter: stats.byProtocol.L2, color: '--stats-l2' },
       { label: 'Sonstige', counter: stats.byProtocol.OTHER, color: '--stats-neutral' },
     ], metric) +
       shareBlock('Adressierung', [
@@ -411,7 +627,7 @@ export function renderStats(container, { stats, metric, talkers, deviceIndex }) 
         { label: 'Kein IP (z. B. ARP)', counter: stats.byIpVersion.none, color: '--stats-neutral' },
       ], metric),
     'stats-card--wide stats-card--shares',
-    undecoded > 0 ? `${countFormat.format(undecoded)} Pakete (z. B. LLDP, STP, 802.11-Management) wurden nicht ausgewertet und fehlen in den Anteilen.` : '',
+    undecoded > 0 ? `${countFormat.format(undecoded)} Pakete (z. B. 802.11-Management) wurden nicht ausgewertet und fehlen in den Anteilen.` : '',
   );
 
   container.innerHTML = `
@@ -425,7 +641,11 @@ export function renderStats(container, { stats, metric, talkers, deviceIndex }) 
       ${flagsCard(stats)}
       ${portsCard(stats, metric)}
       ${dnsCard(stats)}
+      ${dnsServersCard(stats)}
+      ${relayCard(stats)}
+      ${appleCard(stats, metric)}
       ${tlsCard(stats)}
+      ${l2Card(stats, metric)}
       ${sizesCard(stats, metric)}
       ${mtuFragmentationCard(stats)}
       ${timelineCard(stats, metric)}

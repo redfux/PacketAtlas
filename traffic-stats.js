@@ -32,6 +32,16 @@ const DNS_MAX_PENDING_QUERIES = 50000;
 const DNS_MAX_TRACKED_NAMES = 5000;
 const DNS_TOP_LIMIT = 10;
 const TLS_MAX_TRACKED_SERVERS = 2000;
+// Bounds for the layer-2 / Apple / resolver / Private Relay bookkeeping.
+const L2_MAX_MACS_PER_PROTOCOL = 200;
+const L2_MAX_NEIGHBORS = 500;
+const APPLE_MAX_NAMES = 2000;
+const MAX_TRACKED_CLIENTS = 5000;
+const MAX_TRACKED_RESOLVERS = 500;
+const RELAY_MAX_PENDING = 5000;
+const RELAY_MAX_IPS = 500;
+// A DNS answer that takes at least this long counts as "slow" (a client gives up and retries after a few seconds).
+const SLOW_DNS_SECONDS = 1;
 
 // Upper bounds (inclusive, bytes on the wire) of the packet-size histogram buckets.
 const SIZE_BUCKET_LIMITS = [64, 127, 255, 511, 1023, 1518];
@@ -50,7 +60,7 @@ function tcpFlagsLabel(flags) {
 }
 
 function statsProtocolGroup(protocol) {
-  if (protocol === 'TCP' || protocol === 'UDP' || protocol === 'ARP') return protocol;
+  if (protocol === 'TCP' || protocol === 'UDP' || protocol === 'ARP' || protocol === 'L2') return protocol;
   if (protocol === 'ICMP' || protocol === 'ICMPv6') return 'ICMP';
   return 'OTHER';
 }
@@ -91,7 +101,7 @@ class TrafficStats {
     this.decodedBytes = 0;
     this.firstTimestamp = null;
     this.lastTimestamp = null;
-    this.byProtocol = { TCP: createCounter(), UDP: createCounter(), ICMP: createCounter(), ARP: createCounter(), OTHER: createCounter() };
+    this.byProtocol = { TCP: createCounter(), UDP: createCounter(), ICMP: createCounter(), ARP: createCounter(), L2: createCounter(), OTHER: createCounter() };
     this.byCast = { unicast: createCounter(), multicast: createCounter(), broadcast: createCounter() };
     this.byIpVersion = { ipv4: createCounter(), ipv6: createCounter(), none: createCounter() };
     this.sizeBuckets = SIZE_BUCKET_LIMITS.map(() => createCounter());
@@ -120,6 +130,40 @@ class TrafficStats {
       versions: new Map(), // negotiated version (number) -> ServerHellos
       ciphers: new Map(), // cipher suite id -> ServerHellos
       outdatedServers: new Map(), // `${ip}:${port}|${version}` -> ServerHellos that negotiated a deprecated version
+    };
+    this.vlans = new Map(); // VLAN ID -> { packets, bytes } (tagged frames only)
+    this.l2 = {
+      protocols: new Map(), // name -> { packets, bytes, macs: Set }
+      bpdus: 0,
+      tcnBpdus: 0,
+      tcFlagBpdus: 0,
+      roots: new Map(), // `${vlan}|${rootId}` -> { vlan, rootId, count, senders: Set, bridges: Set }
+      tcSenders: new Map(), // sender MAC -> topology change BPDUs
+      neighbors: new Map(), // `${protocol}|${mac}` -> neighbour announcement (latest values)
+      lacpPdus: 0,
+      lacpOutOfSync: 0,
+      lacpDefaultedOrExpired: 0,
+    };
+    this.apple = {
+      groups: new Map(), // traffic group -> { packets, bytes, generic }
+      clients: new Map(), // client address -> { packets, bytes }
+      dnsGroups: new Map(), // group -> DNS queries for names of that group
+      dnsNames: new Map(), // name -> { group, count }
+      sniGroups: new Map(), // group -> TLS ClientHellos with an SNI of that group
+      mdnsServices: new Map(), // service type -> { count, apple }
+      mdnsHosts: new Map(), // host name (*.local) -> count
+    };
+    this.resolvers = {
+      byIp: new Map(), // server address -> { category, label, queries, responses, failures, clients: Set }
+      clientCategories: new Map(), // client address -> Map(category -> queries)
+      dot: new Map(), // `${client}|${server}` -> { client, server, category, label, packets }
+      doh: new Map(), // same, for port 443 towards well-known public resolver addresses
+    };
+    this.relay = {
+      names: new Map(), // watched name -> outcome counters
+      clients: new Map(), // client address -> evidence
+      ips: new Map(), // address learned from a DNS answer for a watched name -> name
+      pending: new Map(), // `${client}|${server}|${id}` -> { client, name, ts }
     };
     this.dns = {
       queries: 0,
@@ -170,11 +214,424 @@ class TrafficStats {
       this.perSecond.set(second, [1, size]);
     }
 
+    if (decoded.vlanId !== null && decoded.vlanId !== undefined) {
+      let vlan = this.vlans.get(decoded.vlanId);
+      if (!vlan) {
+        vlan = createCounter();
+        this.vlans.set(decoded.vlanId, vlan);
+      }
+      bump(vlan, size);
+    }
+
     this.addSizeAndFragmentation(decoded, size);
-    if (decoded.protocol === 'TCP' || decoded.protocol === 'UDP') this.addPort(decoded, size);
+    if (decoded.protocol === 'L2') return null; // layer-2 control frame: detail comes via addL2()
+    this.addApplePacket(decoded, size);
+    if (decoded.protocol === 'TCP' || decoded.protocol === 'UDP') {
+      this.addPort(decoded, size);
+      this.addResolverTraffic(decoded);
+      this.addRelayTraffic(decoded, size);
+    }
     if (decoded.protocol === 'ICMP' || decoded.protocol === 'ICMPv6') this.addIcmp(decoded);
     if (decoded.protocol === 'TCP' && decoded.tcpSeq !== null) return this.addTcp(decoded);
     return null;
+  }
+
+  // ------------------------------------------------------------ layer 2
+
+  /** One layer-2 control frame (STP, CDP, LLDP, LACP, ...); `details` from parseL2Details() or null. */
+  addL2(decoded, details) {
+    const l2 = this.l2;
+    const name = decoded.l2.name;
+    let entry = l2.protocols.get(name);
+    if (!entry) {
+      entry = { packets: 0, bytes: 0, macs: new Set() };
+      l2.protocols.set(name, entry);
+    }
+    bump(entry, decoded.frameLength);
+    if (decoded.srcMac && entry.macs.size < L2_MAX_MACS_PER_PROTOCOL) entry.macs.add(decoded.srcMac);
+    if (!details) return;
+
+    if (details.kind === 'stp') {
+      l2.bpdus++;
+      if (details.bpdu === 'tcn') l2.tcnBpdus++;
+      if (details.topologyChange) {
+        if (details.bpdu !== 'tcn') l2.tcFlagBpdus++;
+        l2.tcSenders.set(decoded.srcMac, (l2.tcSenders.get(decoded.srcMac) || 0) + 1);
+      }
+      if (details.rootId) {
+        const key = `${details.vlan === null ? '-' : details.vlan}|${details.rootId}`;
+        let root = l2.roots.get(key);
+        if (!root) {
+          root = { vlan: details.vlan, rootId: details.rootId, count: 0, senders: new Set(), bridges: new Set() };
+          l2.roots.set(key, root);
+        }
+        root.count++;
+        if (decoded.srcMac) root.senders.add(decoded.srcMac);
+        if (details.bridgeId) root.bridges.add(details.bridgeId);
+      }
+    } else if (details.kind === 'neighbor') {
+      const key = `${details.protocol}|${decoded.srcMac}`;
+      let neighbor = l2.neighbors.get(key);
+      if (!neighbor && l2.neighbors.size < L2_MAX_NEIGHBORS) {
+        neighbor = { protocol: details.protocol, mac: decoded.srcMac, frames: 0, firstSeen: decoded.timestamp };
+        l2.neighbors.set(key, neighbor);
+      }
+      if (neighbor) {
+        neighbor.frames++;
+        neighbor.lastSeen = decoded.timestamp;
+        // Latest announcement wins; fields a frame did not carry keep their previous value.
+        for (const field of ['deviceId', 'portId', 'portDescription', 'platform', 'software', 'mgmtIp', 'vlan', 'ttl']) {
+          if (details[field] !== null && details[field] !== undefined && details[field] !== '') neighbor[field] = details[field];
+        }
+        if (details.capabilities && details.capabilities.length) neighbor.capabilities = details.capabilities;
+      }
+    } else if (details.kind === 'lacp') {
+      l2.lacpPdus++;
+      if (!details.synchronized) l2.lacpOutOfSync++;
+      if (details.defaulted || details.expired) l2.lacpDefaultedOrExpired++;
+    }
+  }
+
+  l2Result() {
+    const l2 = this.l2;
+    if (l2.protocols.size === 0 && this.vlans.size === 0) return null;
+    return {
+      protocols: Array.from(l2.protocols, ([name, e]) => ({ name, packets: e.packets, bytes: e.bytes, devices: e.macs.size })).sort((x, y) => y.packets - x.packets),
+      stp: {
+        bpdus: l2.bpdus,
+        tcnBpdus: l2.tcnBpdus,
+        tcFlagBpdus: l2.tcFlagBpdus,
+        roots: Array.from(l2.roots.values())
+          .map((r) => ({ vlan: r.vlan, rootId: r.rootId, count: r.count, senders: r.senders.size, bridges: r.bridges.size }))
+          .sort((x, y) => y.count - x.count)
+          .slice(0, 12),
+        tcSenders: Array.from(l2.tcSenders, ([mac, count]) => ({ mac, count })).sort((x, y) => y.count - x.count).slice(0, 5),
+      },
+      neighbors: Array.from(l2.neighbors.values())
+        .sort((x, y) => String(x.deviceId || x.mac).localeCompare(String(y.deviceId || y.mac)))
+        .slice(0, 60)
+        .map((n) => ({
+          protocol: n.protocol,
+          mac: n.mac,
+          deviceId: n.deviceId || null,
+          portId: n.portId || null,
+          portDescription: n.portDescription || null,
+          platform: n.platform || null,
+          software: n.software || null,
+          mgmtIp: n.mgmtIp || null,
+          vlan: n.vlan === undefined ? null : n.vlan,
+          capabilities: n.capabilities || [],
+          frames: n.frames,
+        })),
+      neighborCount: l2.neighbors.size,
+      lacp: { pdus: l2.lacpPdus, outOfSync: l2.lacpOutOfSync, defaultedOrExpired: l2.lacpDefaultedOrExpired },
+      vlans: Array.from(this.vlans, ([id, c]) => ({ id, packets: c.packets, bytes: c.bytes })).sort((x, y) => y.packets - x.packets).slice(0, 12),
+      vlanCount: this.vlans.size,
+    };
+  }
+
+  /** Neighbour announcements as MAC / management-IP -> name, so the matrix can label switches by their CDP/LLDP name. */
+  l2DeviceNames() {
+    const names = [];
+    for (const n of this.l2.neighbors.values()) {
+      if (!n.deviceId) continue;
+      names.push({ mac: n.mac, ip: n.mgmtIp || null, name: n.deviceId });
+    }
+    return names;
+  }
+
+  // ------------------------------------------------------------- Apple
+
+  addApplePacket(decoded, size) {
+    const hit = classifyApplePacket(decoded);
+    if (!hit) return;
+    const a = this.apple;
+    let group = a.groups.get(hit.group);
+    if (!group) {
+      group = { packets: 0, bytes: 0, generic: hit.group === 'Bonjour / mDNS' };
+      a.groups.set(hit.group, group);
+    }
+    bump(group, size);
+    if (group.generic) return; // Bonjour is vendor-neutral: counted as a group, not as "Apple traffic" per client
+    let client = a.clients.get(hit.client);
+    if (!client && a.clients.size < MAX_TRACKED_CLIENTS) {
+      client = createCounter();
+      a.clients.set(hit.client, client);
+    }
+    if (client) bump(client, size);
+  }
+
+  addAppleName(name, kind) {
+    const group = classifyAppleName(name);
+    if (!group) return;
+    const a = this.apple;
+    const target = kind === 'sni' ? a.sniGroups : a.dnsGroups;
+    target.set(group, (target.get(group) || 0) + 1);
+    if (kind === 'dns') {
+      const known = a.dnsNames.get(name);
+      if (known) known.count++;
+      else if (a.dnsNames.size < APPLE_MAX_NAMES) a.dnsNames.set(name, { group, count: 1 });
+    }
+  }
+
+  /** One parsed mDNS message (see parseMdnsNames() in dns-resolver.js). */
+  addMdns(decoded, mdns) {
+    const a = this.apple;
+    const seen = new Set();
+    for (const name of mdns.names) {
+      if (seen.has(name)) continue;
+      seen.add(name);
+      const service = /(_[a-z0-9-]+\._(?:tcp|udp))\.local$/.exec(name);
+      if (service && service[1].indexOf('_dns-sd') === -1) {
+        const entry = a.mdnsServices.get(service[1]) || { count: 0, apple: APPLE_MDNS_SERVICES.has(service[1]) };
+        entry.count++;
+        a.mdnsServices.set(service[1], entry);
+      } else if (/^[^._][^.]*\.local$/.test(name) && a.mdnsHosts.size < MAX_TRACKED_CLIENTS) {
+        a.mdnsHosts.set(name, (a.mdnsHosts.get(name) || 0) + 1);
+      }
+    }
+  }
+
+  appleResult() {
+    const a = this.apple;
+    const totalOf = (generic) => Array.from(a.groups.values()).filter((g) => g.generic === generic).reduce((sum, g) => ({ packets: sum.packets + g.packets, bytes: sum.bytes + g.bytes }), { packets: 0, bytes: 0 });
+    const apple = totalOf(false);
+    const empty = a.groups.size === 0 && a.dnsGroups.size === 0 && a.sniGroups.size === 0 && a.mdnsServices.size === 0;
+    if (empty) return null;
+    return {
+      packets: apple.packets,
+      bytes: apple.bytes,
+      groups: Array.from(a.groups, ([name, g]) => ({ name, packets: g.packets, bytes: g.bytes, generic: g.generic })).sort((x, y) => y.packets - x.packets),
+      clients: Array.from(a.clients, ([address, c]) => ({ address, packets: c.packets, bytes: c.bytes })).sort((x, y) => y.packets - x.packets).slice(0, 10),
+      clientCount: a.clients.size,
+      dnsGroups: Array.from(a.dnsGroups, ([name, count]) => ({ name, count })).sort((x, y) => y.count - x.count),
+      dnsNames: Array.from(a.dnsNames, ([name, e]) => ({ name, group: e.group, count: e.count })).sort((x, y) => y.count - x.count).slice(0, 10),
+      sniGroups: Array.from(a.sniGroups, ([name, count]) => ({ name, count })).sort((x, y) => y.count - x.count),
+      mdnsServices: Array.from(a.mdnsServices, ([service, e]) => ({ service, count: e.count, apple: e.apple })).sort((x, y) => y.count - x.count).slice(0, 12),
+      mdnsHosts: Array.from(a.mdnsHosts, ([name, count]) => ({ name, count })).sort((x, y) => y.count - x.count).slice(0, 10),
+      mdnsHostCount: a.mdnsHosts.size,
+    };
+  }
+
+  // ------------------------------------------------------- DNS servers
+
+  getResolver(ip) {
+    const r = this.resolvers;
+    let entry = r.byIp.get(ip);
+    if (!entry && r.byIp.size < MAX_TRACKED_RESOLVERS) {
+      const { category, label } = classifyResolver(ip);
+      entry = { category, label, queries: 0, responses: 0, failures: 0, clients: new Set() };
+      r.byIp.set(ip, entry);
+    }
+    return entry || null;
+  }
+
+  /** DoT (port 853) and traffic to well-known public resolver addresses on 443 (possible DoH / DoQ). */
+  addResolverTraffic(decoded) {
+    const r = this.resolvers;
+    let target = null;
+    if (decoded.dstPort === 853) target = r.dot;
+    else if (decoded.dstPort === 443 && DNS_PROVIDER_BY_IP.has(decoded.dstIp)) target = r.doh;
+    if (!target) return;
+    const key = `${decoded.srcIp}|${decoded.dstIp}`;
+    let entry = target.get(key);
+    if (!entry && target.size < MAX_TRACKED_RESOLVERS) {
+      const { category, label } = classifyResolver(decoded.dstIp);
+      entry = { client: decoded.srcIp, server: decoded.dstIp, category, label, packets: 0 };
+      target.set(key, entry);
+    }
+    if (entry) entry.packets++;
+  }
+
+  resolversResult() {
+    const r = this.resolvers;
+    if (r.byIp.size === 0 && r.dot.size === 0 && r.doh.size === 0) return null;
+    const byCategory = new Map();
+    for (const [ip, e] of r.byIp) {
+      let c = byCategory.get(e.category);
+      if (!c) {
+        c = { category: e.category, label: e.label, queries: 0, resolvers: 0, clients: new Set() };
+        byCategory.set(e.category, c);
+      }
+      c.queries += e.queries;
+      c.resolvers++;
+      for (const client of e.clients) c.clients.add(client);
+    }
+    const mixedClients = [];
+    for (const [client, categories] of r.clientCategories) {
+      if (categories.size < 2) continue;
+      const list = Array.from(categories, ([category, queries]) => ({ category, label: DNS_CATEGORY_LABELS[category], queries })).sort((x, y) => y.queries - x.queries);
+      const hasManaged = list.some((c) => !isAlternativeResolverCategory(c.category));
+      const hasAlternative = list.some((c) => isAlternativeResolverCategory(c.category));
+      mixedClients.push({ client, categories: list, bypassHint: hasManaged && hasAlternative, queries: list.reduce((s, c) => s + c.queries, 0) });
+    }
+    mixedClients.sort((x, y) => Number(y.bypassHint) - Number(x.bypassHint) || y.queries - x.queries);
+    const encrypted = (map) => Array.from(map.values()).sort((x, y) => y.packets - x.packets).slice(0, 8);
+    return {
+      listVersion: CLASSIFICATION_VERSION,
+      resolvers: Array.from(r.byIp, ([ip, e]) => ({ ip, category: e.category, label: e.label, queries: e.queries, responses: e.responses, failures: e.failures, clients: e.clients.size }))
+        .sort((x, y) => y.queries - x.queries)
+        .slice(0, 12),
+      resolverCount: r.byIp.size,
+      categories: Array.from(byCategory.values()).map((c) => ({ category: c.category, label: c.label, queries: c.queries, resolvers: c.resolvers, clients: c.clients.size })).sort((x, y) => y.queries - x.queries),
+      mixedClients: mixedClients.slice(0, 10),
+      mixedClientCount: mixedClients.length,
+      dot: encrypted(r.dot),
+      doh: encrypted(r.doh),
+    };
+  }
+
+  // ----------------------------------------------------- iCloud Private Relay
+
+  getRelayClient(ip) {
+    const clients = this.relay.clients;
+    let client = clients.get(ip);
+    if (!client && clients.size < MAX_TRACKED_CLIENTS) {
+      client = { queries: 0, firstTs: null, lastTs: null, nodata: 0, nxdomain: 0, addresses: 0, blockpage: 0, servfail: 0, refused: 0, other: 0, slow: 0, sniHits: 0, packets: 0, bytes: 0, quicPackets: 0 };
+      clients.set(ip, client);
+    }
+    return client || null;
+  }
+
+  getRelayName(name) {
+    const names = this.relay.names;
+    let entry = names.get(name);
+    if (!entry && names.size < 50) {
+      entry = { queries: 0, nodata: 0, nxdomain: 0, addresses: 0, blockpage: 0, servfail: 0, refused: 0, other: 0, latencySum: 0, latencyCount: 0, latencyMax: 0, slow: 0 };
+      names.set(name, entry);
+    }
+    return entry || null;
+  }
+
+  /** A query for a watched name (mask.icloud.com, mask-h2.icloud.com, mask-api.icloud.com, mask.apple-dns.net, ...). */
+  noteRelayQuery(decoded, message, key) {
+    const relay = this.relay;
+    const nameEntry = this.getRelayName(message.name);
+    if (nameEntry) nameEntry.queries++;
+    const client = this.getRelayClient(decoded.srcIp);
+    if (client) {
+      client.queries++;
+      if (client.firstTs === null || decoded.timestamp < client.firstTs) client.firstTs = decoded.timestamp;
+      if (client.lastTs === null || decoded.timestamp > client.lastTs) client.lastTs = decoded.timestamp;
+    }
+    if (relay.pending.size < RELAY_MAX_PENDING) relay.pending.set(key, { client: decoded.srcIp, name: message.name, ts: decoded.timestamp });
+  }
+
+  /** The response to a watched name: how did the network answer, and how long did it take? */
+  noteRelayResponse(decoded, message, key) {
+    const relay = this.relay;
+    let outcome;
+    if (message.rcode === 3) outcome = 'nxdomain';
+    else if (message.rcode === 2) outcome = 'servfail';
+    else if (message.rcode === 5) outcome = 'refused';
+    else if (message.rcode !== 0) outcome = 'other';
+    else if (message.addresses.length === 0) outcome = 'nodata';
+    else if (message.addresses.some(isUmbrellaBlockPageAddress)) outcome = 'blockpage';
+    else outcome = 'addresses';
+
+    if (outcome === 'addresses') {
+      for (const ip of message.addresses) {
+        if (relay.ips.size < RELAY_MAX_IPS) relay.ips.set(ip, message.name);
+      }
+    }
+    const nameEntry = this.getRelayName(message.name);
+    const client = this.getRelayClient(decoded.dstIp);
+    if (nameEntry) nameEntry[outcome]++;
+    if (client) client[outcome]++;
+
+    const pending = relay.pending.get(key);
+    if (pending) {
+      relay.pending.delete(key);
+      const latency = decoded.timestamp - pending.ts;
+      if (latency >= 0 && nameEntry) {
+        nameEntry.latencySum += latency;
+        nameEntry.latencyCount++;
+        if (latency > nameEntry.latencyMax) nameEntry.latencyMax = latency;
+        if (latency >= SLOW_DNS_SECONDS) {
+          nameEntry.slow++;
+          if (client) client.slow++;
+        }
+      }
+    }
+  }
+
+  /** TCP/UDP 443 to or from an address a watched name resolved to: the relay in use. */
+  addRelayTraffic(decoded, size) {
+    const relay = this.relay;
+    if (relay.ips.size === 0 || (decoded.srcPort !== 443 && decoded.dstPort !== 443)) return;
+    let clientIp = null;
+    if (relay.ips.has(decoded.dstIp)) clientIp = decoded.srcIp;
+    else if (relay.ips.has(decoded.srcIp)) clientIp = decoded.dstIp;
+    if (!clientIp) return;
+    const client = this.getRelayClient(clientIp);
+    if (!client) return;
+    bump(client, size);
+    if (decoded.protocol === 'UDP') client.quicPackets++;
+  }
+
+  relayResult() {
+    const relay = this.relay;
+    if (relay.names.size === 0 && relay.clients.size === 0) return null;
+
+    const unansweredByClient = new Map();
+    const unansweredByName = new Map();
+    for (const p of relay.pending.values()) {
+      unansweredByClient.set(p.client, (unansweredByClient.get(p.client) || 0) + 1);
+      unansweredByName.set(p.name, (unansweredByName.get(p.name) || 0) + 1);
+    }
+    const clients = Array.from(relay.clients, ([address, c]) => {
+      const unanswered = unansweredByClient.get(address) || 0;
+      const errors = c.servfail + c.refused + c.other;
+      const problems = [];
+      if (c.blockpage > 0) problems.push('blockpage');
+      if (errors > 0) problems.push('errors');
+      if (unanswered > 0) problems.push('unanswered');
+      if (c.slow > 0) problems.push('slow');
+      let state;
+      if (c.packets > 0 || c.sniHits > 0) state = 'active';
+      else if (c.addresses > 0) state = 'allowed';
+      else if (problems.length > 0) state = 'broken';
+      else state = 'blocked';
+      const span = c.firstTs !== null ? c.lastTs - c.firstTs : 0;
+      return {
+        address,
+        state,
+        problems,
+        queries: c.queries,
+        perMinute: span >= 30 ? (c.queries / span) * 60 : null,
+        nodata: c.nodata,
+        nxdomain: c.nxdomain,
+        addresses: c.addresses,
+        blockpage: c.blockpage,
+        errors,
+        unanswered,
+        slow: c.slow,
+        sniHits: c.sniHits,
+        packets: c.packets,
+        bytes: c.bytes,
+        quicPackets: c.quicPackets,
+      };
+    }).sort((x, y) => y.problems.length - x.problems.length || y.queries - x.queries);
+
+    return {
+      listVersion: CLASSIFICATION_VERSION,
+      names: Array.from(relay.names, ([name, n]) => ({
+        name,
+        queries: n.queries,
+        nodata: n.nodata,
+        nxdomain: n.nxdomain,
+        addresses: n.addresses,
+        blockpage: n.blockpage,
+        errors: n.servfail + n.refused + n.other,
+        unanswered: unansweredByName.get(name) || 0,
+        avgLatency: n.latencyCount ? n.latencySum / n.latencyCount : null,
+        maxLatency: n.latencyCount ? n.latencyMax : null,
+        slow: n.slow,
+      })).sort((x, y) => y.queries - x.queries),
+      clients: clients.slice(0, 15),
+      clientCount: clients.length,
+      learnedAddresses: relay.ips.size,
+    };
   }
 
   /** One TLS ClientHello / ServerHello found at the start of a TCP payload (see parseTlsHello() in tls-parser.js). */
@@ -182,6 +639,13 @@ class TrafficStats {
     const t = this.tls;
     if (hello.kind === 'client') {
       t.clientHellos++;
+      if (hello.sni) {
+        this.addAppleName(hello.sni, 'sni');
+        if (isPrivateRelayName(hello.sni)) {
+          const client = this.getRelayClient(decoded.srcIp);
+          if (client) client.sniHits++;
+        }
+      }
       return;
     }
     t.serverHellos++;
@@ -216,18 +680,43 @@ class TrafficStats {
     if (!message.isResponse) {
       if (decoded.dstPort !== 53) return;
       d.queries++;
-      if (d.pending.size < DNS_MAX_PENDING_QUERIES) d.pending.set(`${decoded.srcIp}|${decoded.dstIp}|${message.id}`, true);
+      const queryKey = `${decoded.srcIp}|${decoded.dstIp}|${message.id}`;
+      if (d.pending.size < DNS_MAX_PENDING_QUERIES) d.pending.set(queryKey, true);
       else d.pendingCapped = true;
+
+      const server = this.getResolver(decoded.dstIp);
+      if (server) {
+        server.queries++;
+        if (server.clients.size < 200) server.clients.add(decoded.srcIp);
+        const categories = this.resolvers.clientCategories;
+        let perClient = categories.get(decoded.srcIp);
+        if (!perClient && categories.size < MAX_TRACKED_CLIENTS) {
+          perClient = new Map();
+          categories.set(decoded.srcIp, perClient);
+        }
+        if (perClient) perClient.set(server.category, (perClient.get(server.category) || 0) + 1);
+      }
+      if (message.name) {
+        this.addAppleName(message.name, 'dns');
+        if (isPrivateRelayName(message.name)) this.noteRelayQuery(decoded, message, queryKey);
+      }
       return;
     }
     if (decoded.srcPort !== 53) return;
     d.responses++;
-    d.pending.delete(`${decoded.dstIp}|${decoded.srcIp}|${message.id}`);
+    const responseKey = `${decoded.dstIp}|${decoded.srcIp}|${message.id}`;
+    d.pending.delete(responseKey);
     d.rcodes.set(message.rcode, (d.rcodes.get(message.rcode) || 0) + 1);
+    if (message.name && isPrivateRelayName(message.name)) this.noteRelayResponse(decoded, message, responseKey);
 
     const resolver = d.resolvers.get(decoded.srcIp) || { responses: 0, failures: 0 };
     resolver.responses++;
     d.resolvers.set(decoded.srcIp, resolver);
+    const serverEntry = this.getResolver(decoded.srcIp);
+    if (serverEntry) {
+      serverEntry.responses++;
+      if (message.rcode !== 0) serverEntry.failures++;
+    }
     if (message.rcode === 0) return;
 
     resolver.failures++;
@@ -489,6 +978,11 @@ class TrafficStats {
       handshakes: { ...this.handshakes },
       dns: this.dnsResult(),
       tls: this.tlsResult(),
+      l2: this.l2Result(),
+      apple: this.appleResult(),
+      dnsServers: this.resolversResult(),
+      relay: this.relayResult(),
+      classificationVersion: CLASSIFICATION_VERSION,
       fragmentation: { ...this.fragmentation },
       mtu: {
         maxIpPacketLength: this.maxIpPacketLength,

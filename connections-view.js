@@ -6,7 +6,7 @@
 // provides d3-zoom for panning/zooming large diagrams.
 // thought up by human, created by ai
 
-import { deviceLabel, healthOf, icmpTypeLabel } from './data-model.js?v=1.7.0';
+import { deviceLabel, healthOf, icmpTypeLabel } from './data-model.js?v=1.8.0';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
