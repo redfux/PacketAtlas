@@ -22,6 +22,10 @@ Phase 0 und 1 des Plans „Filter, Facetten, Statistik nach Auswahl“ (siehe `f
 - **Klick-Filter aus der Statistik (Phase 4):** Zeilen der Statistik-Karten setzen Filter-Chips (Problemarten, ICMP-Typen, Ports, DNS-Antwortcodes, DNS-Anbieter, Antworten auf Relay-Namen, Apple-Dienste, TLS-Versionen, Cipher Suites, Fragmente); aktive Werte sind mit ✓ markiert, auch per Tastatur (Tab, Enter/Leertaste) bedienbar. Top-Talker-Geräte setzen die Geräteauswahl (Gerät und Kommunikationspartner), Gerätepaare genau die zwei Geräte. Die Karte eines aktiven Filters zeigt die Werte ohne ihren eigenen Filter – dafür berechnet der Worker im selben Durchlauf zusätzliche Statistiken (`extras` in der `scope`-Nachricht).
 - **Tests:** ein weiterer Fall in `tests/scope.test.js` (zusammen 34): Zusatz-Scopes im selben Durchlauf = eigene Anfragen.
 
+### Fixed
+
+- Das „+ Filter“-Menü ragte auf kleinen Bildschirmen über den unteren Rand hinaus und ließ sich nicht scrollen; die Höhe richtet sich jetzt nach dem Platz unterhalb der Schaltfläche.
+
 ### Changed
 
 - **PCAP-Export ohne erneutes Auswählen der Datei:** Der Parse-Worker baut die Datei aus der von ihm behaltenen Capture (`{type:'export'}`); Upload und Prüfsummen-Schritt entfallen. Nur Captures über 1 GiB nutzen weiter den bisherigen Weg (Original-Datei erneut wählen, Prüfsumme, `pcap-export.worker.js`).

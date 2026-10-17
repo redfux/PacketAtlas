@@ -752,7 +752,10 @@ el.facetMenu.addEventListener('beforetoggle', (e) => {
   if (e.newState !== 'open') return;
   const anchor = el.btnAddFilter.getBoundingClientRect();
   const width = Math.min(360, window.innerWidth - 16);
-  el.facetMenu.style.top = `${Math.round(anchor.bottom + 4)}px`;
+  const top = Math.round(anchor.bottom + 4);
+  el.facetMenu.style.top = `${top}px`;
+  // The design system's max-height assumes the menu hangs from the appbar; here it starts lower.
+  el.facetMenu.style.maxHeight = `${Math.max(160, window.innerHeight - top - 8)}px`;
   el.facetMenu.style.left = `${Math.round(Math.max(8, Math.min(anchor.left, window.innerWidth - width - 8)))}px`;
   el.facetMenu.style.right = 'auto';
 });
