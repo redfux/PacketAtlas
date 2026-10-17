@@ -6,6 +6,7 @@
 // thought up by human, created by ai
 
 import { deviceLabel, dnsRcodeName, formatBytes, healthBadge, icmpTypeCodeLabel, portListLabel } from './data-model.js?v=2.1.0';
+import { isFacetActive } from './filters.js?v=2.1.0';
 
 const percentFormat = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 });
 const countFormat = new Intl.NumberFormat('de-DE');
@@ -83,33 +84,64 @@ function shareBlock(title, segments, metric) {
   </div>`;
 }
 
-/** Horizontal bar rows: rows = [{ label, value, display, color, hint? }], bars scaled to the largest value. */
+// The facets currently active, so rows that stand for a filter value show whether it is on.
+// Set at the start of every renderStats() call.
+let activeFacets = new Map();
+
+const ACTION_HINT_FACET = 'Klicken: nur Verbindungen mit diesem Wert zeigen (erneut klicken: aufheben)';
+
+/**
+ * Click behaviour of a row, as attributes read by app.js: `{ facet: [dimension, value] }` toggles
+ * that filter facet, `{ devices: [a, b?] }` sets the sidebar selection (one device: it and its
+ * communication partners, two: just that pair).
+ */
+function actionAttrs(action, hint) {
+  if (!action) return { attrs: hint ? ` title="${esc(hint)}"` : '', cls: '' };
+  let attrs;
+  let actionHint;
+  if (action.facet) {
+    const [dimension, value] = action.facet;
+    const active = isFacetActive(activeFacets, dimension, value);
+    attrs = ` data-facet-dimension="${esc(dimension)}" data-facet-value="${esc(value)}" aria-pressed="${active}"`;
+    actionHint = ACTION_HINT_FACET;
+  } else {
+    const [a, b] = action.devices;
+    attrs = ` data-select-a="${esc(a)}"${b ? ` data-select-b="${esc(b)}"` : ''}`;
+    actionHint = b ? 'Klicken: Auswahl auf dieses Gerätepaar setzen' : 'Klicken: Auswahl auf dieses Gerät und seine Kommunikationspartner setzen';
+  }
+  const title = hint ? `${hint}\n${actionHint}` : actionHint;
+  return { attrs: ` role="button" tabindex="0"${attrs} title="${esc(title)}"`, cls: ' is-action' };
+}
+
+/** Horizontal bar rows: rows = [{ label, value, display, color, hint?, action? }], bars scaled to the largest value. */
 function barRows(rows, emptyText) {
   if (!rows.length) return `<p class="stats-empty">${esc(emptyText)}</p>`;
   const max = Math.max(...rows.map((r) => r.value), 1);
   return rows
-    .map(
-      (r) => `<div class="stats-row"${r.hint ? ` title="${esc(r.hint)}"` : ''}>
+    .map((r) => {
+      const { attrs, cls } = actionAttrs(r.action, r.hint);
+      return `<div class="stats-row${cls}"${attrs}>
       <span class="stats-row__label">${esc(r.label)}</span>
       <span class="stats-bar"><i data-w="${Math.max(r.value > 0 ? 2 : 0, (r.value / max) * 100)}" data-bg="${r.color}"></i></span>
       <span class="stats-row__value">${esc(r.display)}</span>
-    </div>`,
-    )
+    </div>`;
+    })
     .join('');
 }
 
-/** Like barRows(), but each bar is split in two parts: rows = [{ label, first, second, display }], colors fixed (sent / received). */
+/** Like barRows(), but each bar is split in two parts: rows = [{ label, first, second, display, action? }], colors fixed (sent / received). */
 function splitBarRows(rows, emptyText) {
   if (!rows.length) return `<p class="stats-empty">${esc(emptyText)}</p>`;
   const max = Math.max(...rows.map((r) => r.first + r.second), 1);
   return rows
-    .map(
-      (r) => `<div class="stats-row stats-row--wide">
+    .map((r) => {
+      const { attrs, cls } = actionAttrs(r.action);
+      return `<div class="stats-row stats-row--wide${cls}"${attrs}>
       <span class="stats-row__label" title="${esc(r.label)}">${esc(r.label)}</span>
       <span class="stats-bar stats-bar--split"><i data-w="${(r.first / max) * 100}" data-bg="--md-cat-1"></i><i data-w="${(r.second / max) * 100}" data-bg="--md-cat-2"></i></span>
       <span class="stats-row__value">${esc(r.display)}</span>
-    </div>`,
-    )
+    </div>`;
+    })
     .join('');
 }
 
@@ -124,20 +156,21 @@ function kpi(label, value, sub = '', tone = '') {
 function tcpHealthCard(stats) {
   const t = stats.tcp;
   if (t.packets === 0) return card('TCP-Gesundheit', '<p class="stats-empty">Keine TCP-Pakete im Capture.</p>');
-  const row = (label, value, color, hint) => ({
+  const row = (label, value, color, hint, problem) => ({
     label,
     value,
     color,
     hint,
+    action: problem && value > 0 ? { facet: ['problem', problem] } : null,
     display: `${countFormat.format(value)} (${formatPercent(value, t.packets)})`,
   });
   const rows = [
-    row('Retransmits', t.retransmissions, '--pa-bad', `Segment mit bereits gesehener Sequenznummer erneut gesendet. Davon Fast Retransmits (nach 3 Dup-ACKs): ${countFormat.format(t.fastRetransmissions)}.`),
-    row('Dup-ACKs', t.duplicateAcks, '--pa-warn', 'Wiederholte ACKs auf dieselbe Sequenznummer – deutet auf ein fehlendes oder verspätetes Segment hin.'),
-    row('Lücken', t.lostSegments, '--pa-bad', 'Sequenznummer springt nach vorn: Segmente dazwischen fehlen im Capture (verloren oder am Messpunkt nicht gesehen).'),
-    row('Out-of-Order', t.outOfOrder, '--pa-warn', 'Segment traf kurz nach späteren Daten ein (< 3 ms) – Umsortierung im Netz statt erneutem Senden.'),
-    row('RST', t.resets, '--pa-bad', 'Verbindung wurde per Reset abgebrochen.'),
-    row('Zero-Window', t.zeroWindow, '--pa-warn', 'Empfänger meldet Fenstergröße 0 – er kommt mit der Datenmenge nicht hinterher.'),
+    row('Retransmits', t.retransmissions, '--pa-bad', `Segment mit bereits gesehener Sequenznummer erneut gesendet. Davon Fast Retransmits (nach 3 Dup-ACKs): ${countFormat.format(t.fastRetransmissions)}.`, 'retransmits'),
+    row('Dup-ACKs', t.duplicateAcks, '--pa-warn', 'Wiederholte ACKs auf dieselbe Sequenznummer – deutet auf ein fehlendes oder verspätetes Segment hin.', 'dupAcks'),
+    row('Lücken', t.lostSegments, '--pa-bad', 'Sequenznummer springt nach vorn: Segmente dazwischen fehlen im Capture (verloren oder am Messpunkt nicht gesehen).', 'gaps'),
+    row('Out-of-Order', t.outOfOrder, '--pa-warn', 'Segment traf kurz nach späteren Daten ein (< 3 ms) – Umsortierung im Netz statt erneutem Senden.', 'outOfOrder'),
+    row('RST', t.resets, '--pa-bad', 'Verbindung wurde per Reset abgebrochen.', 'resets'),
+    row('Zero-Window', t.zeroWindow, '--pa-warn', 'Empfänger meldet Fenstergröße 0 – er kommt mit der Datenmenge nicht hinterher.', 'zeroWindow'),
     row('Keep-Alives', t.keepAlives, '--md-outline', 'Keep-Alive-Probes, keine Fehler.'),
   ];
   const h = stats.handshakes;
@@ -154,6 +187,7 @@ function icmpCard(stats) {
     value: entry.packets,
     color: dangerTypes.has(`${entry.protocol}|${entry.type}`) ? '--pa-bad' : '--md-cat-3',
     display: countFormat.format(entry.packets),
+    action: { facet: ['icmp', `${entry.protocol}|${entry.type}|${entry.code}`] },
   }));
   const more = stats.icmp.length > rows.length ? `${stats.icmp.length - rows.length} weitere Typen nicht angezeigt.` : '';
   return card('ICMP-Typen', barRows(rows, 'Keine ICMP-Pakete im Capture.'), '', more);
@@ -176,6 +210,7 @@ function portsCard(stats, metric) {
     value: valueOf(entry, metric),
     color: entry.protocol === 'TCP' ? '--md-cat-1' : '--md-cat-2',
     display: formatValue(valueOf(entry, metric), metric),
+    action: { facet: ['port', `${entry.protocol}|${entry.port}`] },
   }));
   return card('Häufigste Ports', barRows(rows, 'Keine TCP-/UDP-Pakete im Capture.'), '', 'Als Dienst-Port gilt der jeweils niedrigere der beiden Ports.');
 }
@@ -194,6 +229,7 @@ function talkersCard(talkers, deviceIndex, metric) {
       label: labelOf(d.id),
       first: sentOf(d),
       second: receivedOf(d),
+      action: { devices: [d.id] },
       display: `${formatValue(sentOf(d) + receivedOf(d), metric)} (↑ ${formatValue(sentOf(d), metric)} · ↓ ${formatValue(receivedOf(d), metric)})`,
     }));
   const pairRows = [...talkers.pairs]
@@ -203,6 +239,7 @@ function talkersCard(talkers, deviceIndex, metric) {
       label: `${labelOf(p.a)} ⇄ ${labelOf(p.b)}`,
       value: valueOf(p, metric),
       color: '--md-outline',
+      action: { devices: [p.a, p.b] },
       display: formatValue(valueOf(p, metric), metric),
     }));
   const legend = `<p class="stats-card__summary"><span class="stats-swatch stats-swatch--inline" data-bg="--md-cat-1"></span> gesendet &nbsp; <span class="stats-swatch stats-swatch--inline" data-bg="--md-cat-2"></span> empfangen · Rangfolge nach ${metric === 'bytes' ? 'Datenvolumen' : 'Paketanzahl'} (Umschalter oben)</p>`;
@@ -213,26 +250,31 @@ function talkersCard(talkers, deviceIndex, metric) {
   return card('Top-Talker', body, 'stats-card--wide', 'Geräte, die nur als Ziel von Broadcast/Multicast auftauchen (z. B. 224.0.0.251), erscheinen ebenfalls – sie zählen als Empfänger.');
 }
 
-function tlsCard(stats) {
+/** `versionStats` / `cipherStats`: the same statistics without the TLS-version / cipher filter, so a filtered value can be joined by the others. */
+function tlsCard(stats, versionStats = stats, cipherStats = stats) {
   const tls = stats.tls;
   if (!tls) return '';
-  const versionRows = tls.versions.map((v) => ({
+  const versionTls = versionStats.tls || tls;
+  const cipherTls = cipherStats.tls || tls;
+  const versionRows = versionTls.versions.map((v) => ({
     label: v.name,
+    action: { facet: ['tlsVersion', v.name] },
     value: v.count,
     color: v.outdated ? '--pa-bad' : v.name === 'TLS 1.3' ? '--md-cat-2' : '--md-cat-1',
     hint: v.outdated ? 'Veraltet (RFC 8996): TLS 1.0/1.1 und SSL 3.0 sollten nicht mehr ausgehandelt werden.' : '',
-    display: `${countFormat.format(v.count)} (${formatPercent(v.count, tls.serverHellos)})`,
+    display: `${countFormat.format(v.count)} (${formatPercent(v.count, versionTls.serverHellos)})`,
   }));
   const qualityColor = { ok: '--md-cat-2', nopfs: '--pa-warn', weak: '--pa-bad' };
   const qualityHint = { ok: '', nopfs: 'Statischer RSA-Schlüsselaustausch: kein Forward Secrecy – mitgeschnittener Verkehr ist später entschlüsselbar, wenn der Server-Schlüssel bekannt wird.', weak: 'Kryptographisch gebrochen oder veraltet (RC4, 3DES).' };
-  const cipherRows = tls.ciphers.map((c) => ({
+  const cipherRows = cipherTls.ciphers.map((c) => ({
     label: c.name,
+    action: { facet: ['tlsCipher', c.name] },
     value: c.count,
     color: qualityColor[c.quality],
     hint: qualityHint[c.quality],
     display: countFormat.format(c.count),
   }));
-  const outdatedRows = tls.outdatedServers.map((s) => ({
+  const outdatedRows = versionTls.outdatedServers.map((s) => ({
     label: `${s.server} · ${s.name}`,
     value: s.count,
     color: '--pa-bad',
@@ -323,14 +365,17 @@ function l2Card(stats, metric, scoped = false) {
   return card('Layer-2-Protokolle', body, 'stats-card--wide', `${scoped ? 'Gilt für den gesamten Capture, nicht für die gefilterte Auswahl: Layer-2-Frames gehören zu keiner Verbindung. ' : ''}Nur was der Messpunkt sieht: Mirror-Ports und manche Netzwerkkarten filtern Steuerframes (STP, CDP, LLDP, LACP) heraus. Die Namen aus CDP/LLDP erscheinen zusätzlich als Beschriftung der Geräte, sofern deren Management-IP im Capture vorkommt.`);
 }
 
-function appleCard(stats, metric) {
+/** `groupStats`: the same statistics without the Apple-service filter, for the group lists. */
+function appleCard(stats, metric, groupStats = stats) {
   const a = stats.apple;
   if (!a) return '';
+  const groupApple = groupStats.apple || a;
   const total = metric === 'bytes' ? stats.decodedBytes : stats.decodedPackets;
   const appleValue = metric === 'bytes' ? a.bytes : a.packets;
   const summary = `<p class="stats-card__summary">Apple-Verkehr: <strong>${formatValue(appleValue, metric)}</strong> (${formatPercent(appleValue, total)} des Captures) · ${countFormat.format(a.clientCount)} ${a.clientCount === 1 ? 'Client' : 'Clients'}</p>`;
-  const groupRows = a.groups.map((g) => ({
+  const groupRows = groupApple.groups.map((g) => ({
     label: g.generic ? `${g.name} (herstellerübergreifend)` : g.name,
+    action: { facet: ['apple', g.name] },
     value: valueOf(g, metric),
     color: g.generic ? '--md-outline' : '--md-cat-1',
     hint: g.generic ? 'Bonjour/mDNS nutzen auch Drucker, Chromecast u. a.; nicht im Apple-Anteil enthalten.' : '',
@@ -338,9 +383,9 @@ function appleCard(stats, metric) {
   }));
   let body = summary + (groupRows.length ? barRows(groupRows, '') : '');
 
-  if (a.dnsGroups.length) {
+  if (groupApple.dnsGroups.length) {
     body += '<div class="stats-subtitle">DNS-Anfragen nach Apple-Dienst</div>';
-    body += barRows(a.dnsGroups.map((g) => ({ label: g.name, value: g.count, color: g.name === 'iCloud Private Relay' ? '--pa-warn' : '--md-cat-1', display: countFormat.format(g.count) })), '');
+    body += barRows(groupApple.dnsGroups.map((g) => ({ label: g.name, action: { facet: ['apple', g.name] }, value: g.count, color: g.name === 'iCloud Private Relay' ? '--pa-warn' : '--md-cat-1', display: countFormat.format(g.count) })), '');
   }
   if (a.mdnsServices.length) {
     body += '<div class="stats-subtitle">Bonjour-Dienste</div>';
@@ -363,14 +408,17 @@ function appleCard(stats, metric) {
 
 const RESOLVER_COLORS = { umbrella: '--md-cat-3', private: '--md-cat-1', google: '--pa-bad', cloudflare: '--pa-warn', quad9: '--pa-warn', adguard: '--pa-warn', cleanbrowsing: '--pa-warn', apple: '--md-cat-4', public: '--pa-warn' };
 
-function dnsServersCard(stats) {
+/** `providerStats`: the same statistics without the provider filter, for the list of providers. */
+function dnsServersCard(stats, providerStats = stats) {
   const r = stats.dnsServers;
   if (!r) return '';
+  const categories = (providerStats.dnsServers || r).categories;
   let body = '';
   if (r.categories.length) {
     body += '<div class="stats-subtitle">Genutzte DNS-Server nach Anbieter</div>';
-    body += barRows(r.categories.map((c) => ({
+    body += barRows(categories.map((c) => ({
       label: c.label,
+      action: { facet: ['dnsProvider', c.label] },
       value: c.queries,
       color: RESOLVER_COLORS[c.category] || '--md-outline',
       display: `${countFormat.format(c.queries)} Anfragen · ${countFormat.format(c.clients)} ${c.clients === 1 ? 'Client' : 'Clients'}`,
@@ -414,9 +462,19 @@ const RELAY_STATE = {
 };
 const RELAY_PROBLEM = { blockpage: 'Blockseiten-Antwort', errors: 'SERVFAIL/REFUSED', unanswered: 'ohne Antwort', slow: 'langsam (≥ 1 s)' };
 
-function relayCard(stats) {
+/** `outcomeStats`: the same statistics without the Private-Relay filter, for the list of answer kinds. */
+function relayCard(stats, outcomeStats = stats) {
   const relay = stats.relay;
   if (!relay) return '';
+  const outcomeNames = (outcomeStats.relay || relay).names;
+  const outcomeSum = (field) => outcomeNames.reduce((sum, n) => sum + n[field], 0);
+  const outcomeRows = [
+    ['Antwort NODATA', outcomeSum('nodata'), '--md-cat-2', 'nodata'],
+    ['Antwort NXDOMAIN', outcomeSum('nxdomain'), '--md-cat-2', 'nxdomain'],
+    ['Adressen geliefert', outcomeSum('addresses'), '--md-cat-1', 'addresses'],
+    ['Blockseiten-Antwort', outcomeSum('blockpage'), '--pa-bad', 'blockpage'],
+    ['SERVFAIL / REFUSED', outcomeSum('errors'), '--pa-bad', 'errors'],
+  ].map(([label, value, color, kind]) => ({ label, value, color, display: countFormat.format(value), action: value > 0 ? { facet: ['relay', kind] } : null }));
   const blockpages = relay.names.reduce((sum, n) => sum + n.blockpage, 0);
   const clientsBroken = relay.clients.filter((c) => c.state === 'broken' || c.problems.length > 0).length;
   const active = relay.clients.filter((c) => c.state === 'active').length;
@@ -458,21 +516,24 @@ function relayCard(stats) {
       ];
     }),
   );
-  const body = `${verdict}${summary}<div class="stats-subtitle">Abgefragte Relay-Namen</div>${nameTable}<div class="stats-subtitle">Clients</div>${clientTable}`;
+  const body = `${verdict}${summary}<div class="stats-subtitle">Antworten auf Relay-Namen</div>${barRows(outcomeRows, '')}<div class="stats-subtitle">Abgefragte Relay-Namen</div>${nameTable}<div class="stats-subtitle">Clients</div>${clientTable}`;
   return card('iCloud Private Relay', body, 'stats-card--wide', `Beobachtet werden mask.icloud.com, mask-h2.icloud.com, mask-api.icloud.com und mask.apple-dns.net (Quelle: Apple- und Cisco-Dokumentation sowie Problemanalyse vom 22.07.2026). „Relay aktiv“ heißt: Verkehr zu einer Adresse, die ein Relay-Name aufgelöst hat, oder TLS-ClientHello mit Relay-SNI – nur sichtbar, wenn die DNS-Antwort im Capture liegt. Die Blockseiten-Erkennung (146.112.0.0/16) ist eine Heuristik, Listenstand ${stats.classificationVersion}.`);
 }
 
-function dnsCard(stats) {
+/** `rcodeStats`: the same statistics without the answer-code filter, for the list of codes. */
+function dnsCard(stats, rcodeStats = stats) {
   const dns = stats.dns;
   if (!dns) return '';
+  const codeDns = rcodeStats.dns || dns;
   const failed = dns.rcodes.filter((r) => r.code !== 0).reduce((sum, r) => sum + r.count, 0);
   const rcodeColor = (code) => (code === 0 ? '--md-cat-2' : code === 3 ? '--pa-warn' : '--pa-bad');
-  const rcodeRows = dns.rcodes.slice(0, 8).map((r) => ({
+  const rcodeRows = codeDns.rcodes.slice(0, 8).map((r) => ({
     label: dnsRcodeName(r.code),
+    action: { facet: ['dnsRcode', String(r.code)] },
     value: r.count,
     color: rcodeColor(r.code),
     hint: r.code === 3 ? 'Der Name existiert nicht. Nicht immer ein Fehler, z. B. bei Suchdomain-Versuchen oder Reverse-Lookups.' : r.code === 2 ? 'Der Server konnte die Anfrage nicht beantworten (z. B. Upstream nicht erreichbar, DNSSEC-Fehler).' : r.code === 5 ? 'Der Server verweigert die Anfrage (ACL oder falscher Resolver).' : '',
-    display: `${countFormat.format(r.count)} (${formatPercent(r.count, dns.responses)})`,
+    display: `${countFormat.format(r.count)} (${formatPercent(r.count, codeDns.responses)})`,
   }));
   const nameRows = dns.failingNames.map((n) => ({
     label: `${n.name} · ${dnsRcodeName(n.rcode)}`,
@@ -539,17 +600,18 @@ function timelineCard(stats, metric) {
 function mtuFragmentationCard(stats) {
   const f = stats.fragmentation;
   const m = stats.mtu;
-  const countRow = (label, value, total, color, hint) => ({
+  const countRow = (label, value, total, color, hint, fragments = false) => ({
     label,
     value,
     color,
     hint,
+    action: fragments && value > 0 ? { facet: ['fragments', 'fragmentiert'] } : null,
     display: total ? `${countFormat.format(value)} (${formatPercent(value, total)})` : countFormat.format(value),
   });
   const fragRows = [
-    countRow('IPv4-Fragmente', f.ipv4Fragments, f.ipv4Packets, '--pa-bad', 'IPv4-Pakete, die Teil eines fragmentierten Datagramms sind (More-Fragments-Flag oder Fragment-Offset > 0). Prozentwert: Anteil an allen IPv4-Paketen.'),
-    countRow('IPv6-Fragmente', f.ipv6Fragments, f.ipv6Packets, '--pa-bad', 'IPv6-Pakete mit Fragment-Extension-Header. Prozentwert: Anteil an allen IPv6-Paketen.'),
-    countRow('Fragmentierte Datagramme', f.fragmentedDatagrams, 0, '--pa-warn', 'Anzahl der ersten Fragmente = Anzahl der fragmentierten Datagramme.'),
+    countRow('IPv4-Fragmente', f.ipv4Fragments, f.ipv4Packets, '--pa-bad', 'IPv4-Pakete, die Teil eines fragmentierten Datagramms sind (More-Fragments-Flag oder Fragment-Offset > 0). Prozentwert: Anteil an allen IPv4-Paketen.', true),
+    countRow('IPv6-Fragmente', f.ipv6Fragments, f.ipv6Packets, '--pa-bad', 'IPv6-Pakete mit Fragment-Extension-Header. Prozentwert: Anteil an allen IPv6-Paketen.', true),
+    countRow('Fragmentierte Datagramme', f.fragmentedDatagrams, 0, '--pa-warn', 'Anzahl der ersten Fragmente = Anzahl der fragmentierten Datagramme.', true),
     countRow('DF-Bit gesetzt (IPv4)', f.dontFragment, f.ipv4Packets, '--md-outline', '„Don\'t Fragment“: Router dürfen das Paket nicht fragmentieren und müssen bei zu großen Paketen ICMP „Fragmentation needed“ senden (Path-MTU-Discovery).'),
   ];
 
@@ -609,7 +671,10 @@ function scopeNote(scope) {
  * `scope` = { filtered, shown, total, unavailable }, `talkers` = { devices, pairs } for the same
  * connections as `stats`.
  */
-export function renderStats(container, { stats, globalStats, scope, metric, talkers, deviceIndex }) {
+export function renderStats(container, { stats, globalStats, scope, metric, talkers, deviceIndex, facets, extras }) {
+  activeFacets = facets || new Map();
+  // The statistics a filtered card shows: without the filter of its own dimension (when there is one).
+  const without = (dimension) => (extras && extras[dimension]) || stats;
   if (!stats) {
     container.innerHTML = '<p class="stats-empty">Keine Statistikdaten vorhanden.</p>';
     return;
@@ -648,20 +713,20 @@ export function renderStats(container, { stats, globalStats, scope, metric, talk
   );
 
   container.innerHTML = `
-    <p class="stats-scope">${esc(scopeNote(scope))}</p>
+    <p class="stats-scope">${esc(scopeNote(scope))} Ein Klick auf eine Zeile setzt den passenden Filter, bei Top-Talkern die Geräteauswahl.</p>
     <div class="stats-kpis">${kpis}</div>
     <div class="stats-grid">
       ${distribution}
       ${talkers ? talkersCard(talkers, deviceIndex, metric) : ''}
-      ${tcpHealthCard(stats)}
-      ${icmpCard(stats)}
+      ${tcpHealthCard(without('problem'))}
+      ${icmpCard(without('icmp'))}
       ${flagsCard(stats)}
-      ${portsCard(stats, metric)}
-      ${dnsCard(stats)}
-      ${dnsServersCard(stats)}
-      ${relayCard(stats)}
-      ${appleCard(stats, metric)}
-      ${tlsCard(stats)}
+      ${portsCard(without('port'), metric)}
+      ${dnsCard(stats, without('dnsRcode'))}
+      ${dnsServersCard(stats, without('dnsProvider'))}
+      ${relayCard(stats, without('relay'))}
+      ${appleCard(stats, metric, without('apple'))}
+      ${tlsCard(stats, without('tlsVersion'), without('tlsCipher'))}
       ${l2Card(globalStats || stats, metric, Boolean(scope && scope.filtered))}
       ${sizesCard(stats, metric)}
       ${mtuFragmentationCard(stats)}

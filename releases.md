@@ -19,6 +19,9 @@ Phase 0 und 1 des Plans „Filter, Facetten, Statistik nach Auswahl“ (siehe `f
 - **PCAP-Export mit Filtern (Phase 3):** Der Export enthält die Pakete der aktuell sichtbaren Verbindungen – Geräteauswahl, Protokoll-Chips, „Nur Probleme“, Multicast/Broadcast und weitere Filter (die Adressfamilie gilt wie bei der Statistik nicht). Der Dialog nennt vorab Paket- und Verbindungsanzahl und sperrt „Exportieren“, wenn nichts passt.
 - **Tests:** `tests/export.test.js` (6 weitere Fälle, zusammen 33) prüft: Export aller Verbindungen = alle Pakete mit Verbindung, Teilmengen, Layer-2-Frames fehlen, „Ohne Payload“ kürzt, leerer Scope, Fehlerfall ohne Datei.
 
+- **Klick-Filter aus der Statistik (Phase 4):** Zeilen der Statistik-Karten setzen Filter-Chips (Problemarten, ICMP-Typen, Ports, DNS-Antwortcodes, DNS-Anbieter, Antworten auf Relay-Namen, Apple-Dienste, TLS-Versionen, Cipher Suites, Fragmente); aktive Werte sind mit ✓ markiert, auch per Tastatur (Tab, Enter/Leertaste) bedienbar. Top-Talker-Geräte setzen die Geräteauswahl (Gerät und Kommunikationspartner), Gerätepaare genau die zwei Geräte. Die Karte eines aktiven Filters zeigt die Werte ohne ihren eigenen Filter – dafür berechnet der Worker im selben Durchlauf zusätzliche Statistiken (`extras` in der `scope`-Nachricht).
+- **Tests:** ein weiterer Fall in `tests/scope.test.js` (zusammen 34): Zusatz-Scopes im selben Durchlauf = eigene Anfragen.
+
 ### Changed
 
 - **PCAP-Export ohne erneutes Auswählen der Datei:** Der Parse-Worker baut die Datei aus der von ihm behaltenen Capture (`{type:'export'}`); Upload und Prüfsummen-Schritt entfallen. Nur Captures über 1 GiB nutzen weiter den bisherigen Weg (Original-Datei erneut wählen, Prüfsumme, `pcap-export.worker.js`).

@@ -26,6 +26,7 @@ import {
   createFacetState,
   facetEntries,
   facetPredicate,
+  facetsWithout,
   hasFacets,
   isFacetActive,
   toggleFacet,
@@ -692,6 +693,60 @@ el.facetMenu.addEventListener('click', (e) => {
 });
 el.btnResetFilters.addEventListener('click', resetFilters);
 
+// --- Clicks on the statistics ----------------------------------------------------------
+//
+// Rows of the statistics cards are controls (see actionAttrs() in stats-view.js): a value row
+// toggles its filter facet, a Top-Talker row sets the sidebar selection - one device selects it
+// together with its communication partners (like starting a fresh selection in the sidebar), a
+// pair selects just those two devices.
+
+let pendingStatsFocus = null;
+
+function selectDevicesFromStats(a, b) {
+  state.selectedIds = b ? new Set([a, b]) : new Set([a, ...relatedDeviceIds(state.pairs, a)]);
+  renderDeviceList();
+  renderPortList();
+  renderActiveView();
+}
+
+function activateStatsRow(row, viaKeyboard) {
+  if (row.dataset.facetDimension) {
+    if (viaKeyboard) pendingStatsFocus = { dimension: row.dataset.facetDimension, value: row.dataset.facetValue };
+    toggleFacetValue(row.dataset.facetDimension, row.dataset.facetValue);
+  } else if (row.dataset.selectA) {
+    if (viaKeyboard) pendingStatsFocus = { selectA: row.dataset.selectA, selectB: row.dataset.selectB || '' };
+    selectDevicesFromStats(row.dataset.selectA, row.dataset.selectB || null);
+  }
+}
+
+/** The statistics are redrawn after an action; a keyboard user keeps their place. */
+function restoreStatsFocus() {
+  const wanted = pendingStatsFocus;
+  if (!wanted) return;
+  pendingStatsFocus = null;
+  for (const row of el.statsContainer.querySelectorAll('.stats-row.is-action')) {
+    const same = wanted.dimension
+      ? row.dataset.facetDimension === wanted.dimension && row.dataset.facetValue === wanted.value
+      : row.dataset.selectA === wanted.selectA && (row.dataset.selectB || '') === wanted.selectB;
+    if (same) {
+      row.focus();
+      return;
+    }
+  }
+}
+
+el.statsContainer.addEventListener('click', (e) => {
+  const row = e.target.closest('.stats-row.is-action');
+  if (row) activateStatsRow(row, false);
+});
+el.statsContainer.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const row = e.target.closest('.stats-row.is-action');
+  if (!row) return;
+  e.preventDefault();
+  activateStatsRow(row, true);
+});
+
 // The menu hangs below the "+ Filter" button instead of the design system's default (top right).
 el.facetMenu.addEventListener('beforetoggle', (e) => {
   if (e.newState !== 'open') return;
@@ -836,8 +891,24 @@ const SCOPE_CACHE_LIMIT = 8;
 const SCOPE_LOADING_DELAY_MS = 150;
 
 /** The connections that pass the selection and all filters - the scope of the statistics and of the PCAP export. */
-function getScopeConnections() {
-  return computeVisibleConnections(state.connections, state.selectedIds, state.activeGroups, state.hideMulticast, state.onlyProblems, facetPredicate(state.facets));
+function getScopeConnections(facets = state.facets) {
+  return computeVisibleConnections(state.connections, state.selectedIds, state.activeGroups, state.hideMulticast, state.onlyProblems, facetPredicate(facets));
+}
+
+// Dimensions whose statistics card lists the values of that dimension. While such a filter is
+// active the card shows the numbers without it (computed in the same worker pass), so the other
+// values stay visible and can be added to the filter.
+const STATS_FACET_DIMENSIONS = new Set(['port', 'problem', 'tlsVersion', 'tlsCipher', 'icmp', 'dnsRcode', 'dnsProvider', 'relay', 'apple']);
+
+/** For each active dimension with a card: the connections that pass everything except that dimension's filter (only when that differs from `connections`). */
+function getExtraScopes(connections) {
+  const extraScopes = {};
+  for (const dimension of state.facets.keys()) {
+    if (!STATS_FACET_DIMENSIONS.has(dimension)) continue;
+    const widened = getScopeConnections(facetsWithout(state.facets, dimension));
+    if (widened.length !== connections.length) extraScopes[dimension] = widened;
+  }
+  return extraScopes;
 }
 
 /** Cheap fingerprint of an ordered list of connections (count + FNV-1a over the keys). */
@@ -855,7 +926,7 @@ function scopeSignature(connections) {
   return `${connections.length}:${(hash >>> 0).toString(16)}`;
 }
 
-function showStats(stats, scope, pairs) {
+function showStats(stats, scope, pairs, extras = {}) {
   el.statsContainer.classList.remove('is-loading');
   el.statsContainer.removeAttribute('aria-busy');
   renderStats(el.statsContainer, {
@@ -865,7 +936,10 @@ function showStats(stats, scope, pairs) {
     metric: state.metric,
     talkers: { devices: computeDeviceTraffic(pairs), pairs },
     deviceIndex: state.deviceIndex,
+    facets: state.facets,
+    extras,
   });
+  restoreStatsFocus();
 }
 
 function renderStatsTab() {
@@ -884,17 +958,20 @@ function renderStatsTab() {
     return;
   }
 
-  const signature = scopeSignature(connections);
+  const extraScopes = getExtraScopes(connections);
+  const signature = [scopeSignature(connections), ...Object.entries(extraScopes).map(([dimension, list]) => `${dimension}=${scopeSignature(list)}`)].join('+');
   state.latestScopeSignature = signature;
   const cached = state.scopeCache.get(signature);
   if (cached) {
-    showStats(cached, scope, derivePairs(connections));
+    showStats(cached.stats, scope, derivePairs(connections), cached.extras);
     return;
   }
 
   const requestId = ++state.scopeRequestCounter;
   state.scopeRequests.set(requestId, signature);
-  worker.postMessage({ type: 'scope', requestId, keys: connections.map((c) => c.key) });
+  const extraKeys = {};
+  for (const [dimension, list] of Object.entries(extraScopes)) extraKeys[dimension] = list.map((c) => c.key);
+  worker.postMessage({ type: 'scope', requestId, keys: connections.map((c) => c.key), extras: extraKeys });
   el.statsContainer.setAttribute('aria-busy', 'true');
   if (el.statsContainer.childElementCount === 0) {
     el.statsContainer.innerHTML = '<div class="busy"><div class="spinner"></div> Statistik wird berechnet …</div>';
@@ -909,7 +986,7 @@ function onScopedStats(msg) {
   const signature = state.scopeRequests.get(msg.requestId);
   state.scopeRequests.delete(msg.requestId);
   if (!signature) return;
-  state.scopeCache.set(signature, msg.stats);
+  state.scopeCache.set(signature, { stats: msg.stats, extras: msg.extras || {} });
   while (state.scopeCache.size > SCOPE_CACHE_LIMIT) state.scopeCache.delete(state.scopeCache.keys().next().value);
   if (state.activeTab === 'stats' && signature === state.latestScopeSignature) renderActiveView();
 }

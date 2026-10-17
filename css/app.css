@@ -358,6 +358,12 @@
 
 .stats-subtitle { margin: 12px 0 4px; font-size: var(--fs-xs); font-weight: 600; }
 .stats-row { display: grid; grid-template-columns: 210px 1fr 110px; align-items: center; gap: 8px; padding: 3px 0; font-size: var(--fs-xs); }
+/* Rows that are controls: a filter value (✓ when active) or a Top-Talker selection. */
+.stats-row.is-action { cursor: pointer; border-radius: 6px; margin: 0 -6px; padding: 3px 6px; }
+.stats-row.is-action:hover { background: var(--md-surface-2); }
+.stats-row.is-action:focus-visible { outline: 2px solid var(--md-primary); outline-offset: -2px; }
+.stats-row[aria-pressed="true"] { background: var(--md-surface-3); font-weight: 600; }
+.stats-row[aria-pressed="true"] .stats-row__label::before { content: '✓ '; color: var(--md-primary); }
 .stats-row__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stats-row__value { text-align: right; color: var(--md-on-surface-variant); font-variant-numeric: tabular-nums; }
 .stats-row--wide { grid-template-columns: 210px 1fr 230px; }

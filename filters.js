@@ -142,6 +142,13 @@ export function connectionMatchesFacets(connection, facets) {
   return true;
 }
 
+/** A copy of the active facets without one dimension - "everything except this card's own filter". */
+export function facetsWithout(facets, dimension) {
+  const copy = new Map(facets);
+  copy.delete(dimension);
+  return copy;
+}
+
 /** Predicate for computeVisibleConnections(), or null when no facet is active. */
 export function facetPredicate(facets) {
   return hasFacets(facets) ? (connection) => connectionMatchesFacets(connection, facets) : null;

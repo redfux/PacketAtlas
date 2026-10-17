@@ -408,21 +408,28 @@ function processBuffer(buffer) {
 /**
  * Statistics for just the packets of the given connections (`keys`, see connectionKeyOf()),
  * exactly as the full pass would have computed them had the capture contained nothing else.
- * Layer-2 control frames belong to no connection and are therefore never part of a scope.
+ * `extras` ({ name: keys }) asks for further such sets in the same pass over the file - the
+ * statistics page uses them to show a card's distribution without the filter of its own
+ * dimension, so a clicked value can be joined by its siblings. Layer-2 control frames belong
+ * to no connection and are therefore never part of a scope.
  * A newer request makes an older one stop at its next yield - the user has already moved on.
  */
-async function computeScopedStats({ requestId, keys }) {
+async function computeScopedStats({ requestId, keys, extras }) {
   latestScopeRequest = requestId;
   const buffer = retainedBuffer;
   if (!buffer) throw new Error('Die Datei wird nicht mehr im Speicher gehalten.');
-  const scope = new Set(keys);
-  const stats = new TrafficStats();
+  const targets = [{ name: null, keys: new Set(keys), stats: new TrafficStats() }];
+  for (const [name, list] of Object.entries(extras || {})) targets.push({ name, keys: new Set(list), stats: new TrafficStats() });
   let processed = 0;
   for (const frame of parseFrames(buffer)) {
     const decoded = decodeFrame(buffer, frame.offset, frame.length, frame.linkType, frame.timestamp, frame.origLen);
     if (decoded) {
       const key = connectionKeyOf(decoded);
-      if (key !== null && scope.has(key)) analysePacket(buffer, frame, decoded, stats, {}, null);
+      if (key !== null) {
+        for (const target of targets) {
+          if (target.keys.has(key)) analysePacket(buffer, frame, decoded, target.stats, {}, null);
+        }
+      }
     }
     if (++processed % SCOPE_YIELD_EVERY === 0) {
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -430,8 +437,13 @@ async function computeScopedStats({ requestId, keys }) {
     }
   }
   if (latestScopeRequest !== requestId) return;
-  const result = stats.toResult();
-  self.postMessage({ type: 'scopedStats', requestId, stats: { ...result, totalPackets: result.decodedPackets } });
+  const finish = (stats) => {
+    const result = stats.toResult();
+    return { ...result, totalPackets: result.decodedPackets };
+  };
+  const extraResults = {};
+  for (const target of targets) if (target.name !== null) extraResults[target.name] = finish(target.stats);
+  self.postMessage({ type: 'scopedStats', requestId, stats: finish(targets[0].stats), extras: extraResults });
 }
 
 /**

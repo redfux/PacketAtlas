@@ -50,6 +50,19 @@ export function register(test) {
     assert.equal(reply.stats.icmp.length, 0);
   });
 
+  test('Zusatz-Scopes im selben Durchlauf ergeben dieselbe Statistik wie eigene Anfragen', async () => {
+    const session = createWorkerSession();
+    const result = session.parse(FIXTURES.quality());
+    const all = result.connections.map((c) => c.key);
+    const tcp = result.connections.filter((c) => c.protocol === 'TCP').map((c) => c.key);
+    const flow = ['10.0.0.1|10.0.0.3|TCP|5001'];
+    const combined = await session.scope(flow, { tcp, alle: all });
+    assert.deepStrictEqual(combined.stats, (await session.scope(flow)).stats);
+    assert.deepStrictEqual(combined.extras.tcp, (await session.scope(tcp)).stats);
+    assert.deepStrictEqual(combined.extras.alle, (await session.scope(all)).stats);
+    assert.deepStrictEqual(Object.keys((await session.scope(flow)).extras), []);
+  });
+
   test('ein leerer Scope liefert eine leere Statistik statt eines Fehlers', async () => {
     const { reply } = await parsedWithScope(FIXTURES.quality, () => []);
     assert.equal(reply.type, 'scopedStats');

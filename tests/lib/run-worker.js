@@ -60,14 +60,14 @@ export function createWorkerSession() {
       return plain(messages.find((m) => m.type === 'result'));
     },
     /** Sends a scope request; `promise` resolves with the reply, `requestId` identifies it. */
-    startScope(keys) {
+    startScope(keys, extras) {
       const requestId = nextRequestId++;
-      self.onmessage({ data: { type: 'scope', requestId, keys } });
+      self.onmessage({ data: { type: 'scope', requestId, keys, extras } });
       const promise = waitFor((m) => (m.type === 'scopedStats' || m.type === 'scopeError') && m.requestId === requestId).then(plain);
       return { requestId, promise };
     },
-    scope(keys) {
-      return this.startScope(keys).promise;
+    scope(keys, extras) {
+      return this.startScope(keys, extras).promise;
     },
     /** Asks for the filtered .pcap of `keys`; resolves with the worker's reply (exportResult or exportError). */
     exportPcap(keys, payloadMode = 'full') {
