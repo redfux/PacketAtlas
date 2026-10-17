@@ -1,6 +1,6 @@
 /* ==========================================================================
    Design System — Components
-   Version: 3.1.0
+   Version: 3.1.1
    Stand: 17.10.2026
 
    Material Design 3 inspired components using semantic tokens from
@@ -1042,6 +1042,11 @@ tr.editing input.invalid { border-color: var(--md-error); }
   color: var(--md-on-surface);
   border-color: transparent;
 }
+/* Hover only frames the chip. The general button hover (brightness) would
+   bleach the pressed ground until it looks unpressed — and on touch screens
+   the hover state sticks after a tap. */
+.chip:hover:not(:disabled) { filter: none; border-color: var(--md-outline); }
+.chip[aria-pressed="true"]:hover:not(:disabled) { border-color: var(--md-outline); }
 
 /* Status dot, e.g. for a sync or connection indicator. */
 .dot {

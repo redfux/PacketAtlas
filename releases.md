@@ -21,6 +21,10 @@ Neue Oberfläche auf Basis eines gemeinsamen Design Systems (Material-Design-3-G
 - Export-Menü und PCAP-Dialog nutzen native Browser-Elemente (Popover, `<dialog>`): Escape und Klick daneben schließen sie; ein laufender PCAP-Export wird beim Schließen beendet.
 - Projektdateien: `style.css` → `css/app.css` (nur noch PacketAtlas-Eigenes, ausschließlich Design-Tokens); neu `css/design-tokens.css`, `css/design-components.css`, `js/design-system.js`, `icons/`. `bump-version.sh` versieht auch diese Dateien mit `?v=`.
 
+### Fixed
+
+- Protokoll- und Filter-Chips sahen nach dem Wiedereinschalten noch aus wie ausgeschaltet, solange der Zeiger darauf stand (am Handy bis zum nächsten Tippen) – behoben im Design System 3.1.1 (Hover hellt gedrückte Chips nicht mehr auf).
+
 ### Removed
 
 - Selbst gehostete Schriften (`fonts/`: Roboto, Material Symbols). Text nutzt die Systemschrift, Icons sind ein Inline-SVG-Sprite.
