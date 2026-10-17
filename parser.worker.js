@@ -28,38 +28,8 @@ importScripts(
   `tls-parser.js?v=${WORKER_VERSION}`,
   `l2-parser.js?v=${WORKER_VERSION}`,
   `classification.js?v=${WORKER_VERSION}`,
+  `capture-scope.js?v=${WORKER_VERSION}`,
 );
-
-function pairKey(idA, idB) {
-  return idA < idB ? `${idA}|${idB}` : `${idB}|${idA}`;
-}
-
-/**
- * The "service port" of a packet, used to correlate both directions of a
- * connection (client's ephemeral source port vs. the server's port) into one
- * entry: the lower of the two port numbers is almost always the server side.
- * Not a perfect heuristic, but correct for the vast majority of real traffic
- * and good enough for a human-facing "which ports do these devices talk
- * over" breakdown rather than an exact per-flow reconstruction.
- */
-function servicePortOf(decoded) {
-  if (decoded.srcPort == null || decoded.dstPort == null) return null;
-  return Math.min(decoded.srcPort, decoded.dstPort);
-}
-
-/**
- * Identity of the connection a packet belongs to (device pair + protocol + service
- * port), or null for frames that belong to none: layer-2 control frames, frames
- * without addresses and self-talk. The Aggregator files packets under exactly this
- * key, and the scoped statistics (see computeScopedStats()) select packets by it.
- */
-function connectionKeyOf(decoded) {
-  if (decoded.protocol === 'L2') return null;
-  const srcId = decoded.srcIp || decoded.srcMac;
-  const dstId = decoded.dstIp || decoded.dstMac;
-  if (!srcId || !dstId || srcId === dstId) return null;
-  return `${pairKey(srcId, dstId)}|${decoded.protocol}|${servicePortOf(decoded)}`;
-}
 
 // Per pair / connection TCP quality counters (see traffic-stats.js for how the
 // events are detected). `problemTimes` (timestamps of retransmits/gaps/resets/
@@ -345,18 +315,16 @@ self.onmessage = (event) => {
     });
     return;
   }
+  if (data.type === 'export') {
+    exportScope(data);
+    return;
+  }
   try {
     processBuffer(data.buffer);
   } catch (err) {
     self.postMessage({ type: 'error', message: (err && (err.message || String(err))) || 'Unbekannter Parsing-Fehler.' });
   }
 };
-
-function parseFrames(buffer) {
-  if (isPcapng(buffer)) return parsePcapng(buffer);
-  if (isClassicPcap(buffer)) return parsePcap(buffer);
-  throw new Error('Datei ist weder ein gültiges pcap- noch pcapng-Format (Magic Number nicht erkannt).');
-}
 
 /**
  * Everything the analysers take from one decoded packet: TrafficStats counters, TLS
@@ -464,4 +432,20 @@ async function computeScopedStats({ requestId, keys }) {
   if (latestScopeRequest !== requestId) return;
   const result = stats.toResult();
   self.postMessage({ type: 'scopedStats', requestId, stats: { ...result, totalPackets: result.decodedPackets } });
+}
+
+/**
+ * Builds the filtered .pcap for the packets of the given connections (`keys`) from the kept
+ * capture. Runs in one go - an export is a deliberate, one-off action and takes a moment
+ * even for large captures (progress is reported).
+ */
+function exportScope({ requestId, keys, payloadMode }) {
+  try {
+    const buffer = retainedBuffer;
+    if (!buffer) throw new Error('Die Datei wird nicht mehr im Speicher gehalten.');
+    const result = buildFilteredPcap(buffer, keys, payloadMode, (percent) => self.postMessage({ type: 'exportProgress', requestId, percent }));
+    self.postMessage({ type: 'exportResult', requestId, ...result }, [result.buffer]);
+  } catch (err) {
+    self.postMessage({ type: 'exportError', requestId, message: (err && (err.message || String(err))) || 'Unbekannter Fehler beim PCAP-Export.' });
+  }
 }

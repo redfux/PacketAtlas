@@ -69,6 +69,12 @@ export function createWorkerSession() {
     scope(keys) {
       return this.startScope(keys).promise;
     },
+    /** Asks for the filtered .pcap of `keys`; resolves with the worker's reply (exportResult or exportError). */
+    exportPcap(keys, payloadMode = 'full') {
+      const requestId = nextRequestId++;
+      self.onmessage({ data: { type: 'export', requestId, keys, payloadMode } });
+      return waitFor((m) => (m.type === 'exportResult' || m.type === 'exportError') && m.requestId === requestId);
+    },
   };
 }
 

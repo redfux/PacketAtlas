@@ -83,12 +83,13 @@ const state = {
   graphSimulation: null,
   activeSvg: null,
   pinnedItems: [], // { id, type: 'pair'|'connection'|'device', data, deviceA, deviceB }
-  // Original capture bytes are NOT kept in memory for the whole session (only
-  // the aggregated device/pair/connection model is) - originalFileHash lets a
-  // later PCAP export verify a re-uploaded file is byte-identical before
-  // trusting it; originalFileBuffer caches that file only once it's been
-  // verified once, so re-exporting later in the same session doesn't need
-  // another re-upload. Both reset on a new capture import.
+  // The main thread never keeps the capture bytes: the parse worker holds them (scopeAvailable)
+  // and serves statistics and PCAP export from there. Only for captures too large for that does
+  // the export fall back to a re-upload: originalFileHash lets it verify the re-uploaded file is
+  // byte-identical before trusting it; originalFileBuffer caches that file once verified, so
+  // re-exporting later in the same session doesn't need another re-upload. Reset on a new import.
+  exportRequestCounter: 0,
+  activeExportId: null,
   originalFileHash: null,
   originalFileName: null,
   originalFileBuffer: null,
@@ -256,6 +257,8 @@ function handleWorkerMessage(event) {
     onScopedStats(msg);
   } else if (msg.type === 'scopeError') {
     onScopeError(msg);
+  } else if (msg.type === 'exportProgress' || msg.type === 'exportResult' || msg.type === 'exportError') {
+    onExportMessage(msg);
   }
 }
 
@@ -274,6 +277,7 @@ function onParseComplete(msg) {
   state.facetOptions = collectFacetOptions(state.connections);
   state.stats = msg.stats;
   state.scopeAvailable = Boolean(msg.scopeAvailable);
+  state.activeExportId = null;
   state.scopeCache.clear();
   state.scopeRequests.clear();
   state.latestScopeSignature = null;
@@ -571,8 +575,6 @@ el.toggleHideBroadcast.addEventListener('click', () => {
   renderActiveView();
 });
 
-// Not applied to the PCAP export (its worker re-derives the filter from the raw
-// capture and has no notion of per-connection quality), only to the views and the Excel export.
 el.toggleOnlyProblems.addEventListener('click', () => setOnlyProblems(!state.onlyProblems));
 
 // --- Extra filters (facets) ---------------------------------------------------
@@ -833,7 +835,8 @@ function getVisibleConnections(familyIds, order, onlyProblems = state.onlyProble
 const SCOPE_CACHE_LIMIT = 8;
 const SCOPE_LOADING_DELAY_MS = 150;
 
-function getStatsScopeConnections() {
+/** The connections that pass the selection and all filters - the scope of the statistics and of the PCAP export. */
+function getScopeConnections() {
   return computeVisibleConnections(state.connections, state.selectedIds, state.activeGroups, state.hideMulticast, state.onlyProblems, facetPredicate(state.facets));
 }
 
@@ -866,7 +869,7 @@ function showStats(stats, scope, pairs) {
 }
 
 function renderStatsTab() {
-  const connections = getStatsScopeConnections();
+  const connections = getScopeConnections();
   const total = state.connections.length;
   el.filterCount.textContent = `${connections.length.toLocaleString('de-DE')} von ${total.toLocaleString('de-DE')} Verbindungen`;
   const scope = { filtered: connections.length !== total, shown: connections.length, total, unavailable: false };
@@ -1332,15 +1335,15 @@ el.exportPinnedXlsx.addEventListener('click', () => {
   exportSelectionToExcel({ items: state.pinnedItems, deviceIndex: state.deviceIndex, filenameBase: 'packetatlas-angeheftete-auswahl' });
 });
 
-// --- PCAP export (filtered re-export of the original capture) --------------------
+// --- PCAP export (filtered re-export of the capture) ------------------------------
 //
-// The original capture bytes aren't kept in memory for the whole session (see
-// startParsing()), so building a filtered .pcap needs the user to provide the
-// file again. Its SHA-256 (computed at import time) is compared against the
-// re-uploaded file to catch the wrong file being picked by mistake - this is
-// NOT a security boundary, just user-error prevention, hence a fast native
-// hash rather than anything more elaborate. Once verified, the buffer is
-// cached for the rest of the session so later exports need no re-upload.
+// The export holds the packets of the connections that pass the selection and all filters (the
+// same scope as the statistics; Layer-2 control frames belong to no connection and are left
+// out). Normally the parse worker rebuilds the file from the capture it keeps. Only for
+// captures too large to be kept does the export fall back to the user providing the file again:
+// its SHA-256 (computed at import time) is compared against the re-uploaded file to catch the
+// wrong file being picked by mistake - NOT a security boundary, just user-error prevention,
+// hence a fast native hash. Once verified, the buffer is cached for the rest of the session.
 
 let pcapExportWorker = null;
 
@@ -1362,18 +1365,37 @@ function completePcapStep(labelEl, fillEl, checkEl, label) {
   checkEl.hidden = false;
 }
 
-/** Restores the dialog's "waiting for input" state - the appropriate one (re-upload vs. cached buffer) for whatever state.originalFileBuffer currently holds. Used both when first opening the dialog and after an error, so the user can immediately retry. */
-function showPcapAwaitingInput(introText) {
+/** What the export would contain right now: keys of the scope connections and their size. */
+function currentExportScope() {
+  const connections = getScopeConnections();
+  return {
+    keys: connections.map((connection) => connection.key),
+    connections: connections.length,
+    packets: connections.reduce((sum, connection) => sum + connection.packets, 0),
+  };
+}
+
+function exportScopeSummary(scope) {
+  if (scope.connections === 0) return 'Die aktuelle Auswahl enthält keine Verbindungen – es gibt nichts zu exportieren.';
+  const connections = scope.connections.toLocaleString('de-DE');
+  return `Exportiert werden ${scope.packets.toLocaleString('de-DE')} Pakete aus ${connections} ${scope.connections === 1 ? 'Verbindung' : 'Verbindungen'} – die aktuelle Auswahl mit allen Filtern.`;
+}
+
+/** Restores the dialog's "waiting for input" state: ready to export (capture kept by the worker, or file cached) or asking for the original file. Used when opening the dialog and after an error, so the user can retry right away. */
+function showPcapAwaitingInput() {
   el.pcapExportProgress.hidden = true;
   el.pcapExportSuccess.hidden = true;
-  const hasCachedBuffer = state.originalFileBuffer != null;
-  el.pcapUploadSection.hidden = hasCachedBuffer;
+  const scope = currentExportScope();
+  const hasCachedBuffer = !state.scopeAvailable && state.originalFileBuffer != null;
+  const ready = state.scopeAvailable || hasCachedBuffer;
+  el.pcapUploadSection.hidden = ready;
   el.pcapCachedSection.hidden = !hasCachedBuffer;
-  el.pcapExportConfirm.hidden = !hasCachedBuffer;
+  el.pcapExportConfirm.hidden = !ready;
+  el.pcapExportConfirm.disabled = scope.connections === 0;
   el.pcapExportIntro.hidden = false;
-  el.pcapExportIntro.textContent = introText || (hasCachedBuffer
-    ? 'Wähle, was exportiert werden soll.'
-    : 'Wähle die Original-Capture-Datei erneut aus. Nur die aktuell gefilterten Verbindungen werden exportiert.');
+  el.pcapExportIntro.textContent = ready || scope.connections === 0
+    ? exportScopeSummary(scope)
+    : `${exportScopeSummary(scope)} Die Datei ist zu groß, um im Speicher gehalten zu werden – wähle die Original-Capture-Datei erneut aus.`;
 }
 
 function openPcapExportDialog() {
@@ -1392,8 +1414,10 @@ function closePcapExportDialog() {
   if (el.pcapExportOverlay.open) el.pcapExportOverlay.close();
 }
 
-// Runs for every way of closing (button, backdrop, Escape): stop a running export.
+// Runs for every way of closing (button, backdrop, Escape): stop a running export (the fallback
+// worker is terminated; the parse worker finishes its run, the result is ignored).
 el.pcapExportOverlay.addEventListener('close', () => {
+  state.activeExportId = null;
   if (pcapExportWorker) {
     pcapExportWorker.terminate();
     pcapExportWorker = null;
@@ -1422,13 +1446,32 @@ async function handlePcapReupload(file) {
     }
     completePcapStep(el.pcapStepHashLabel, el.pcapStepHashFill, el.pcapStepHashCheck, 'Prüfsumme stimmt überein.');
     state.originalFileBuffer = buffer;
-    runPcapExport(buffer);
+    runPcapExport();
   } catch {
     showPcapExportError('Die Datei konnte nicht gelesen werden.');
   }
 }
 
-function runPcapExport(buffer) {
+function showPcapExportSuccess(msg) {
+  completePcapStep(el.pcapStepBuildLabel, el.pcapStepBuildFill, el.pcapStepBuildCheck, 'PCAP-Datei erstellt.');
+  downloadPcapResult(msg);
+  el.pcapExportSuccess.hidden = false;
+  el.pcapExportCancel.textContent = 'Schließen';
+}
+
+/** Replies of the parse worker to an export request; stale ones (dialog closed meanwhile) are ignored. */
+function onExportMessage(msg) {
+  if (msg.requestId !== state.activeExportId) return;
+  if (msg.type === 'exportProgress') {
+    el.pcapStepBuildFill.style.setProperty('--w', `${msg.percent}%`);
+    return;
+  }
+  state.activeExportId = null;
+  if (msg.type === 'exportError') showPcapExportError(msg.message);
+  else showPcapExportSuccess(msg);
+}
+
+function runPcapExport() {
   el.pcapExportError.hidden = true;
   el.pcapUploadSection.hidden = true;
   el.pcapCachedSection.hidden = true;
@@ -1439,6 +1482,15 @@ function runPcapExport(buffer) {
   el.pcapStepBuild.hidden = false;
   resetPcapStep(el.pcapStepBuildLabel, el.pcapStepBuildFill, el.pcapStepBuildCheck, 'PCAP-Datei wird erstellt …');
 
+  const { keys } = currentExportScope();
+  const payloadMode = currentPcapPayloadMode();
+
+  if (state.scopeAvailable) {
+    state.activeExportId = ++state.exportRequestCounter;
+    worker.postMessage({ type: 'export', requestId: state.activeExportId, keys, payloadMode });
+    return;
+  }
+
   if (pcapExportWorker) pcapExportWorker.terminate();
   pcapExportWorker = new Worker(`pcap-export.worker.js?v=${APP_VERSION}`);
   pcapExportWorker.onmessage = (event) => {
@@ -1448,10 +1500,7 @@ function runPcapExport(buffer) {
     } else if (msg.type === 'error') {
       showPcapExportError(msg.message);
     } else if (msg.type === 'result') {
-      completePcapStep(el.pcapStepBuildLabel, el.pcapStepBuildFill, el.pcapStepBuildCheck, 'PCAP-Datei erstellt.');
-      downloadPcapResult(msg);
-      el.pcapExportSuccess.hidden = false;
-      el.pcapExportCancel.textContent = 'Schließen';
+      showPcapExportSuccess(msg);
     }
   };
   pcapExportWorker.onerror = (event) => {
@@ -1461,14 +1510,8 @@ function runPcapExport(buffer) {
 
   // A fresh transferable copy each time - state.originalFileBuffer itself is
   // never handed over, so it stays usable for further exports this session.
-  const bufferCopy = buffer.slice(0);
-  pcapExportWorker.postMessage({
-    buffer: bufferCopy,
-    selectedIds: [...state.selectedIds],
-    activeGroups: [...state.activeGroups],
-    hideMulticast: state.hideMulticast,
-    payloadMode: currentPcapPayloadMode(),
-  }, [bufferCopy]);
+  const bufferCopy = state.originalFileBuffer.slice(0);
+  pcapExportWorker.postMessage({ buffer: bufferCopy, keys, payloadMode }, [bufferCopy]);
 }
 
 function downloadPcapResult(msg) {
@@ -1494,9 +1537,7 @@ el.exportPcap.addEventListener('click', () => {
 });
 el.pcapExportCancel.addEventListener('click', closePcapExportDialog);
 el.pcapExportClose.addEventListener('click', closePcapExportDialog);
-el.pcapExportConfirm.addEventListener('click', () => {
-  if (state.originalFileBuffer) runPcapExport(state.originalFileBuffer);
-});
+el.pcapExportConfirm.addEventListener('click', runPcapExport);
 // A click on the backdrop lands on the <dialog> element itself.
 el.pcapExportOverlay.addEventListener('click', (e) => {
   if (e.target === el.pcapExportOverlay) closePcapExportDialog();
