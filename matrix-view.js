@@ -3,13 +3,13 @@
 // used here only for its color interpolator.
 // thought up by human, created by ai
 
-import { pairKey, metricValue, deviceLabel } from './data-model.js?v=1.8.0';
+import { pairKey, metricValue, deviceLabel } from './data-model.js?v=2.0.0';
 
 const CELL_SIZE = 26;
 const MIN_LABEL_SPACE = 60;
 const MAX_LABEL_CHARS = 40;
-// Matches the 10px `.matrix-label` font (see style.css): a generous
-// per-character estimate for Roboto at that size, so computed label areas
+// Matches the 10px `.matrix-label` font (see css/app.css): a generous
+// per-character estimate for the system UI font at that size, so computed label areas
 // stay big enough even for the widest characters rather than clipping them.
 const CHAR_WIDTH = 6.2;
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -35,8 +35,10 @@ function createLabel(device, x, y, rotate, anchor) {
 
 function colorForValue(value, maxValue, metric) {
   const t = maxValue > 0 ? Math.log1p(value) / Math.log1p(maxValue) : 0;
-  // Problems get their own (red) scale so they can't be mistaken for plain traffic volume.
-  return (metric === 'problems' ? d3.interpolateReds : d3.interpolateBlues)(0.15 + t * 0.8);
+  // Mixed from theme tokens, so the scale follows light/dark mode. Problems get
+  // their own (red) scale so they can't be mistaken for plain traffic volume.
+  const percent = Math.round(15 + t * 85);
+  return `color-mix(in srgb, var(${metric === 'problems' ? '--pa-bad' : '--md-primary'}) ${percent}%, var(--md-surface))`;
 }
 
 /**
@@ -115,7 +117,8 @@ export function renderMatrix(container, { devices, pairs, metric, onHover, onLea
       rect.setAttribute('y', cellY);
       rect.setAttribute('width', CELL_SIZE - 1);
       rect.setAttribute('height', CELL_SIZE - 1);
-      rect.setAttribute('fill', value > 0 ? colorForValue(value, maxValue, metric) : 'var(--md-surface-container)');
+      // Through the CSSOM: color-mix() is a CSS value, and inline style attributes are blocked by the CSP.
+      rect.style.fill = value > 0 ? colorForValue(value, maxValue, metric) : 'var(--md-surface-2)';
       rect.classList.add('matrix-cell');
       rect.addEventListener('mousemove', (e) => onHover(e, pair, rowDevice, colDevice));
       rect.addEventListener('mouseleave', onLeave);

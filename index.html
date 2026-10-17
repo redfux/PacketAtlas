@@ -4,316 +4,341 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: blob:; connect-src 'none'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'none'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';">
   <title>PacketAtlas</title>
-  <link rel="stylesheet" href="style.css?v=1.8.0">
+  <link rel="stylesheet" href="css/design-tokens.css?v=2.0.0">
+  <link rel="stylesheet" href="css/design-components.css?v=2.0.0">
+  <link rel="stylesheet" href="css/app.css?v=2.0.0">
+  <!-- Classic script in <head>: applies the saved light/dark choice before the first paint. -->
+  <script src="js/design-system.js?v=2.0.0"></script>
 </head>
 <body>
+<!-- Icon sprite (inline: an external sprite file stays invisible under file://). Source: icons/icon-sprite-inline.html -->
+<svg xmlns="http://www.w3.org/2000/svg" class="sprite" aria-hidden="true">
+  <symbol id="ic-menu" viewBox="0 0 24 24"><path d="M3 18h18v-2H3zm0-5h18v-2H3zm0-7v2h18V6z"/></symbol>
+  <symbol id="ic-sidebar-close" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm5 2v14h9V5h-9Z"/><path d="M17.4 8.4 16 7l-5 5 5 5 1.4-1.4-3.6-3.6z"/></symbol>
+  <symbol id="ic-sidebar-open" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 2v14h3V5H5Zm5 0v14h9V5h-9Z"/><path d="M11.6 8.4 13 7l5 5-5 5-1.4-1.4 3.6-3.6z"/></symbol>
+  <symbol id="ic-push-pin" viewBox="0 0 24 24"><path d="M14 4v5c0 1.12.37 2.16 1 3H9c.65-.86 1-1.9 1-3V4zm3-2H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3V4h1c.55 0 1-.45 1-1s-.45-1-1-1"/></symbol>
+  <symbol id="ic-push-pin-filled" viewBox="0 0 24 24"><path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3"/></symbol>
+  <symbol id="ic-close" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></symbol>
+  <symbol id="ic-search" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"/></symbol>
+  <symbol id="ic-arrow-back" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z"/></symbol>
+  <symbol id="ic-arrow-forward" viewBox="0 0 24 24"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></symbol>
+  <symbol id="ic-chevron-right" viewBox="0 0 24 24"><path d="M10.34 4.42 7.81 6.38 12.15 12 7.81 17.62 10.34 19.58 16.19 12Z"/></symbol>
+  <symbol id="ic-add" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></symbol>
+  <symbol id="ic-edit" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75zM20.71 7.04a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75z"/></symbol>
+  <symbol id="ic-delete" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6zM19 4h-3.5l-1-1h-5l-1 1H5v2h14z"/></symbol>
+  <symbol id="ic-save" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></symbol>
+  <symbol id="ic-copy" viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2m0 16H8V7h11z"/></symbol>
+  <symbol id="ic-info" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2m1 15h-2v-6h2zm0-8h-2V7h2z"/></symbol>
+  <symbol id="ic-warning" viewBox="0 0 24 24"><path d="M1 21h22L12 2zm12-3h-2v-2h2zm0-4h-2v-4h2z"/></symbol>
+  <symbol id="ic-error" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2m1 15h-2v-2h2zm0-4h-2V7h2z"/></symbol>
+  <symbol id="ic-check-circle" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2m-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></symbol>
+  <symbol id="ic-link" viewBox="0 0 24 24"><path d="M17 7h-4v2h4a3 3 0 010 6h-4v2h4A5 5 0 0017 7m-6 8H7a3 3 0 010-6h4V7H7a5 5 0 000 10h4zm-3-4h8v2H8z"/></symbol>
+  <symbol id="ic-refresh" viewBox="0 0 24 24"><path d="M17.65 6.35A8 8 0 1019.73 14h-2.08A6 6 0 1112 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z"/></symbol>
+  <symbol id="ic-upload" viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></symbol>
+  <symbol id="ic-download" viewBox="0 0 24 24"><path d="M5 20h14v-2H5zM19 9h-4V3H9v6H5l7 7z"/></symbol>
+  <symbol id="ic-settings" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 00-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61zM12 15.6A3.6 3.6 0 1115.6 12 3.61 3.61 0 0112 15.6"/></symbol>
+  <symbol id="ic-lock" viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2m-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2M9 8V6c0-1.66 1.34-3 3-3s3 1.34 3 3v2z"/></symbol>
+  <symbol id="ic-visibility" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5M12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5m0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3"/></symbol>
+  <symbol id="ic-print" viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3m-3 11H8v-5h8zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1m-1-9H6v4h12z"/></symbol>
+  <symbol id="ic-light-mode" viewBox="0 0 24 24"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5M2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1m18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1M11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1m0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1M5.99 4.58a.996.996 0 00-1.41 0 .996.996 0 000 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41zm12.37 12.37a.996.996 0 00-1.41 0 .996.996 0 000 1.41l1.06 1.06c.39.39 1.03.39 1.41 0a.996.996 0 000-1.41zm1.06-10.96a.996.996 0 000-1.41.996.996 0 00-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0zM7.05 18.36a.996.996 0 000-1.41.996.996 0 00-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0z"/></symbol>
+  <symbol id="ic-dark-mode" viewBox="0 0 24 24"><path d="M12 3a9 9 0 109 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 01-4.4 2.26 5.403 5.403 0 01-3.14-9.8c-.44-.06-.9-.1-1.36-.1"/></symbol>
+  <symbol id="ic-auto-mode" viewBox="0 0 24 24"><path d="M12 2C6.49 2 2 6.49 2 12s4.49 10 10 10 10-4.49 10-10S17.51 2 12 2m0 18V4c4.41 0 8 3.59 8 8s-3.59 8-8 8"/></symbol>
+  <!-- Network tools (3.1) -->
+  <symbol id="ic-lan" viewBox="0 0 24 24"><path d="M13 22h8v-7h-3v-4h-5V9h3V2H8v7h3v2H6v4H3v7h8v-7H8v-2h8v2h-3v7zM10 7V4h4v3h-4zM9 17v3H5v-3h4zm10 0v3h-4v-3h4z"/></symbol>
+  <symbol id="ic-folder-open" viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"/></symbol>
+  <symbol id="ic-grid" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM8 20H4v-4h4v4zm0-6H4v-4h4v4zm0-6H4V4h4v4zm6 12h-4v-4h4v4zm0-6h-4v-4h4v4zm0-6h-4V4h4v4zm6 12h-4v-4h4v4zm0-6h-4v-4h4v4zm0-6h-4V4h4v4z"/></symbol>
+  <symbol id="ic-hub" viewBox="0 0 24 24"><path d="M8.4 18.2c.38.5.6 1.12.6 1.8 0 1.66-1.34 3-3 3s-3-1.34-3-3 1.34-3 3-3c.44 0 .85.09 1.23.26l1.41-1.77c-.92-1.03-1.29-2.39-1.09-3.69l-2.03-.68c-.54.83-1.46 1.38-2.52 1.38-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3v.2l2.03.69c.64-1.21 1.82-2.09 3.22-2.32V5.89C9.96 5.48 9 4.36 9 3c0-1.66 1.34-3 3-3s3 1.34 3 3c0 1.36-.96 2.48-2.25 2.89v2.16c1.4.23 2.58 1.11 3.22 2.32L18 9.69V9.5c0-1.66 1.34-3 3-3s3 1.34 3 3-1.34 3-3 3c-1.06 0-1.98-.55-2.52-1.37l-2.03.68c.2 1.29-.16 2.65-1.09 3.69l1.41 1.77c.38-.17.79-.26 1.23-.26 1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3c0-.68.22-1.3.6-1.8l-1.41-1.77c-1.35.75-3.01.76-4.37 0L8.4 18.2z"/></symbol>
+  <symbol id="ic-swap-horiz" viewBox="0 0 24 24"><path d="M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></symbol>
+  <symbol id="ic-timeline" viewBox="0 0 24 24"><path d="M20 3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H4V5h16v14zM6 7h7v2H6zm4 4h8v2h-8zm-2 4h6v2H8z"/></symbol>
+  <symbol id="ic-bar-chart" viewBox="0 0 24 24"><path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z"/></symbol>
+</svg>
   <a class="skip-link" href="#main-content">Zum Hauptinhalt springen</a>
 
-  <header class="app-header">
-    <h1 class="app-header__title">
-      <span class="material-symbols-outlined" aria-hidden="true">lan</span>
-      PacketAtlas
+  <!-- Appbar: the file (open, export) and the app menu -->
+  <header class="appbar">
+    <h1 class="app-title">
+      <span class="app-mark"><svg><use href="#ic-lan"></use></svg></span>
+      <span class="app-name">PacketAtlas</span>
+      <span class="app-claim" id="app-claim">Kommunikationsmatrix aus Wireshark-Captures</span>
     </h1>
-    <div class="app-header__actions">
-      <button type="button" id="btn-open-file" class="btn btn--filled">
-        <span class="material-symbols-outlined" aria-hidden="true">folder_open</span>
-        Capture-Datei öffnen
-      </button>
-      <input type="file" id="file-input" accept=".pcap,.pcapng" hidden>
-    </div>
+    <span class="spacer"></span>
+    <button type="button" id="btn-open-file" class="pa-appbar-btn">
+      <svg class="i"><use href="#ic-folder-open"></use></svg>
+      <span class="pa-btn-label">Capture öffnen</span>
+    </button>
+    <input type="file" id="file-input" accept=".pcap,.pcapng" hidden>
+    <button type="button" id="btn-export" class="outlined pa-appbar-btn" popovertarget="export-menu" disabled>
+      <svg class="i"><use href="#ic-download"></use></svg>
+      <span class="pa-btn-label">Export</span>
+    </button>
+    <button type="button" class="menu-toggle" popovertarget="app-menu" aria-label="Menü" title="Menü"><svg><use href="#ic-menu"></use></svg></button>
   </header>
 
-  <div id="progress-banner" class="progress-banner" hidden role="status" aria-live="polite">
-    <span id="progress-label" class="progress-banner__label">Datei wird geparst …</span>
-    <div class="progress-bar">
-      <div id="progress-bar-fill" class="progress-bar__fill"></div>
+  <div class="app-menu pa-export-menu" id="export-menu" popover>
+    <button type="button" id="export-png" class="app-menu-item">Als PNG …</button>
+    <button type="button" id="export-svg" class="app-menu-item">Als SVG …</button>
+    <button type="button" id="export-xlsx" class="app-menu-item">Als Excel (.xlsx) …</button>
+    <button type="button" id="export-pcap" class="app-menu-item">Als PCAP (gefiltert) …</button>
+    <button type="button" id="export-pinned-xlsx" class="app-menu-item" disabled>Nur angeheftete Auswahl (.xlsx) …</button>
+  </div>
+
+  <div class="app-menu" id="app-menu" popover>
+    <a class="app-menu-item" href="https://github.com/redfux/PacketAtlas" target="_blank" rel="noopener">PacketAtlas auf GitHub</a>
+    <div class="app-menu-foot">
+      Darstellung
+      <div class="theme-toggle" role="group" aria-label="Darstellung">
+        <button type="button" data-theme="light" aria-pressed="false" aria-label="Hell" title="Hell"><svg><use href="#ic-light-mode"></use></svg></button>
+        <button type="button" data-theme="auto" aria-pressed="true" aria-label="Automatisch" title="Automatisch"><svg><use href="#ic-auto-mode"></use></svg></button>
+        <button type="button" data-theme="dark" aria-pressed="false" aria-label="Dunkel" title="Dunkel"><svg><use href="#ic-dark-mode"></use></svg></button>
+      </div>
     </div>
   </div>
 
-  <div id="error-banner" class="error-banner" hidden role="alert">
-    <span class="material-symbols-outlined" aria-hidden="true">error</span>
-    <span id="error-message"></span>
-    <button type="button" id="btn-dismiss-error" class="btn btn--text" aria-label="Fehlermeldung schließen">
-      <span class="material-symbols-outlined" aria-hidden="true">close</span>
+  <div id="progress-banner" class="pa-banner" hidden role="status" aria-live="polite">
+    <span id="progress-label" class="pa-banner__label">Datei wird geparst …</span>
+    <div class="progress-bar"><i id="progress-bar-fill"></i></div>
+  </div>
+
+  <div id="error-banner" class="status err pa-banner" hidden role="alert">
+    <svg class="i"><use href="#ic-error"></use></svg>
+    <div id="error-message"></div>
+    <button type="button" id="btn-dismiss-error" class="icon" aria-label="Fehlermeldung schließen" title="Schließen">
+      <svg class="i"><use href="#ic-close"></use></svg>
     </button>
   </div>
 
-  <main id="main-content" class="app-main">
-    <div id="drop-zone" class="drop-zone">
-      <span class="material-symbols-outlined drop-zone__icon" aria-hidden="true">file_upload</span>
-      <p class="drop-zone__text">Wireshark-Capture-Datei (.pcap / .pcapng) hierher ziehen</p>
-      <p class="drop-zone__hint">oder über „Capture-Datei öffnen" auswählen. Die Datei verlässt Ihren Browser zu keinem Zeitpunkt.</p>
-    </div>
-
-    <div id="workspace" class="workspace" hidden>
-      <aside class="sidebar" aria-label="Geräte-/Port-Filter">
-        <div class="sidebar__section">
-          <label class="field-label" for="device-search">Suche</label>
-          <div class="search-field">
-            <input type="search" id="device-search" class="text-input" placeholder="IP-Teilstring …" autocomplete="off">
-            <button type="button" id="device-search-clear" class="search-field__clear" aria-label="Suche löschen" title="Suche löschen" hidden>
-              <span class="material-symbols-outlined" aria-hidden="true">close</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="sidebar__section sidebar__section--row">
-          <button type="button" id="btn-select-all" class="btn btn--text">Alle auswählen</button>
-          <button type="button" id="btn-select-none" class="btn btn--text">Alle abwählen</button>
-        </div>
-
-        <div class="sidebar__section">
-          <span class="field-label">Protokoll</span>
-          <div id="protocol-filters" class="chip-group">
-            <button type="button" class="chip is-active" data-protocol="TCP">TCP</button>
-            <button type="button" class="chip is-active" data-protocol="UDP">UDP</button>
-            <button type="button" class="chip is-active" data-protocol="ICMP">ICMP</button>
-            <button type="button" class="chip is-active" data-protocol="OTHER">Sonstige</button>
-          </div>
-          <label class="switch sidebar__switch">
-            <input type="checkbox" id="toggle-only-problems">
-            <span class="switch__track" aria-hidden="true"></span>
-            Nur Probleme anzeigen
-          </label>
-        </div>
-
-        <div class="sidebar__section sidebar-subtabs" role="tablist" aria-label="Filterliste">
-          <button type="button" class="sidebar-subtab is-active" id="subtab-devices" role="tab" aria-selected="true">Geräte</button>
-          <button type="button" class="sidebar-subtab" id="subtab-ports" role="tab" aria-selected="false">Ports</button>
-        </div>
-
-        <div id="device-filter-extras">
-          <div class="sidebar__section">
-            <label class="switch">
-              <input type="checkbox" id="toggle-hide-broadcast">
-              <span class="switch__track" aria-hidden="true"></span>
-              Multicast/Broadcast ausblenden
-            </label>
-          </div>
-        </div>
-
-        <div class="sidebar__section sidebar__section--grow" id="device-list-section">
-          <span class="field-label">Geräte (<span id="device-count">0</span>)</span>
-          <ul id="device-list" class="device-list"></ul>
-        </div>
-
-        <div class="sidebar__section sidebar__section--grow" id="port-list-section" hidden>
-          <span class="field-label">Ports (<span id="port-count">0</span>)</span>
-          <ul id="port-list" class="device-list"></ul>
-        </div>
-      </aside>
-
-      <section class="content">
-        <div class="toolbar">
-          <div class="tabs" role="tablist" aria-label="Ansicht">
-            <button type="button" class="tab is-active" id="tab-matrix" role="tab" aria-selected="true" aria-controls="view-matrix">
-              <span class="material-symbols-outlined" aria-hidden="true">grid_on</span>
-              Matrix
-            </button>
-            <button type="button" class="tab" id="tab-graph" role="tab" aria-selected="false" aria-controls="view-graph">
-              <span class="material-symbols-outlined" aria-hidden="true">hub</span>
-              Graph
-            </button>
-            <button type="button" class="tab" id="tab-connections" role="tab" aria-selected="false" aria-controls="view-connections">
-              <span class="material-symbols-outlined" aria-hidden="true">swap_horiz</span>
-              Verbindungen
-            </button>
-            <button type="button" class="tab" id="tab-timeline" role="tab" aria-selected="false" aria-controls="view-timeline">
-              <span class="material-symbols-outlined" aria-hidden="true">view_timeline</span>
-              Zeitleiste
-            </button>
-            <button type="button" class="tab" id="tab-stats" role="tab" aria-selected="false" aria-controls="view-stats">
-              <span class="material-symbols-outlined" aria-hidden="true">bar_chart</span>
-              Statistik
-            </button>
-          </div>
-
-          <div class="toolbar__spacer"></div>
-
-          <div class="segmented" role="radiogroup" aria-label="Adressfamilie" id="address-family-group">
-            <button type="button" class="segmented__option is-active" id="family-ipv4" role="radio" aria-checked="true" data-family="ipv4">IPv4</button>
-            <button type="button" class="segmented__option" id="family-ipv6" role="radio" aria-checked="false" data-family="ipv6">IPv6</button>
-            <button type="button" class="segmented__option" id="family-mac" role="radio" aria-checked="false" data-family="mac">Sonstige</button>
-          </div>
-
-          <div class="segmented" role="radiogroup" aria-label="Metrik" id="metric-group">
-            <button type="button" class="segmented__option is-active" id="metric-packets" role="radio" aria-checked="true">Pakete</button>
-            <button type="button" class="segmented__option" id="metric-bytes" role="radio" aria-checked="false">Bytes</button>
-            <button type="button" class="segmented__option" id="metric-problems" role="radio" aria-checked="false" title="Retransmits, Lücken, RST, Zero-Window und ICMP-Fehlermeldungen">Probleme</button>
-          </div>
-
-          <div class="toolbar__menu">
-            <button type="button" id="btn-export" class="btn btn--tonal">
-              <span class="material-symbols-outlined" aria-hidden="true">download</span>
-              Export
-            </button>
-            <div id="export-menu" class="menu" hidden>
-              <button type="button" id="export-png" class="menu__item">Als PNG …</button>
-              <button type="button" id="export-svg" class="menu__item">Als SVG …</button>
-              <button type="button" id="export-xlsx" class="menu__item">Als Excel (.xlsx) …</button>
-              <button type="button" id="export-pcap" class="menu__item">Als PCAP (gefiltert) …</button>
-              <button type="button" id="export-pinned-xlsx" class="menu__item" disabled>Nur angeheftete Auswahl (.xlsx) …</button>
-            </div>
-          </div>
-        </div>
-
-        <div id="graph-controls" class="graph-controls" hidden>
-          <label class="field-label" for="force-charge">Abstoßung</label>
-          <input type="range" id="force-charge" min="50" max="1200" value="300">
-          <label class="field-label" for="force-distance">Kantenlänge</label>
-          <input type="range" id="force-distance" min="20" max="400" value="120">
-          <span id="graph-problems-note" class="graph-controls__note" hidden>Rote Kanten = Probleme (Retransmits, Lücken, RST, Zero-Window, ICMP-Fehler), Dicke = Anzahl</span>
-        </div>
-
-        <div id="large-selection-warning" class="warning-banner" hidden>
-          <span class="material-symbols-outlined" aria-hidden="true">warning</span>
-          Viele Geräte ausgewählt – für bessere Lesbarkeit Filterung empfohlen.
-        </div>
-
-        <div id="connections-truncated-warning" class="warning-banner" hidden>
-          <span class="material-symbols-outlined" aria-hidden="true">warning</span>
-          <span id="connections-truncated-message"></span>
-        </div>
-
-        <div id="timeline-truncated-warning" class="warning-banner" hidden>
-          <span class="material-symbols-outlined" aria-hidden="true">warning</span>
-          <span id="timeline-truncated-message"></span>
-        </div>
-
-        <div id="view-matrix" class="view" role="tabpanel" aria-labelledby="tab-matrix">
-          <div class="matrix-legend">
-            <span><span class="matrix-legend__icon matrix-legend__icon--initiator">▲</span> Verbindungsaufbau (Zeile → Spalte initiiert)</span>
-            <span><span class="matrix-legend__icon matrix-legend__icon--responder">○</span> Antwort auf die jeweils andere Zelle</span>
-            <span id="matrix-problems-note" hidden>Farbe (rot) = Probleme je Richtung: Retransmits, Lücken, RST, Zero-Window, ICMP-Fehler</span>
-          </div>
-          <div id="matrix-container" class="matrix-container"></div>
-        </div>
-
-        <div id="view-graph" class="view" role="tabpanel" aria-labelledby="tab-graph" hidden>
-          <div id="graph-container" class="graph-container"></div>
-        </div>
-
-        <div id="view-connections" class="view" role="tabpanel" aria-labelledby="tab-connections" hidden>
-          <div class="view-mode-bar">
-            <div class="segmented" role="radiogroup" aria-label="Darstellung der Verbindungen">
-              <button type="button" class="segmented__option is-active" id="connections-view-diagram" role="radio" aria-checked="true">Diagramm</button>
-              <button type="button" class="segmented__option" id="connections-view-table" role="radio" aria-checked="false">Tabelle</button>
-            </div>
-          </div>
-          <div id="connections-container" class="sequence-container"></div>
-          <div id="connections-table" class="ctable-container" hidden></div>
-        </div>
-
-        <div id="view-timeline" class="view" role="tabpanel" aria-labelledby="tab-timeline" hidden>
-          <div class="matrix-legend">
-            <span>Balken: blau = unauffällig, gelb = auffällig, rot = instabil</span>
-            <span>helle Striche im Balken = einzelne Probleme (Retransmit, Lücke, RST, Zero-Window)</span>
-          </div>
-          <div id="timeline-container" class="timeline-container"></div>
-        </div>
-
-        <div id="view-stats" class="view" role="tabpanel" aria-labelledby="tab-stats" hidden>
-          <div id="stats-container" class="stats-container"></div>
-        </div>
-      </section>
-
-      <aside id="pinned-panel" class="pinned-panel" aria-label="Angeheftete Auswahl" hidden>
-        <div class="pinned-panel__header">
-          <span class="field-label">Angeheftet (<span id="pinned-count">0</span>)</span>
-          <button type="button" id="btn-clear-pinned" class="btn btn--text">Alle entfernen</button>
-        </div>
-        <div id="pinned-list" class="pinned-list"></div>
-      </aside>
+  <!-- Start screen, until a capture is loaded -->
+  <main id="start-screen" class="pa-start">
+    <div id="drop-zone" class="file-dropzone" tabindex="0" role="button" aria-label="Capture-Datei hier ablegen oder klicken, um sie auszuwählen">
+      <svg class="i"><use href="#ic-upload"></use></svg>
+      <strong>Wireshark-Capture (.pcap / .pcapng) hierher ziehen</strong>
+      <span class="hint">oder klicken bzw. „Capture öffnen“. Die Datei verlässt Ihren Browser zu keinem Zeitpunkt.</span>
     </div>
   </main>
 
-  <div id="tooltip" class="tooltip" hidden role="tooltip"></div>
+  <div id="workspace" class="app-shell fill" hidden>
+    <!-- WER: which hosts (or ports) are shown -->
+    <aside class="sidebar" id="sidebar" aria-label="Auswahl der Geräte und Ports">
+      <button type="button" class="sidebar-toggle" aria-controls="sidebar" aria-expanded="true" aria-label="Seitenleiste einklappen" title="Seitenleiste einklappen"><svg><use href="#ic-sidebar-close"></use></svg></button>
+      <div class="pa-side">
+        <div class="search-field">
+          <input type="search" id="device-search" class="sel" placeholder="IP-Teilstring …" autocomplete="off" aria-label="Liste filtern">
+          <button type="button" id="device-search-clear" class="icon clear-btn" aria-label="Suche löschen" title="Suche löschen" hidden>
+            <svg class="i"><use href="#ic-close"></use></svg>
+          </button>
+        </div>
 
-  <div id="pcap-export-overlay" class="modal-overlay" hidden>
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pcap-export-title">
-      <div class="modal__header">
-        <p id="pcap-export-title" class="modal__title">PCAP-Export vorbereiten</p>
-        <button type="button" id="pcap-export-close" class="modal__close" aria-label="Dialog schließen">
-          <span class="material-symbols-outlined" aria-hidden="true">close</span>
-        </button>
-      </div>
-      <p id="pcap-export-intro" class="modal__intro">Wähle die Original-Capture-Datei erneut aus. Nur die aktuell gefilterten Verbindungen werden exportiert.</p>
+        <div class="tab-bar pa-side-tabs" role="tablist" aria-label="Liste">
+          <button type="button" class="active" id="subtab-devices" role="tab" aria-selected="true">Geräte <span class="n" id="device-count">0</span></button>
+          <button type="button" id="subtab-ports" role="tab" aria-selected="false">Ports <span class="n" id="port-count">0</span></button>
+        </div>
 
-      <div class="modal__section">
-        <span class="field-label">Inhalt</span>
-        <div class="radio-group">
-          <label class="radio-option">
-            <input type="radio" name="pcap-payload-mode" id="pcap-payload-full" value="full" checked>
-            Mit Payload (vollständige Pakete)
-          </label>
-          <label class="radio-option">
-            <input type="radio" name="pcap-payload-mode" id="pcap-payload-headers" value="headers-only">
-            Ohne Payload (nur Header)
-          </label>
+        <div class="pa-list-head">
+          <label class="check"><input type="checkbox" id="select-all"> Alle</label>
+          <span class="grow"></span>
+          <span id="selection-count"></span>
+          <span>Pakete</span>
+        </div>
+
+        <div id="device-list-section">
+          <ul id="device-list" class="pa-list"></ul>
+        </div>
+        <div id="port-list-section" hidden>
+          <ul id="port-list" class="pa-list"></ul>
         </div>
       </div>
+    </aside>
 
-      <div id="pcap-export-error" class="error-banner error-banner--inline" hidden role="alert">
-        <span class="material-symbols-outlined" aria-hidden="true">error</span>
-        <span id="pcap-export-error-message"></span>
-      </div>
-
-      <div id="pcap-upload-section" class="modal__section">
-        <div id="pcap-drop-zone" class="drop-zone drop-zone--compact">
-          <span class="material-symbols-outlined drop-zone__icon" aria-hidden="true">file_upload</span>
-          <p class="drop-zone__text">Original-Capture-Datei hierher ziehen oder auswählen</p>
+    <div class="pa-content">
+      <!-- WIE: view and display mode -->
+      <nav class="toolbar">
+        <div class="tab-bar" role="tablist" aria-label="Ansicht">
+          <button type="button" class="active" id="tab-matrix" role="tab" aria-selected="true" aria-controls="view-matrix"><svg class="i"><use href="#ic-grid"></use></svg> Matrix</button>
+          <button type="button" id="tab-graph" role="tab" aria-selected="false" aria-controls="view-graph"><svg class="i"><use href="#ic-hub"></use></svg> Graph</button>
+          <button type="button" id="tab-connections" role="tab" aria-selected="false" aria-controls="view-connections"><svg class="i"><use href="#ic-swap-horiz"></use></svg> Verbindungen</button>
+          <button type="button" id="tab-timeline" role="tab" aria-selected="false" aria-controls="view-timeline"><svg class="i"><use href="#ic-timeline"></use></svg> Zeitleiste</button>
+          <button type="button" id="tab-stats" role="tab" aria-selected="false" aria-controls="view-stats"><svg class="i"><use href="#ic-bar-chart"></use></svg> Statistik</button>
         </div>
-        <input type="file" id="pcap-file-input" accept=".pcap,.pcapng" hidden>
-      </div>
-
-      <div id="pcap-cached-section" class="modal__section" hidden>
-        <p class="modal__hint"><span class="material-symbols-outlined icon--inline" aria-hidden="true">check_circle</span> Original-Datei aus dieser Sitzung bereits verifiziert.</p>
-      </div>
-
-      <div id="pcap-export-progress" class="modal__section" hidden>
-        <div id="pcap-step-hash" class="export-step" hidden>
-          <div class="export-step__row">
-            <span id="pcap-step-hash-label" class="modal__hint">Prüfsumme wird verglichen …</span>
-            <span id="pcap-step-hash-check" class="export-step__check material-symbols-outlined" hidden aria-hidden="true">check_circle</span>
+        <div class="pa-modes">
+          <div class="seg" role="group" aria-label="Adressfamilie" id="address-family-group">
+            <button type="button" id="family-ipv4" aria-pressed="true">IPv4</button>
+            <button type="button" id="family-ipv6" aria-pressed="false">IPv6</button>
+            <button type="button" id="family-mac" aria-pressed="false">Sonstige</button>
           </div>
-          <div class="progress-bar">
-            <div id="pcap-step-hash-fill" class="progress-bar__fill"></div>
-          </div>
-        </div>
-        <div id="pcap-step-build" class="export-step" hidden>
-          <div class="export-step__row">
-            <span id="pcap-step-build-label" class="modal__hint">PCAP-Datei wird erstellt …</span>
-            <span id="pcap-step-build-check" class="export-step__check material-symbols-outlined" hidden aria-hidden="true">check_circle</span>
-          </div>
-          <div class="progress-bar">
-            <div id="pcap-step-build-fill" class="progress-bar__fill"></div>
+          <div class="seg" role="group" aria-label="Metrik" id="metric-group">
+            <button type="button" id="metric-packets" aria-pressed="true">Pakete</button>
+            <button type="button" id="metric-bytes" aria-pressed="false">Bytes</button>
+            <button type="button" id="metric-problems" aria-pressed="false" title="Retransmits, Lücken, RST, Zero-Window und ICMP-Fehlermeldungen">Probleme</button>
           </div>
         </div>
+      </nav>
+
+      <!-- WAS: which connections count -->
+      <div class="filter-bar" id="filter-bar">
+        <span class="label">Protokoll</span>
+        <span id="protocol-filters" class="pa-chip-group">
+          <button type="button" class="chip" aria-pressed="true" data-protocol="TCP">TCP</button>
+          <button type="button" class="chip" aria-pressed="true" data-protocol="UDP">UDP</button>
+          <button type="button" class="chip" aria-pressed="true" data-protocol="ICMP">ICMP</button>
+          <button type="button" class="chip" aria-pressed="true" data-protocol="OTHER">Sonstige</button>
+        </span>
+        <span class="pa-sep" aria-hidden="true"></span>
+        <button type="button" class="chip" id="toggle-only-problems" aria-pressed="false">Nur Probleme</button>
+        <button type="button" class="chip" id="toggle-hide-broadcast" aria-pressed="false">Multicast/Broadcast ausblenden</button>
+        <span class="grow"></span>
+        <span class="count" id="filter-count"></span>
       </div>
 
-      <div id="pcap-export-success" class="modal__success" hidden>
-        <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
-        <div>
-          <p class="modal__success-text">Export erfolgreich – Download gestartet.</p>
-          <p id="pcap-export-success-note" class="modal__hint modal__hint--tight" hidden></p>
-        </div>
+      <div id="graph-controls" class="pa-graph-controls" hidden>
+        <label for="force-charge">Abstoßung</label>
+        <input type="range" id="force-charge" min="50" max="1200" value="300">
+        <label for="force-distance">Kantenlänge</label>
+        <input type="range" id="force-distance" min="20" max="400" value="120">
+        <span id="graph-problems-note" class="pa-problem-note" hidden>Rote Kanten = Probleme (Retransmits, Lücken, RST, Zero-Window, ICMP-Fehler), Dicke = Anzahl</span>
       </div>
 
-      <div class="modal__actions">
-        <button type="button" id="pcap-export-cancel" class="btn btn--text">Abbrechen</button>
-        <button type="button" id="pcap-export-confirm" class="btn btn--filled" hidden>Exportieren</button>
+      <div id="large-selection-warning" class="status warn pa-banner" hidden>
+        <svg class="i"><use href="#ic-warning"></use></svg>
+        <div>Viele Geräte ausgewählt – für bessere Lesbarkeit Filterung empfohlen.</div>
+      </div>
+      <div id="connections-truncated-warning" class="status warn pa-banner" hidden>
+        <svg class="i"><use href="#ic-warning"></use></svg>
+        <div id="connections-truncated-message"></div>
+      </div>
+      <div id="timeline-truncated-warning" class="status warn pa-banner" hidden>
+        <svg class="i"><use href="#ic-warning"></use></svg>
+        <div id="timeline-truncated-message"></div>
+      </div>
+
+      <div class="pa-body">
+        <main id="main-content">
+          <div id="view-matrix" class="view" role="tabpanel" aria-labelledby="tab-matrix">
+            <div class="pa-legend">
+              <span><span class="matrix-legend__icon matrix-legend__icon--initiator">▲</span> Verbindungsaufbau (Zeile → Spalte initiiert)</span>
+              <span><span class="matrix-legend__icon matrix-legend__icon--responder">○</span> Antwort auf die jeweils andere Zelle</span>
+              <span id="matrix-problems-note" class="pa-problem-note" hidden>Farbe (rot) = Probleme je Richtung: Retransmits, Lücken, RST, Zero-Window, ICMP-Fehler</span>
+            </div>
+            <div id="matrix-container" class="matrix-container"></div>
+          </div>
+
+          <div id="view-graph" class="view" role="tabpanel" aria-labelledby="tab-graph" hidden>
+            <div id="graph-container" class="graph-container"></div>
+          </div>
+
+          <div id="view-connections" class="view" role="tabpanel" aria-labelledby="tab-connections" hidden>
+            <div class="pa-view-head">
+              <div class="seg" role="group" aria-label="Darstellung der Verbindungen">
+                <button type="button" id="connections-view-diagram" aria-pressed="true">Diagramm</button>
+                <button type="button" id="connections-view-table" aria-pressed="false">Tabelle</button>
+              </div>
+            </div>
+            <div id="connections-container" class="sequence-container"></div>
+            <div id="connections-table" class="ctable-container" hidden></div>
+          </div>
+
+          <div id="view-timeline" class="view" role="tabpanel" aria-labelledby="tab-timeline" hidden>
+            <div class="pa-legend">
+              <span><span class="pa-swatch pa-swatch--ok"></span>unauffällig</span>
+              <span><span class="pa-swatch pa-swatch--warn"></span>auffällig</span>
+              <span><span class="pa-swatch pa-swatch--bad"></span>instabil</span>
+              <span>helle Striche im Balken = einzelne Probleme (Retransmit, Lücke, RST, Zero-Window)</span>
+            </div>
+            <div id="timeline-container" class="timeline-container"></div>
+          </div>
+
+          <div id="view-stats" class="view" role="tabpanel" aria-labelledby="tab-stats" hidden>
+            <div id="stats-container" class="stats-container"></div>
+          </div>
+        </main>
+
+        <aside id="pinned-panel" class="pa-pinned" aria-label="Angeheftete Auswahl" hidden>
+          <div class="card-head">
+            <h2>Angeheftet <span class="n" id="pinned-count">0</span></h2>
+            <button type="button" id="btn-clear-pinned" class="text">Alle entfernen</button>
+          </div>
+          <div id="pinned-list" class="pa-pinned-list"></div>
+        </aside>
       </div>
     </div>
   </div>
 
-  <footer class="app-footer">
-    <span>PacketAtlas <span id="app-version"></span> — thought up by human, created by ai</span>
+  <div id="tooltip" class="pa-tooltip" hidden role="tooltip"></div>
+
+  <dialog id="pcap-export-overlay" class="pa-dialog" aria-labelledby="pcap-export-title">
+    <div class="pa-dialog__head">
+      <h3 id="pcap-export-title">PCAP-Export vorbereiten</h3>
+      <button type="button" id="pcap-export-close" class="icon" aria-label="Dialog schließen" title="Schließen">
+        <svg class="i"><use href="#ic-close"></use></svg>
+      </button>
+    </div>
+    <p id="pcap-export-intro" class="hint">Wähle die Original-Capture-Datei erneut aus. Nur die aktuell gefilterten Verbindungen werden exportiert.</p>
+
+    <div class="pa-dialog__section">
+      <span class="pa-field-label">Inhalt</span>
+      <label class="check"><input type="radio" name="pcap-payload-mode" id="pcap-payload-full" value="full" checked> Mit Payload (vollständige Pakete)</label>
+      <label class="check"><input type="radio" name="pcap-payload-mode" id="pcap-payload-headers" value="headers-only"> Ohne Payload (nur Header)</label>
+    </div>
+
+    <div id="pcap-export-error" class="status err" hidden role="alert">
+      <svg class="i"><use href="#ic-error"></use></svg>
+      <div id="pcap-export-error-message"></div>
+    </div>
+
+    <div id="pcap-upload-section" class="pa-dialog__section">
+      <div id="pcap-drop-zone" class="file-dropzone compact" tabindex="0" role="button" aria-label="Original-Capture-Datei ablegen oder auswählen">
+        <svg class="i"><use href="#ic-upload"></use></svg>
+        <span>Original-Capture-Datei hierher ziehen oder auswählen</span>
+      </div>
+      <input type="file" id="pcap-file-input" accept=".pcap,.pcapng" hidden>
+    </div>
+
+    <div id="pcap-cached-section" class="pa-dialog__section" hidden>
+      <p class="hint"><svg class="i pa-icon-ok"><use href="#ic-check-circle"></use></svg> Original-Datei aus dieser Sitzung bereits verifiziert.</p>
+    </div>
+
+    <div id="pcap-export-progress" class="pa-dialog__section" hidden>
+      <div id="pcap-step-hash" class="pa-step" hidden>
+        <div class="pa-step__row">
+          <span id="pcap-step-hash-label" class="hint">Prüfsumme wird verglichen …</span>
+          <svg id="pcap-step-hash-check" class="i pa-icon-ok" hidden><use href="#ic-check-circle"></use></svg>
+        </div>
+        <div class="progress-bar"><i id="pcap-step-hash-fill"></i></div>
+      </div>
+      <div id="pcap-step-build" class="pa-step" hidden>
+        <div class="pa-step__row">
+          <span id="pcap-step-build-label" class="hint">PCAP-Datei wird erstellt …</span>
+          <svg id="pcap-step-build-check" class="i pa-icon-ok" hidden><use href="#ic-check-circle"></use></svg>
+        </div>
+        <div class="progress-bar"><i id="pcap-step-build-fill"></i></div>
+      </div>
+    </div>
+
+    <div id="pcap-export-success" class="status ok" hidden>
+      <svg class="i"><use href="#ic-check-circle"></use></svg>
+      <div>
+        <div>Export erfolgreich – Download gestartet.</div>
+        <div id="pcap-export-success-note" class="hint" hidden></div>
+      </div>
+    </div>
+
+    <div class="dlg-actions">
+      <button type="button" id="pcap-export-cancel" class="text">Abbrechen</button>
+      <button type="button" id="pcap-export-confirm" hidden>Exportieren</button>
+    </div>
+  </dialog>
+
+  <footer>
+    <span class="footer-brand">PacketAtlas</span>
+    <span class="footer-divider">·</span>
+    <span class="footer-version" id="app-version"></span>
+    <span class="footer-divider">·</span>
+    <span>thought up by human, created by ai</span>
   </footer>
 
   <script src="vendor/d3.min.js"></script>
   <script src="vendor/xlsx.full.min.js"></script>
-  <script type="module" src="app.js?v=1.8.0"></script>
+  <script type="module" src="app.js?v=2.0.0"></script>
 </body>
 </html>

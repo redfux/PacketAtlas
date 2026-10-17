@@ -5,6 +5,31 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [2.0.0] – 2026-10-17
+
+Neue Oberfläche auf Basis eines gemeinsamen Design Systems (Material-Design-3-Grundlage, Theme „Neutral“ in Stahlblau). Funktionen, Datenmodell und Exporte bleiben unverändert; geändert haben sich Aufbau, Bedienelemente und Aussehen – daher Hauptversion.
+
+### Changed
+
+- **Aufteilung nach „Wer / Was / Wie“:** Seitenleiste = Auswahl der Geräte/Ports; neue **Filterleiste** über allen Ansichten = Protokoll-Chips, „Nur Probleme“, „Multicast/Broadcast ausblenden“ und Zähler „x von y Verbindungen“; Werkzeugleiste = Ansicht (Tabs), Adressfamilie, Metrik; Kopfleiste = „Capture öffnen“ und „Export“. Bisher waren die Filter auf Seitenleiste und Verbindungstabelle verteilt.
+- „Nur Probleme“ und „Multicast/Broadcast ausblenden“ sind Chips statt Schalter und gelten für alle Ansichten; die Verbindungstabelle hat keine eigenen Filter-Chips mehr.
+- „Alle auswählen“ / „Alle abwählen“ ersetzt eine **„Alle“-Checkbox** mit Zwischenzustand und Zähler „x von y“. Ein Klick auf die Adresse eines Listeneintrags schaltet ihn jetzt ebenfalls um.
+- Die App nutzt die **volle Fensterfläche**: Seite scrollt nicht mehr, Seitenleiste, Ansicht und angeheftete Kacheln scrollen jeweils für sich. Die Seitenleiste ist einklappbar; unter 1100 px Breite liegen die angehefteten Kacheln unter der Ansicht.
+- **Hell / Auto / Dunkel** ist jetzt im Menü (☰) umschaltbar und wird gespeichert (bisher nur Systemeinstellung).
+- Status OK / Auffällig / Instabil als Badges mit Symbol (✓ ◆ ✖), auch ohne Farbe lesbar; angeheftete Kacheln problematischer Verbindungen haben einen farbigen Rand.
+- Matrix-Farbskala folgt dem Theme (Mischung aus Grundfarbe bzw. Rot mit der Oberfläche) statt fester d3-Skalen; die Richtungssymbole sind auf hellen und kräftigen Zellen lesbar.
+- Export-Menü und PCAP-Dialog nutzen native Browser-Elemente (Popover, `<dialog>`): Escape und Klick daneben schließen sie; ein laufender PCAP-Export wird beim Schließen beendet.
+- Projektdateien: `style.css` → `css/app.css` (nur noch PacketAtlas-Eigenes, ausschließlich Design-Tokens); neu `css/design-tokens.css`, `css/design-components.css`, `js/design-system.js`, `icons/`. `bump-version.sh` versieht auch diese Dateien mit `?v=`.
+
+### Removed
+
+- Selbst gehostete Schriften (`fonts/`: Roboto, Material Symbols). Text nutzt die Systemschrift, Icons sind ein Inline-SVG-Sprite.
+
+### Notes
+
+- Content-Security-Policy unverändert streng (`script-src 'self'; style-src 'self'`, `connect-src 'none'`); `font-src` entfällt.
+- Geprüft mit einer echten Capture (4.146 Pakete, 76 Geräte): alle fünf Ansichten, Tabelle mit Details, Anheften, Filter-Chips, „Alle“-Checkbox, Suche, Export-Menü, PCAP-Export (Prüfsumme, Aufbau, Download) in hell und dunkel, 1440 px und 375 px.
+
 ## [1.8.0] – 2026-10-16
 
 ### Added

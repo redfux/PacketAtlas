@@ -74,6 +74,17 @@ export function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
 
+// Health level -> design-system severity badge. The symbol keeps the level
+// readable without colour (print, colour blindness).
+const SEVERITY_BADGE = { ok: ['s1', '✓'], warn: ['s2', '◆'], bad: ['s4', '✖'] };
+
+/** Status badge (`.sev` of the design system) for a health level ok/warn/bad; any other level gets a neutral pill. */
+export function healthBadge(level, text) {
+  const badge = SEVERITY_BADGE[level];
+  if (!badge) return `<span class="pill">${escapeHtml(text)}</span>`;
+  return `<span class="sev ${badge[0]}">${badge[1]} ${escapeHtml(text)}</span>`;
+}
+
 /** 'ipv4' | 'ipv6' | 'mac' (device known only by MAC address, e.g. from malformed ARP). */
 export function addressFamilyOf(device) {
   if (device.kind !== 'ip' || !device.ip) return 'mac';

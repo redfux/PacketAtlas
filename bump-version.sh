@@ -13,7 +13,8 @@
 # CSP forbids inline scripts / import maps), so they are rewritten here.
 #
 # Touches: APP_VERSION in app.js, every `from './x.js'` import in the top-level
-# .js files, and the stylesheet / app.js tags in index.html. The workers already
+# .js files, and the stylesheet (css/*.css), js/design-system.js and app.js tags
+# in index.html. The workers already
 # derive their version from APP_VERSION at runtime. releases.md stays manual.
 #
 # Normally you don't run this yourself: .githooks/pre-commit calls it with the
@@ -30,9 +31,9 @@ fi
 
 perl -pi -e "s/^(const APP_VERSION = ')[^']*(';)/\${1}${version}\${2}/" app.js
 perl -pi -e "s#(from '\./[A-Za-z0-9._-]+?\.js)(\?v=[^']*)?'#\${1}?v=${version}'#" ./*.js
-perl -pi -e "s#(href=\"style\.css)(\?v=[^\"]*)?\"#\${1}?v=${version}\"#; s#(src=\"app\.js)(\?v=[^\"]*)?\"#\${1}?v=${version}\"#" index.html
+perl -pi -e "s#(href=\"css/[A-Za-z0-9._-]+\.css)(\?v=[^\"]*)?\"#\${1}?v=${version}\"#g; s#(src=\"(?:app|js/design-system)\.js)(\?v=[^\"]*)?\"#\${1}?v=${version}\"#g" index.html
 
 echo "Version auf ${version} gesetzt:"
 grep -n "const APP_VERSION" app.js
-grep -n 'style.css\|src="app.js' index.html
+grep -n 'css/.*\.css\|src="app.js\|design-system.js' index.html
 echo "Import-Zeilen mit Version: $(grep -c "from '\./.*?v=${version}'" ./*.js | awk -F: '{s+=$2} END {print s}')"

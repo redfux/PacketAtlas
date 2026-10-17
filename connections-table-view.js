@@ -5,15 +5,9 @@
 // connections-view.js; both show the same, already filtered connection list.
 // thought up by human, created by ai
 
-import { deviceLabel, formatBytes, formatSeconds, formatTimestamp, healthOf, icmpTypeLabel } from './data-model.js?v=1.8.0';
+import { deviceLabel, formatBytes, formatSeconds, formatTimestamp, healthBadge, healthOf, icmpTypeLabel } from './data-model.js?v=2.0.0';
 
 const MAX_ROWS = 500;
-const PROTOCOL_CHIPS = [
-  { group: 'TCP', label: 'TCP' },
-  { group: 'UDP', label: 'UDP' },
-  { group: 'ICMP', label: 'ICMP' },
-  { group: 'OTHER', label: 'Sonstige' },
-];
 
 const numberFormat = new Intl.NumberFormat('de-DE');
 const percentFormat = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 });
@@ -64,7 +58,7 @@ const COLUMNS = [
 function statusChip(row) {
   const { health, connection } = row;
   const label = !connection.tcp && connection.problems ? `${numberFormat.format(connection.problems)}× ICMP-Fehler` : health.label;
-  return `<span class="health-chip health-chip--${health.level}">${esc(label)}</span>`;
+  return healthBadge(health.level, label);
 }
 
 function dashOr(value) {
@@ -143,20 +137,16 @@ function detailHtml(row) {
  * Renders the connections table into `container`. `connections` is the filtered
  * list as shown on screen, `totalCount` how many connections there would be
  * without the "Nur Probleme" filter (for the "12 von 148" counter). All state
- * (sort, expanded rows, filters) is owned by app.js and passed in; user actions
- * are reported back through `handlers`, after which app.js re-renders.
+ * (sort, expanded rows) is owned by app.js and passed in; user actions are
+ * reported back through `handlers`, after which app.js re-renders. The
+ * protocol and problem filters live in the filter bar above all views.
  */
-export function renderConnectionsTable(container, { connections, totalCount, deviceIndex, idOf, expandedIds, sort, activeGroups, onlyProblems, handlers }) {
+export function renderConnectionsTable(container, { connections, totalCount, deviceIndex, idOf, expandedIds, sort, handlers }) {
   const rows = connections.map((c) => buildRow(c, deviceIndex, idOf));
   const compare = SORTERS[sort.key] || SORTERS.status;
   const direction = sort.dir === 'asc' ? 1 : -1;
   rows.sort((x, y) => direction * compare(x, y) || y.connection.packets - x.connection.packets);
   const shown = rows.slice(0, MAX_ROWS);
-
-  const chips = [
-    `<button type="button" class="chip chip--problem${onlyProblems ? ' is-active' : ''}" data-action="problems" aria-pressed="${onlyProblems}">Nur Probleme</button>`,
-    ...PROTOCOL_CHIPS.map(({ group, label }) => `<button type="button" class="chip${activeGroups.has(group) ? ' is-active' : ''}" data-group="${group}" aria-pressed="${activeGroups.has(group)}">${label}</button>`),
-  ].join('');
 
   const head = COLUMNS.map((col) => {
     const active = sort.key === col.key;
@@ -172,7 +162,7 @@ export function renderConnectionsTable(container, { connections, totalCount, dev
     : '';
 
   container.innerHTML = `<div class="ctable">
-    <div class="ctable__bar"><div class="ctable__filters">${chips}</div><span class="ctable__count">${numberFormat.format(connections.length)} von ${numberFormat.format(totalCount)} Verbindungen</span></div>
+    <p class="ctable__count">${numberFormat.format(connections.length)} von ${numberFormat.format(totalCount)} Verbindungen</p>
     <div class="ctable__scroll"><table class="ctable__table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>
     ${truncated}
   </div>`;
@@ -181,9 +171,6 @@ export function renderConnectionsTable(container, { connections, totalCount, dev
   container.onclick = (event) => {
     const target = event.target;
     if (!(target instanceof Element)) return;
-    if (target.closest('[data-action="problems"]')) return handlers.onToggleProblems();
-    const chip = target.closest('[data-group]');
-    if (chip) return handlers.onToggleGroup(chip.dataset.group);
     const header = target.closest('th[data-sort]');
     if (header) return handlers.onSort(header.dataset.sort);
     const row = target.closest('tr.ctable__row');

@@ -1,0 +1,221 @@
+/* ==========================================================================
+   Design System — Theme "Neutral" (tokens)
+   Version: 3.1.0
+   Stand: 17.10.2026
+
+   Theme file: design tokens (CSS custom properties) only. Brand-free: no
+   logos, no brand names, a steel-blue palette of its own. The components
+   (design-components.css) use nothing but these tokens; sync-design.sh
+   copies this file to css/design-tokens.css in a project
+   (sync-design.sh --theme neutral).
+
+   Every text/ground pairing is checked for at least 4.5:1, light and dark.
+   Palette "Stahlblau"; the colour tokens are one block, so further palettes
+   can be added later as alternative blocks.
+   thought up by human, coded by ai
+   ========================================================================== */
+
+:root {
+  color-scheme: light dark;
+
+  /* ------------------------------------------------------------ colours */
+  --md-primary: #2F5D8C;
+  --md-on-primary: #FFFFFF;
+  --md-primary-hover: #244A70;
+  --md-primary-strong: #1B3A5C;
+  --md-primary-container: #3A6896;
+  --md-on-primary-container: #FFFFFF;
+  --md-appbar: #DDE6F0;
+  --md-on-appbar: #1B3A5C;
+  --md-progress: #6E93BA;
+  --md-progress-track: #DDE6F0;
+  --md-attention: #FFD8B8;
+  --md-surface: #F7F8FA;
+  --md-surface-dim: #EEF0F4;
+  --md-surface-1: #FFFFFF;
+  --md-surface-2: #EEF3F8;
+  --md-surface-3: #DDE6F0;
+  --md-on-surface: #1B3A5C;
+  --md-on-surface-variant: #4F5866;
+  --md-outline: #6E7F94;
+  --md-outline-variant: #CBD5E1;
+  --md-error: #C8385A;
+  --md-on-error: #FFFFFF;
+  --md-error-container: #FBECEF;
+  --md-on-error-container: #6B1E30;
+  --md-success: #2E8B57;
+  --md-success-container: #E3F2E9;
+  --md-on-success-container: #1E5B3A;
+  --md-warning: #E8833A;
+  --md-warning-container: #FFF4EA;
+  --md-on-warning-container: #5A3412;
+  --md-info: #3463C4;
+  --md-info-container: #EAF0FB;
+  --md-on-info-container: #142C5C;
+  --md-sev1-bg: #DCEFE3;
+  --md-sev1-on: #1E5B3A;
+  --md-sev2-bg: #FFEBD6;
+  --md-sev2-on: #5A3412;
+  --md-sev3-bg: #FFC796;
+  --md-sev3-on: #5A3412;
+  --md-sev4-bg: #9E2F45;
+  --md-sev4-on: #FFFFFF;
+
+  /* Severity scale, four levels — accent edge, the same in both themes. */
+  --md-sev1-mark: #3A9A68;
+  --md-sev2-mark: #F2B37A;
+  --md-sev3-mark: #E8833A;
+  --md-sev4-mark: #C8385A;
+
+  /* Categories for charts (e.g. protocols): five hues that stay apart from
+     each other — use with a label, not as the only cue. Same in both themes. */
+  --md-cat-1: #1A5B9A;
+  --md-cat-2: #2E8B57;
+  --md-cat-3: #C77D00;
+  --md-cat-4: #8A5CB5;
+  --md-cat-5: #00838F;
+
+  /* ------------------------------------------------------------ shadows */
+  --elev-1: 0 1px 3px rgba(27,58,92,.08), 0 1px 12px rgba(27,58,92,.06);
+  --elev-2: 0 2px 6px rgba(27,58,92,.10), 0 2px 24px rgba(27,58,92,.10);
+  --elev-3: 0 4px 12px rgba(27,58,92,.12), 0 8px 32px rgba(27,58,92,.14);
+
+  /* ------------------------------------------------------------ type, shape, motion, layout */
+  --radius-xs: 4px;
+  --radius-s: 8px;
+  --radius-m: 12px;
+  --radius-l: 16px;
+  --radius-xl: 28px;
+  --radius-full: 9999px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --fs-2xs: 0.6875rem;   /* 11px — dense labels, pills, table captions */
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.85rem;
+  --fs-base: 0.9375rem;
+  --fs-md: 1.05rem;
+  --fs-lg: 1.25rem;
+  --fs-xl: 1.5rem;
+  --lh: 1.5;
+  --duration-short: 120ms;
+  --duration-medium: 300ms;
+  --duration-long: 500ms;
+  --easing: cubic-bezier(0.2, 0, 0, 1);
+  --content-max-width: 1100px;
+  --appbar-height: 56px;
+  --footer-height: auto;
+  --sidebar-width: 220px;
+  --sidebar-rail: 36px;
+  --md-scrim: rgba(0,0,0,.32);
+  --z-appbar: 20;
+  --z-drawer: 30;
+  --z-overlay: 40;
+  --z-toast: 60;
+  --z-dialog: 100;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --md-primary: #8DB4DE;
+    --md-on-primary: #0C1118;
+    --md-primary-hover: #A9C8E9;
+    --md-primary-strong: #1B3A5C;
+    --md-primary-container: #24405F;
+    --md-on-primary-container: #D6E6F7;
+    --md-appbar: #152233;
+    --md-on-appbar: #E4EBF3;
+    --md-progress: #6E93BA;
+    --md-progress-track: #22344A;
+    --md-attention: #4A2D16;
+    --md-surface: #0C1118;
+    --md-surface-dim: #090D13;
+    --md-surface-1: #121A24;
+    --md-surface-2: #18222F;
+    --md-surface-3: #1E2C3D;
+    --md-on-surface: #E4EBF3;
+    --md-on-surface-variant: #AFBCCB;
+    --md-outline: #7A8BA0;
+    --md-outline-variant: #2A3A4E;
+    --md-error: #E5677F;
+    --md-on-error: #2A0A12;
+    --md-error-container: #5A1A2A;
+    --md-on-error-container: #F6CBD4;
+    --md-success: #6CCB97;
+    --md-success-container: #173A28;
+    --md-on-success-container: #CDEFDB;
+    --md-warning: #F2A266;
+    --md-warning-container: #4A2D16;
+    --md-on-warning-container: #FFE6CF;
+    --md-info: #7FA6F0;
+    --md-info-container: #142C5C;
+    --md-on-info-container: #C9D9FA;
+    --md-sev1-bg: #1D4A33;
+    --md-sev1-on: #DCEFE3;
+    --md-sev2-bg: #4A2D16;
+    --md-sev2-on: #FFE6CF;
+    --md-sev3-bg: #E8833A;
+    --md-sev3-on: #2E1806;
+    --md-sev4-bg: #9E2F45;
+    --md-sev4-on: #FFFFFF;
+    --md-cat-1: #5FA3EC;
+    --md-cat-2: #5CC98A;
+    --md-cat-3: #F0B04A;
+    --md-cat-4: #C4A0E8;
+    --md-cat-5: #4DD0E1;
+    --elev-1: 0 1px 3px rgba(0,0,0,.30), 0 1px 12px rgba(0,0,0,.20);
+    --elev-2: 0 2px 6px rgba(0,0,0,.35), 0 2px 24px rgba(0,0,0,.25);
+    --elev-3: 0 4px 12px rgba(0,0,0,.40), 0 8px 32px rgba(0,0,0,.30);
+  }
+}
+
+:root[data-theme="dark"] {
+  --md-primary: #8DB4DE;
+  --md-on-primary: #0C1118;
+  --md-primary-hover: #A9C8E9;
+  --md-primary-strong: #1B3A5C;
+  --md-primary-container: #24405F;
+  --md-on-primary-container: #D6E6F7;
+  --md-appbar: #152233;
+  --md-on-appbar: #E4EBF3;
+  --md-progress: #6E93BA;
+  --md-progress-track: #22344A;
+  --md-attention: #4A2D16;
+  --md-surface: #0C1118;
+  --md-surface-dim: #090D13;
+  --md-surface-1: #121A24;
+  --md-surface-2: #18222F;
+  --md-surface-3: #1E2C3D;
+  --md-on-surface: #E4EBF3;
+  --md-on-surface-variant: #AFBCCB;
+  --md-outline: #7A8BA0;
+  --md-outline-variant: #2A3A4E;
+  --md-error: #E5677F;
+  --md-on-error: #2A0A12;
+  --md-error-container: #5A1A2A;
+  --md-on-error-container: #F6CBD4;
+  --md-success: #6CCB97;
+  --md-success-container: #173A28;
+  --md-on-success-container: #CDEFDB;
+  --md-warning: #F2A266;
+  --md-warning-container: #4A2D16;
+  --md-on-warning-container: #FFE6CF;
+  --md-info: #7FA6F0;
+  --md-info-container: #142C5C;
+  --md-on-info-container: #C9D9FA;
+  --md-sev1-bg: #1D4A33;
+  --md-sev1-on: #DCEFE3;
+  --md-sev2-bg: #4A2D16;
+  --md-sev2-on: #FFE6CF;
+  --md-sev3-bg: #E8833A;
+  --md-sev3-on: #2E1806;
+  --md-sev4-bg: #9E2F45;
+  --md-sev4-on: #FFFFFF;
+  --md-cat-1: #5FA3EC;
+  --md-cat-2: #5CC98A;
+  --md-cat-3: #F0B04A;
+  --md-cat-4: #C4A0E8;
+  --md-cat-5: #4DD0E1;
+  --elev-1: 0 1px 3px rgba(0,0,0,.30), 0 1px 12px rgba(0,0,0,.20);
+  --elev-2: 0 2px 6px rgba(0,0,0,.35), 0 2px 24px rgba(0,0,0,.25);
+  --elev-3: 0 4px 12px rgba(0,0,0,.40), 0 8px 32px rgba(0,0,0,.30);
+}

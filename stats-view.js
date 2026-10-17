@@ -5,7 +5,7 @@
 // parser.worker.js (traffic-stats.js), so this only formats and lays it out.
 // thought up by human, created by ai
 
-import { deviceLabel, dnsRcodeName, formatBytes, icmpTypeCodeLabel, portListLabel } from './data-model.js?v=1.8.0';
+import { deviceLabel, dnsRcodeName, formatBytes, healthBadge, icmpTypeCodeLabel, portListLabel } from './data-model.js?v=2.0.0';
 
 const percentFormat = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 });
 const countFormat = new Intl.NumberFormat('de-DE');
@@ -106,7 +106,7 @@ function splitBarRows(rows, emptyText) {
     .map(
       (r) => `<div class="stats-row stats-row--wide">
       <span class="stats-row__label" title="${esc(r.label)}">${esc(r.label)}</span>
-      <span class="stats-bar stats-bar--split"><i data-w="${(r.first / max) * 100}" data-bg="--stats-tcp"></i><i data-w="${(r.second / max) * 100}" data-bg="--stats-udp"></i></span>
+      <span class="stats-bar stats-bar--split"><i data-w="${(r.first / max) * 100}" data-bg="--md-cat-1"></i><i data-w="${(r.second / max) * 100}" data-bg="--md-cat-2"></i></span>
       <span class="stats-row__value">${esc(r.display)}</span>
     </div>`,
     )
@@ -132,13 +132,13 @@ function tcpHealthCard(stats) {
     display: `${countFormat.format(value)} (${formatPercent(value, t.packets)})`,
   });
   const rows = [
-    row('Retransmits', t.retransmissions, '--stats-bad', `Segment mit bereits gesehener Sequenznummer erneut gesendet. Davon Fast Retransmits (nach 3 Dup-ACKs): ${countFormat.format(t.fastRetransmissions)}.`),
-    row('Dup-ACKs', t.duplicateAcks, '--stats-warn', 'Wiederholte ACKs auf dieselbe Sequenznummer – deutet auf ein fehlendes oder verspätetes Segment hin.'),
-    row('Lücken', t.lostSegments, '--stats-bad', 'Sequenznummer springt nach vorn: Segmente dazwischen fehlen im Capture (verloren oder am Messpunkt nicht gesehen).'),
-    row('Out-of-Order', t.outOfOrder, '--stats-warn', 'Segment traf kurz nach späteren Daten ein (< 3 ms) – Umsortierung im Netz statt erneutem Senden.'),
-    row('RST', t.resets, '--stats-bad', 'Verbindung wurde per Reset abgebrochen.'),
-    row('Zero-Window', t.zeroWindow, '--stats-warn', 'Empfänger meldet Fenstergröße 0 – er kommt mit der Datenmenge nicht hinterher.'),
-    row('Keep-Alives', t.keepAlives, '--stats-neutral', 'Keep-Alive-Probes, keine Fehler.'),
+    row('Retransmits', t.retransmissions, '--pa-bad', `Segment mit bereits gesehener Sequenznummer erneut gesendet. Davon Fast Retransmits (nach 3 Dup-ACKs): ${countFormat.format(t.fastRetransmissions)}.`),
+    row('Dup-ACKs', t.duplicateAcks, '--pa-warn', 'Wiederholte ACKs auf dieselbe Sequenznummer – deutet auf ein fehlendes oder verspätetes Segment hin.'),
+    row('Lücken', t.lostSegments, '--pa-bad', 'Sequenznummer springt nach vorn: Segmente dazwischen fehlen im Capture (verloren oder am Messpunkt nicht gesehen).'),
+    row('Out-of-Order', t.outOfOrder, '--pa-warn', 'Segment traf kurz nach späteren Daten ein (< 3 ms) – Umsortierung im Netz statt erneutem Senden.'),
+    row('RST', t.resets, '--pa-bad', 'Verbindung wurde per Reset abgebrochen.'),
+    row('Zero-Window', t.zeroWindow, '--pa-warn', 'Empfänger meldet Fenstergröße 0 – er kommt mit der Datenmenge nicht hinterher.'),
+    row('Keep-Alives', t.keepAlives, '--md-outline', 'Keep-Alive-Probes, keine Fehler.'),
   ];
   const h = stats.handshakes;
   const handshake = h && h.count ? ` · Handshake (SYN → SYN/ACK): Ø ${formatMs(h.sum / h.count)}, ${formatMs(h.min)}–${formatMs(h.max)} bei ${countFormat.format(h.count)} Verbindungen` : '';
@@ -152,7 +152,7 @@ function icmpCard(stats) {
   const rows = stats.icmp.slice(0, 10).map((entry) => ({
     label: icmpTypeCodeLabel(entry.protocol, entry.type, entry.code),
     value: entry.packets,
-    color: dangerTypes.has(`${entry.protocol}|${entry.type}`) ? '--stats-bad' : '--stats-icmp',
+    color: dangerTypes.has(`${entry.protocol}|${entry.type}`) ? '--pa-bad' : '--md-cat-3',
     display: countFormat.format(entry.packets),
   }));
   const more = stats.icmp.length > rows.length ? `${stats.icmp.length - rows.length} weitere Typen nicht angezeigt.` : '';
@@ -163,7 +163,7 @@ function flagsCard(stats) {
   const rows = stats.tcpFlags.slice(0, 10).map((entry) => ({
     label: entry.label,
     value: entry.packets,
-    color: entry.label.includes('RST') ? '--stats-bad' : '--stats-tcp',
+    color: entry.label.includes('RST') ? '--pa-bad' : '--md-cat-1',
     display: countFormat.format(entry.packets),
   }));
   return card('TCP-Flag-Kombinationen', barRows(rows, 'Keine TCP-Pakete im Capture.'));
@@ -174,7 +174,7 @@ function portsCard(stats, metric) {
   const rows = sorted.map((entry) => ({
     label: `${entry.protocol} ${portListLabel(entry.port)}`,
     value: valueOf(entry, metric),
-    color: entry.protocol === 'TCP' ? '--stats-tcp' : '--stats-udp',
+    color: entry.protocol === 'TCP' ? '--md-cat-1' : '--md-cat-2',
     display: formatValue(valueOf(entry, metric), metric),
   }));
   return card('Häufigste Ports', barRows(rows, 'Keine TCP-/UDP-Pakete im Capture.'), '', 'Als Dienst-Port gilt der jeweils niedrigere der beiden Ports.');
@@ -202,10 +202,10 @@ function talkersCard(talkers, deviceIndex, metric) {
     .map((p) => ({
       label: `${labelOf(p.a)} ⇄ ${labelOf(p.b)}`,
       value: valueOf(p, metric),
-      color: '--stats-neutral',
+      color: '--md-outline',
       display: formatValue(valueOf(p, metric), metric),
     }));
-  const legend = `<p class="stats-card__summary"><span class="stats-swatch stats-swatch--inline" data-bg="--stats-tcp"></span> gesendet &nbsp; <span class="stats-swatch stats-swatch--inline" data-bg="--stats-udp"></span> empfangen · Rangfolge nach ${metric === 'bytes' ? 'Datenvolumen' : 'Paketanzahl'} (Umschalter oben)</p>`;
+  const legend = `<p class="stats-card__summary"><span class="stats-swatch stats-swatch--inline" data-bg="--md-cat-1"></span> gesendet &nbsp; <span class="stats-swatch stats-swatch--inline" data-bg="--md-cat-2"></span> empfangen · Rangfolge nach ${metric === 'bytes' ? 'Datenvolumen' : 'Paketanzahl'} (Umschalter oben)</p>`;
   const body = `${legend}<div class="stats-columns">
     <div><div class="stats-subtitle">Top-Talker (Geräte)</div>${splitBarRows(deviceRows, 'Keine Geräte im Capture.')}</div>
     <div><div class="stats-subtitle">Aktivste Gerätepaare</div>${barRows(pairRows, 'Keine Kommunikation im Capture.').replace(/class="stats-row"/g, 'class="stats-row stats-row--wide"')}</div>
@@ -219,11 +219,11 @@ function tlsCard(stats) {
   const versionRows = tls.versions.map((v) => ({
     label: v.name,
     value: v.count,
-    color: v.outdated ? '--stats-bad' : v.name === 'TLS 1.3' ? '--stats-udp' : '--stats-tcp',
+    color: v.outdated ? '--pa-bad' : v.name === 'TLS 1.3' ? '--md-cat-2' : '--md-cat-1',
     hint: v.outdated ? 'Veraltet (RFC 8996): TLS 1.0/1.1 und SSL 3.0 sollten nicht mehr ausgehandelt werden.' : '',
     display: `${countFormat.format(v.count)} (${formatPercent(v.count, tls.serverHellos)})`,
   }));
-  const qualityColor = { ok: '--stats-udp', nopfs: '--stats-warn', weak: '--stats-bad' };
+  const qualityColor = { ok: '--md-cat-2', nopfs: '--pa-warn', weak: '--pa-bad' };
   const qualityHint = { ok: '', nopfs: 'Statischer RSA-Schlüsselaustausch: kein Forward Secrecy – mitgeschnittener Verkehr ist später entschlüsselbar, wenn der Server-Schlüssel bekannt wird.', weak: 'Kryptographisch gebrochen oder veraltet (RC4, 3DES).' };
   const cipherRows = tls.ciphers.map((c) => ({
     label: c.name,
@@ -235,7 +235,7 @@ function tlsCard(stats) {
   const outdatedRows = tls.outdatedServers.map((s) => ({
     label: `${s.server} · ${s.name}`,
     value: s.count,
-    color: '--stats-bad',
+    color: '--pa-bad',
     display: countFormat.format(s.count),
   }));
   const summary = `<p class="stats-card__summary">${countFormat.format(tls.serverHellos)} ServerHellos (ausgehandelte Version) · ${countFormat.format(tls.clientHellos)} ClientHellos im Capture</p>`;
@@ -255,7 +255,7 @@ function statsTable(headers, rows) {
 }
 
 function chip(level, text) {
-  return `<span class="health-chip health-chip--${level}">${esc(text)}</span>`;
+  return healthBadge(level, text);
 }
 
 function l2Card(stats, metric) {
@@ -264,7 +264,7 @@ function l2Card(stats, metric) {
   const protocolRows = l2.protocols.map((p) => ({
     label: p.name,
     value: valueOf(p, metric),
-    color: '--stats-l2',
+    color: '--md-cat-5',
     display: `${formatValue(valueOf(p, metric), metric)} · ${countFormat.format(p.devices)} ${p.devices === 1 ? 'Gerät' : 'Geräte'}`,
   }));
   let body = l2.protocols.length ? barRows(protocolRows, '') : '<p class="stats-empty">Keine Layer-2-Steuerframes im Capture.</p>';
@@ -318,7 +318,7 @@ function l2Card(stats, metric) {
 
   if (l2.vlans.length) {
     body += `<div class="stats-subtitle">VLANs (getaggte Frames)${l2.vlanCount > l2.vlans.length ? ` – ${countFormat.format(l2.vlanCount)} gesehen` : ''}</div>`;
-    body += barRows(l2.vlans.map((v) => ({ label: `VLAN ${v.id}`, value: valueOf(v, metric), color: '--stats-tcp', display: formatValue(valueOf(v, metric), metric) })), '');
+    body += barRows(l2.vlans.map((v) => ({ label: `VLAN ${v.id}`, value: valueOf(v, metric), color: '--md-cat-1', display: formatValue(valueOf(v, metric), metric) })), '');
   }
   return card('Layer-2-Protokolle', body, 'stats-card--wide', 'Nur was der Messpunkt sieht: Mirror-Ports und manche Netzwerkkarten filtern Steuerframes (STP, CDP, LLDP, LACP) heraus. Die Namen aus CDP/LLDP erscheinen zusätzlich als Beschriftung der Geräte, sofern deren Management-IP im Capture vorkommt.');
 }
@@ -332,7 +332,7 @@ function appleCard(stats, metric) {
   const groupRows = a.groups.map((g) => ({
     label: g.generic ? `${g.name} (herstellerübergreifend)` : g.name,
     value: valueOf(g, metric),
-    color: g.generic ? '--stats-neutral' : '--stats-tcp',
+    color: g.generic ? '--md-outline' : '--md-cat-1',
     hint: g.generic ? 'Bonjour/mDNS nutzen auch Drucker, Chromecast u. a.; nicht im Apple-Anteil enthalten.' : '',
     display: formatValue(valueOf(g, metric), metric),
   }));
@@ -340,14 +340,14 @@ function appleCard(stats, metric) {
 
   if (a.dnsGroups.length) {
     body += '<div class="stats-subtitle">DNS-Anfragen nach Apple-Dienst</div>';
-    body += barRows(a.dnsGroups.map((g) => ({ label: g.name, value: g.count, color: g.name === 'iCloud Private Relay' ? '--stats-warn' : '--stats-tcp', display: countFormat.format(g.count) })), '');
+    body += barRows(a.dnsGroups.map((g) => ({ label: g.name, value: g.count, color: g.name === 'iCloud Private Relay' ? '--pa-warn' : '--md-cat-1', display: countFormat.format(g.count) })), '');
   }
   if (a.mdnsServices.length) {
     body += '<div class="stats-subtitle">Bonjour-Dienste</div>';
     body += barRows(a.mdnsServices.map((s) => ({
       label: s.apple ? `${s.service} (Apple-typisch)` : s.service,
       value: s.count,
-      color: s.apple ? '--stats-tcp' : '--stats-neutral',
+      color: s.apple ? '--md-cat-1' : '--md-outline',
       display: countFormat.format(s.count),
     })), '');
   }
@@ -356,12 +356,12 @@ function appleCard(stats, metric) {
   }
   if (a.clients.length) {
     body += '<div class="stats-subtitle">Clients mit dem meisten Apple-Verkehr</div>';
-    body += barRows(a.clients.map((c) => ({ label: c.address, value: valueOf(c, metric), color: '--stats-tcp', display: formatValue(valueOf(c, metric), metric) })), '');
+    body += barRows(a.clients.map((c) => ({ label: c.address, value: valueOf(c, metric), color: '--md-cat-1', display: formatValue(valueOf(c, metric), metric) })), '');
   }
   return card('Apple-Protokolle', body, '', `Erkennung über Adressbereich 17.0.0.0/8, Ports, DNS-Namen und TLS-Servernamen (SNI) – Heuristik, Listenstand ${stats.classificationVersion}. Verkehr über Fremd-CDNs (z. B. Akamai) ohne sichtbares DNS wird nicht erkannt.`);
 }
 
-const RESOLVER_COLORS = { umbrella: '--stats-icmp', private: '--stats-tcp', google: '--stats-bad', cloudflare: '--stats-warn', quad9: '--stats-warn', adguard: '--stats-warn', cleanbrowsing: '--stats-warn', apple: '--stats-arp', public: '--stats-warn' };
+const RESOLVER_COLORS = { umbrella: '--md-cat-3', private: '--md-cat-1', google: '--pa-bad', cloudflare: '--pa-warn', quad9: '--pa-warn', adguard: '--pa-warn', cleanbrowsing: '--pa-warn', apple: '--md-cat-4', public: '--pa-warn' };
 
 function dnsServersCard(stats) {
   const r = stats.dnsServers;
@@ -372,7 +372,7 @@ function dnsServersCard(stats) {
     body += barRows(r.categories.map((c) => ({
       label: c.label,
       value: c.queries,
-      color: RESOLVER_COLORS[c.category] || '--stats-neutral',
+      color: RESOLVER_COLORS[c.category] || '--md-outline',
       display: `${countFormat.format(c.queries)} Anfragen · ${countFormat.format(c.clients)} ${c.clients === 1 ? 'Client' : 'Clients'}`,
     })), '');
     body += '<div class="stats-subtitle">Einzelne Server</div>';
@@ -466,7 +466,7 @@ function dnsCard(stats) {
   const dns = stats.dns;
   if (!dns) return '';
   const failed = dns.rcodes.filter((r) => r.code !== 0).reduce((sum, r) => sum + r.count, 0);
-  const rcodeColor = (code) => (code === 0 ? '--stats-udp' : code === 3 ? '--stats-warn' : '--stats-bad');
+  const rcodeColor = (code) => (code === 0 ? '--md-cat-2' : code === 3 ? '--pa-warn' : '--pa-bad');
   const rcodeRows = dns.rcodes.slice(0, 8).map((r) => ({
     label: dnsRcodeName(r.code),
     value: r.count,
@@ -483,13 +483,13 @@ function dnsCard(stats) {
   const resolverRows = dns.resolvers.map((r) => ({
     label: r.ip,
     value: r.failures,
-    color: '--stats-bad',
+    color: '--pa-bad',
     display: `${countFormat.format(r.failures)} von ${countFormat.format(r.responses)} (${formatPercent(r.failures, r.responses)})`,
   }));
   const clientRows = dns.clients.map((c) => ({
     label: c.ip,
     value: c.count,
-    color: '--stats-warn',
+    color: '--pa-warn',
     display: countFormat.format(c.count),
   }));
 
@@ -509,7 +509,7 @@ function sizesCard(stats, metric) {
   const rows = stats.sizeBuckets.map((bucket, i) => ({
     label: labels[i],
     value: valueOf(bucket, metric),
-    color: '--stats-neutral',
+    color: '--md-outline',
     display: formatValue(valueOf(bucket, metric), metric),
   }));
   const avg = stats.decodedPackets ? Math.round(stats.decodedBytes / stats.decodedPackets) : 0;
@@ -547,23 +547,23 @@ function mtuFragmentationCard(stats) {
     display: total ? `${countFormat.format(value)} (${formatPercent(value, total)})` : countFormat.format(value),
   });
   const fragRows = [
-    countRow('IPv4-Fragmente', f.ipv4Fragments, f.ipv4Packets, '--stats-bad', 'IPv4-Pakete, die Teil eines fragmentierten Datagramms sind (More-Fragments-Flag oder Fragment-Offset > 0). Prozentwert: Anteil an allen IPv4-Paketen.'),
-    countRow('IPv6-Fragmente', f.ipv6Fragments, f.ipv6Packets, '--stats-bad', 'IPv6-Pakete mit Fragment-Extension-Header. Prozentwert: Anteil an allen IPv6-Paketen.'),
-    countRow('Fragmentierte Datagramme', f.fragmentedDatagrams, 0, '--stats-warn', 'Anzahl der ersten Fragmente = Anzahl der fragmentierten Datagramme.'),
-    countRow('DF-Bit gesetzt (IPv4)', f.dontFragment, f.ipv4Packets, '--stats-neutral', '„Don\'t Fragment“: Router dürfen das Paket nicht fragmentieren und müssen bei zu großen Paketen ICMP „Fragmentation needed“ senden (Path-MTU-Discovery).'),
+    countRow('IPv4-Fragmente', f.ipv4Fragments, f.ipv4Packets, '--pa-bad', 'IPv4-Pakete, die Teil eines fragmentierten Datagramms sind (More-Fragments-Flag oder Fragment-Offset > 0). Prozentwert: Anteil an allen IPv4-Paketen.'),
+    countRow('IPv6-Fragmente', f.ipv6Fragments, f.ipv6Packets, '--pa-bad', 'IPv6-Pakete mit Fragment-Extension-Header. Prozentwert: Anteil an allen IPv6-Paketen.'),
+    countRow('Fragmentierte Datagramme', f.fragmentedDatagrams, 0, '--pa-warn', 'Anzahl der ersten Fragmente = Anzahl der fragmentierten Datagramme.'),
+    countRow('DF-Bit gesetzt (IPv4)', f.dontFragment, f.ipv4Packets, '--md-outline', '„Don\'t Fragment“: Router dürfen das Paket nicht fragmentieren und müssen bei zu großen Paketen ICMP „Fragmentation needed“ senden (Path-MTU-Discovery).'),
   ];
 
   const mssRows = m.mss.slice(0, 6).map((entry) => ({
     label: `MSS ${entry.mss} (IPv${entry.ipVersion})`,
     value: entry.packets,
-    color: '--stats-tcp',
+    color: '--md-cat-1',
     hint: `Im SYN angekündigte Maximum Segment Size; entspricht einer MTU von ca. ${entry.impliedMtu} B (MSS + IP- und TCP-Header).`,
     display: `≈ MTU ${countFormat.format(entry.impliedMtu)} · ${countFormat.format(entry.packets)}×`,
   }));
   const icmpRows = m.icmpReported.slice(0, 6).map((entry) => ({
     label: entry.protocol === 'ICMPv6' ? 'Packet Too Big' : 'Fragmentation needed',
     value: entry.packets,
-    color: '--stats-bad',
+    color: '--pa-bad',
     hint: 'Ein Router meldet, dass ein Paket größer als die MTU seines nächsten Hops war.',
     display: `MTU ${countFormat.format(entry.mtu)} · ${countFormat.format(entry.packets)}×`,
   }));
@@ -609,29 +609,29 @@ export function renderStats(container, { stats, metric, talkers, deviceIndex }) 
   const distribution = card(
     'Protokollverteilung',
     shareBlock('Transportprotokoll', [
-      { label: 'TCP', counter: stats.byProtocol.TCP, color: '--stats-tcp' },
-      { label: 'UDP', counter: stats.byProtocol.UDP, color: '--stats-udp' },
-      { label: 'ICMP / ICMPv6', counter: stats.byProtocol.ICMP, color: '--stats-icmp' },
-      { label: 'ARP', counter: stats.byProtocol.ARP, color: '--stats-arp' },
-      { label: 'Layer 2 (STP, CDP, LLDP …)', counter: stats.byProtocol.L2, color: '--stats-l2' },
-      { label: 'Sonstige', counter: stats.byProtocol.OTHER, color: '--stats-neutral' },
+      { label: 'TCP', counter: stats.byProtocol.TCP, color: '--md-cat-1' },
+      { label: 'UDP', counter: stats.byProtocol.UDP, color: '--md-cat-2' },
+      { label: 'ICMP / ICMPv6', counter: stats.byProtocol.ICMP, color: '--md-cat-3' },
+      { label: 'ARP', counter: stats.byProtocol.ARP, color: '--md-cat-4' },
+      { label: 'Layer 2 (STP, CDP, LLDP …)', counter: stats.byProtocol.L2, color: '--md-cat-5' },
+      { label: 'Sonstige', counter: stats.byProtocol.OTHER, color: '--md-outline' },
     ], metric) +
       shareBlock('Adressierung', [
-        { label: 'Unicast', counter: stats.byCast.unicast, color: '--stats-tcp' },
-        { label: 'Multicast', counter: stats.byCast.multicast, color: '--stats-udp' },
-        { label: 'Broadcast', counter: stats.byCast.broadcast, color: '--stats-icmp' },
+        { label: 'Unicast', counter: stats.byCast.unicast, color: '--md-cat-1' },
+        { label: 'Multicast', counter: stats.byCast.multicast, color: '--md-cat-2' },
+        { label: 'Broadcast', counter: stats.byCast.broadcast, color: '--md-cat-3' },
       ], metric) +
       shareBlock('IP-Version', [
-        { label: 'IPv4', counter: stats.byIpVersion.ipv4, color: '--stats-tcp' },
-        { label: 'IPv6', counter: stats.byIpVersion.ipv6, color: '--stats-udp' },
-        { label: 'Kein IP (z. B. ARP)', counter: stats.byIpVersion.none, color: '--stats-neutral' },
+        { label: 'IPv4', counter: stats.byIpVersion.ipv4, color: '--md-cat-1' },
+        { label: 'IPv6', counter: stats.byIpVersion.ipv6, color: '--md-cat-2' },
+        { label: 'Kein IP (z. B. ARP)', counter: stats.byIpVersion.none, color: '--md-outline' },
       ], metric),
     'stats-card--wide stats-card--shares',
     undecoded > 0 ? `${countFormat.format(undecoded)} Pakete (z. B. 802.11-Management) wurden nicht ausgewertet und fehlen in den Anteilen.` : '',
   );
 
   container.innerHTML = `
-    <p class="stats-scope">Statistik über den gesamten Capture – die Filter in der Seitenleiste wirken hier nicht.</p>
+    <p class="stats-scope">Statistik über den gesamten Capture – Geräteauswahl und Filterleiste wirken hier (noch) nicht.</p>
     <div class="stats-kpis">${kpis}</div>
     <div class="stats-grid">
       ${distribution}

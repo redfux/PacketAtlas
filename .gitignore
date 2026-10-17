@@ -6,3 +6,6 @@ build/
 .DS_Store
 .claude/
 prompt_pcap_kommunikationsmatrix.md
+
+# No brand or logo files in this public repo (the design system's assets/ stays out)
+assets/

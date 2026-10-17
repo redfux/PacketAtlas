@@ -2,7 +2,7 @@
 
 ## Überblick
 
-PacketAtlas ist eine buildfreie, rein clientseitige Web-App aus nativen ES-Modulen. Es gibt keinen Server-Anteil, keinen Bundler und keinen Build-Schritt – alle Dateien liegen flach im Projekt-Root (Ausnahmen: `vendor/`, `fonts/`, `assets/`, `docs/`).
+PacketAtlas ist eine buildfreie, rein clientseitige Web-App aus nativen ES-Modulen. Es gibt keinen Server-Anteil, keinen Bundler und keinen Build-Schritt – alle Module liegen flach im Projekt-Root (Ausnahmen: `vendor/`, `css/`, `js/`, `icons/`, `docs/`).
 
 ```
 Datei-Import (app.js)
@@ -189,9 +189,23 @@ Ist die Auswahl leer (`state.selectedIds.size === 0`) und wird ein einzelnes Ger
 
 Neben „Geräte" listet ein zweiter Reiter „Ports" (`setSidebarTab()` in `app.js`) jede im Capture tatsächlich genutzte (Protokoll, Service-Port)-Kombination auf. `computePortEntries()` in `data-model.js` gruppiert dafür `state.connections` nach `${protocolGroupOf(protocol)}|${port}` (nur TCP/UDP – ICMP/ARP haben keinen Port und werden übersprungen) und sammelt je Gruppe alle beteiligten Geräte-IDs sowie Paket-/Byte-Summen; das Ergebnis ist bereits numerisch nach Port aufsteigend sortiert. `WELL_KNOWN_PORTS`/`wellKnownPortName()`/`portListLabel()` (ebenfalls `data-model.js`) bilden eine kleine, nicht erschöpfende Tabelle gängiger IANA-Portnummern auf lesbare Namen ab (z. B. „22 (SSH)"); unbekannte Ports erscheinen ohne Klammerzusatz statt geraten oder ausgeblendet zu werden. Da ein Port sowohl über TCP als auch UDP vorkommen kann, ist jede Zeile explizit einem Protokoll zugeordnet (Label z. B. „53 (DNS) · UDP").
 
-Die Portliste teilt sich bewusst Suchfeld (`#device-search`) und TCP/UDP-Protokoll-Chips (`#protocol-filters`) mit der Geräteliste, statt eigene Steuerelemente zu bekommen – beide Eingabe-Handler rufen zusätzlich `renderPortList()` auf. „Alle auswählen"/„Alle abwählen" und der Multicast-Umschalter sind reine Geräte-Konzepte und werden im Ports-Reiter ausgeblendet (`#device-filter-extras`).
+Die Portliste teilt sich bewusst Suchfeld (`#device-search`) und TCP/UDP-Protokoll-Chips (`#protocol-filters`) mit der Geräteliste, statt eigene Steuerelemente zu bekommen – beide Eingabe-Handler rufen zusätzlich `renderPortList()` auf. Die „Alle“-Checkbox (`#select-all`) wirkt in beiden Reitern auf die Geräteauswahl; Multicast/Broadcast und „Nur Probleme“ sitzen in der Filterleiste und gelten für alle Ansichten.
 
 Ein Häkchen bei einem Port-Eintrag fügt alle in `entry.deviceIds` gesammelten Geräte-IDs zu `state.selectedIds` hinzu (Vereinigung mit einer eventuell bereits bestehenden Auswahl); Entfernen des Häkchens entfernt exakt dieselben IDs wieder – ohne Herkunfts-Tracking, d. h. ein Gerät, das über zwei sich überschneidende Ports ausgewählt wurde, verschwindet bereits beim Abwählen des ersten davon. Der Checkbox-Zustand selbst ist rein abgeleitet (`isPortEntryFullySelected()`: alle beteiligten Geräte aktuell in `state.selectedIds`), keine eigene persistente Auswahl – so bleiben Geräte- und Portliste immer konsistent zum selben `state.selectedIds`, unabhängig davon, über welchen Reiter zuletzt selektiert wurde. Das erlaubt z. B., mit einem Klick auf „22 (SSH)" die komplette SSH-Kommunikation in allen vier Ansichten sichtbar zu machen, ohne die beteiligten IPs vorher kennen zu müssen.
+
+## Oberfläche und Design System
+
+Seit 2.0.0 baut die Oberfläche auf einem gemeinsamen Design System auf (Material-Design-3-Grundlage, Theme „Neutral“ in Stahlblau, ohne Marken-Assets). Es wird nicht von Hand kopiert, sondern per Sync-Skript des Design Systems eingespielt (`sync-design.sh --theme neutral`) und liegt in:
+
+- `css/design-tokens.css` – Farben, Typografie, Abstände als CSS-Variablen (`--md-*`), hell/dunkel; `css/design-components.css` – Bausteine (Appbar, Menü, Seitenleiste, Werkzeug-/Filterleiste, Tabs, Chips, Umschalter `.seg`, Suchfeld, Karten, Status-Boxen, Dialog, Schweregrad-Badges `.sev`, Kategorie-Farben `--md-cat-1…5` für Diagramme);
+- `js/design-system.js` – Hell/Auto/Dunkel (vor dem ersten Zeichnen, Schlüssel `theme` im `localStorage`), einklappbare Seitenleiste, Löschen-Knopf/Escape im Suchfeld;
+- `icons/` – Icon-Sprite als Referenz; die Symbole stehen inline am Anfang von `index.html`.
+
+Diese Dateien werden nicht im Projekt geändert. Alles PacketAtlas-Eigene steht in `css/app.css` und nutzt ausschließlich die Tokens: Layout (Fensterfläche ohne Seiten-Scrollen, `.app-shell.fill`), die SVG-Ansichten, Statistik, Verbindungstabelle, Tooltip, angeheftete Kacheln. Problemfarben sind dort zentral als `--pa-ok`/`--pa-warn`/`--pa-bad` abgeleitet; die Matrix mischt ihre Farbskala per `color-mix()` aus `--md-primary` bzw. `--pa-bad` mit der Oberfläche, sodass sie dem Hell/Dunkel-Modus folgt.
+
+Aufteilung der Bedienelemente („Wer / Was / Wie“): Seitenleiste = Auswahl der Geräte/Ports; Filterleiste = welche Verbindungen zählen (Protokolle, „Nur Probleme“, Multicast/Broadcast, Zähler); Werkzeugleiste = Ansicht, Adressfamilie, Metrik; Appbar = Datei öffnen und Export (Popover-Menü). Der PCAP-Export-Dialog ist ein natives `<dialog>` (Escape und Klick auf den Hintergrund schließen ihn; das `close`-Ereignis beendet einen laufenden Export-Worker).
+
+Alles läuft unter der strengen CSP (`script-src 'self'; style-src 'self'`): keine Inline-Stile oder -Skripte; dynamische Breiten und Farben setzt der Code über das CSSOM (`element.style.setProperty('--w', …)`, `rect.style.fill`).
 
 ## Web Worker
 
@@ -246,7 +260,7 @@ Geschrieben wird immer **klassisches pcap** (24-Byte-Global-Header + 16-Byte-Rec
 ## Sicherheit / Datenschutz
 
 - Content-Security-Policy (Meta-Tag in `index.html`) unterbindet jede externe Verbindung: `default-src 'none'` mit gezielten Ausnahmen nur für `'self'` (Skripte, Styles, Fonts, Worker) sowie `data:`/`blob:` bei Bildern (letzteres ausschließlich für den clientseitigen PNG-Export benötigt – eine reine In-Memory-Referenz auf zuvor selbst erzeugte Daten, keine Netzwerkverbindung).
-- Keine CDN-Referenzen; alle Bibliotheken und Schriften liegen lokal in `vendor/` bzw. `fonts/`.
+- Keine CDN-Referenzen; alle Bibliotheken liegen lokal in `vendor/`, Icons als Inline-SVG-Sprite in `index.html`, Schrift ist die Systemschrift.
 - Keine Analytics-/Tracking-Skripte.
 - Datei-Inhalt verlässt zu keinem Zeitpunkt den Browser-Kontext (kein `fetch`, kein `XMLHttpRequest` im gesamten Code; `connect-src 'none'` erzwingt dies zusätzlich technisch).
 

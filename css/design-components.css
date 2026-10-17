@@ -1,0 +1,1486 @@
+/* ==========================================================================
+   Design System — Components
+   Version: 3.1.0
+   Stand: 17.10.2026
+
+   Material Design 3 inspired components using semantic tokens from
+   design-tokens.css. Never reference palette values directly — always
+   use var(--md-*) or var(--radius-*) etc.
+
+   thought up by human, coded by ai
+   ========================================================================== */
+
+/* ------------------------------------------------------------------- reset */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+[hidden] { display: none !important; }
+
+/* Icon sprite block at the top of <body>: takes no space, without needing an
+   inline style (strict CSP). */
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+body {
+  font-family: var(--font);
+  font-size: var(--fs-base);
+  line-height: var(--lh);
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+  -webkit-text-size-adjust: 100%;
+  /* Footer sits at the bottom even on short pages. */
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+:focus-visible {
+  outline: 3px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+/* Global base rules (links, buttons, tables) sit in :where() — zero
+   specificity, so any project or component rule wins without fighting them.
+   Exception: the button states (hover, active, disabled) keep their normal
+   specificity, so they still reach buttons that reset themselves with
+   `all: unset` or set their own cursor/opacity. */
+:where(a) {
+  color: var(--md-info);
+  text-decoration: none;
+}
+:where(a:hover) { text-decoration: underline; }
+
+code, pre {
+  font-family: var(--mono);
+  font-size: 0.92em;
+}
+
+/* ================================================================== appbar */
+/* A quiet band instead of a block of colour: light green, no drop shadow,
+   just a hairline towards the toolbar below. Ground and foreground follow
+   the theme (--md-appbar / --md-on-appbar). */
+.appbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 clamp(12px, 4vw, 32px);
+  height: var(--appbar-height);
+  background: var(--md-appbar);
+  color: var(--md-on-appbar);
+  border-bottom: 1px solid var(--md-outline-variant);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-appbar);
+}
+
+/* Left: product mark, app name and an optional claim behind a hairline. */
+.appbar .app-title {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin: 0;
+  min-width: 0;
+  font-size: var(--fs-lg);
+  font-weight: 500;
+}
+.appbar .app-mark {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  color: var(--md-primary-strong);
+}
+.appbar .app-mark svg { width: 100%; height: 100%; fill: currentColor; }
+.appbar img.app-mark { width: auto; height: 36px; }
+.appbar .app-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.appbar .app-claim {
+  border-left: 1px solid var(--md-outline-variant);
+  padding-left: 11px;
+  font-size: var(--fs-xs);
+  line-height: 1.3;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--md-on-surface-variant);
+  white-space: nowrap;
+}
+
+.appbar .spacer { flex: 1 1 auto; }
+
+/* Right: the brand mark (e.g. a signet), after the menu. The mark alone — a
+   landscape wordmark would compete with the app name on the left. */
+.appbar .brand-mark { height: 30px; width: auto; flex: none; }
+
+@media (max-width: 899px) {
+  .appbar .app-claim { display: none; }
+}
+@media (max-width: 639px) {
+  .appbar .app-name { font-size: var(--fs-sm); }
+  .appbar .badge { display: none; }
+  .appbar img.app-mark { height: 28px; }
+  .appbar .brand-mark { height: 24px; }
+}
+
+/* Logos exist as a light-ground and a dark-ground variant; the bar follows
+   the theme, so the marks have to as well. An <img> cannot see data-theme,
+   hence the pair of elements. */
+.appbar .on-light { display: block; }
+.appbar .on-dark { display: none; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .appbar .on-light { display: none; }
+  :root:not([data-theme="light"]) .appbar .on-dark { display: block; }
+  :root:not([data-theme="light"]) .appbar .app-mark { color: var(--md-primary); }
+}
+
+:root[data-theme="dark"] .appbar .on-light { display: none; }
+:root[data-theme="dark"] .appbar .on-dark { display: block; }
+:root[data-theme="dark"] .appbar .app-mark { color: var(--md-primary); }
+
+.appbar .badge {
+  font: 500 var(--fs-xs)/1 var(--mono);
+  padding: 5px 10px;
+  border-radius: var(--radius-full);
+  background: var(--md-surface-1);
+  color: var(--md-on-surface-variant);
+  white-space: nowrap;
+}
+
+/* ================================================== theme toggle (appbar) */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--md-surface-1);
+  border-radius: var(--radius-full);
+  padding: 2px;
+  border: none;
+}
+
+.theme-toggle button {
+  all: unset;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--md-on-surface-variant);
+  transition: background var(--duration-short) var(--easing),
+              color var(--duration-short) var(--easing);
+}
+
+.theme-toggle button:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 1px; }
+/* Pressed: only the ground changes, the icon keeps its colour. */
+.theme-toggle button[aria-pressed="true"] {
+  background: var(--md-surface-3);
+}
+
+.theme-toggle svg { width: 18px; height: 18px; fill: currentColor; }
+
+/* ============================================================== app menu */
+/* Hamburger button in the appbar, left of the brand mark. It opens the
+   .app-menu panel through the browser's popover API (popovertarget), which
+   brings Escape, click-outside and focus return without any script. */
+.menu-toggle {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--md-on-appbar);
+  flex: none;
+}
+.menu-toggle:hover:not(:disabled) { background: var(--md-surface-1); filter: none; }
+.menu-toggle svg { width: 24px; height: 24px; fill: currentColor; }
+
+/* The panel. A popover lives in the top layer, so it is placed against the
+   viewport: right under the appbar, on the appbar's right gutter. */
+.app-menu {
+  inset: auto;
+  top: calc(var(--appbar-height) + 4px);
+  right: clamp(12px, 4vw, 32px);
+  margin: 0;
+  padding: 0;
+  min-width: 220px;
+  max-width: min(320px, calc(100vw - 24px));
+  max-height: calc(100vh - var(--appbar-height) - 16px);
+  overflow: auto;
+  background: var(--md-surface-1);
+  color: var(--md-on-surface);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--radius-m);
+  box-shadow: var(--elev-2);
+}
+/* display only while open — a display rule on .app-menu alone would
+   override the browser's "hidden while closed". */
+.app-menu:popover-open { display: flex; flex-direction: column; }
+
+.app-menu-head {
+  padding: 12px 16px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+
+/* Entries: links or buttons, the active one marked by a bar on the left. */
+.app-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 0;
+  padding: 10px 16px 10px 13px;
+  border: none;
+  border-left: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--fs-sm);
+  text-align: left;
+  text-decoration: none;
+  white-space: nowrap;
+  justify-content: flex-start;
+  cursor: pointer;
+}
+.app-menu-item:hover:not(:disabled) { background: var(--md-surface-2); filter: none; text-decoration: none; }
+.app-menu-item.active,
+.app-menu-item[aria-current]:not([aria-current="false"]) {
+  border-left-color: var(--md-primary-strong);
+  font-weight: 600;
+}
+.app-menu form { margin: 0; }
+.app-menu-sep {
+  margin: 4px 0;
+  border: none;
+  border-top: 1px solid var(--md-outline-variant);
+}
+
+/* Footer of the menu: always last, holds the light/auto/dark switch. If the
+   menu has nothing else, it is the only content. */
+.app-menu-foot {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px 6px 16px;
+  font-size: var(--fs-xs);
+  color: var(--md-on-surface-variant);
+}
+.app-menu-foot:not(:first-child) { border-top: 1px solid var(--md-outline-variant); }
+
+/* The theme toggle in the menu footer: smaller and quieter than in the
+   appbar. 24px buttons are the minimum touch target (WCAG 2.2, 2.5.8). */
+.app-menu-foot .theme-toggle { background: var(--md-surface-2); }
+.app-menu-foot .theme-toggle button { width: 24px; height: 24px; }
+.app-menu-foot .theme-toggle svg { width: 14px; height: 14px; }
+
+/* =============================================================== sidebar */
+/* Page frame with a sidebar on the left: open --sidebar-width, collapsed a
+   narrow rail (--sidebar-rail) that only holds the toggle. */
+.app-shell {
+  display: flex;
+  align-items: stretch;
+  flex: 1 0 auto;
+  min-width: 0;
+}
+/* Whatever sits next to the sidebar — <main> directly, or a wrapper with a
+   toolbar and <main> — takes the remaining width. */
+.app-shell > :not(.sidebar) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sidebar {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  width: var(--sidebar-width);
+  position: sticky;
+  top: var(--appbar-height);
+  align-self: flex-start;
+  height: calc(100vh - var(--appbar-height));
+  padding: 6px 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: var(--md-surface-1);
+  border-right: 1px solid var(--md-outline-variant);
+  transition: width var(--duration-short) var(--easing);
+}
+
+/* The toggle sits at the top of the sidebar, right under the appbar, and
+   keeps its place in both states: 6px from the left edge. */
+.sidebar-toggle {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  min-height: 0;
+  margin: 0 0 6px 6px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--md-on-surface-variant);
+}
+.sidebar-toggle:hover:not(:disabled) { color: var(--md-on-surface); background: var(--md-surface-3); filter: none; }
+.sidebar-toggle svg { width: 24px; height: 24px; fill: currentColor; }
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px 10px 13px;
+  border-left: 3px solid transparent;
+  color: var(--md-on-surface);
+  font-size: var(--fs-sm);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.sidebar-link:hover { background: var(--md-surface-2); text-decoration: none; }
+.sidebar-link.active,
+.sidebar-link[aria-current]:not([aria-current="false"]) {
+  border-left-color: var(--md-primary-strong);
+  background: var(--md-surface-3);
+  font-weight: 600;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .sidebar-link.active,
+  :root:not([data-theme="light"]) .sidebar-link[aria-current]:not([aria-current="false"]),
+  :root:not([data-theme="light"]) .app-menu-item.active,
+  :root:not([data-theme="light"]) .app-menu-item[aria-current]:not([aria-current="false"]) { border-left-color: var(--md-primary); }
+}
+:root[data-theme="dark"] .sidebar-link.active,
+:root[data-theme="dark"] .sidebar-link[aria-current]:not([aria-current="false"]),
+:root[data-theme="dark"] .app-menu-item.active,
+:root[data-theme="dark"] .app-menu-item[aria-current]:not([aria-current="false"]) { border-left-color: var(--md-primary); }
+
+/* Collapsed: only the rail with the toggle. Everything else is hidden with
+   visibility, which also takes it out of the tab order and the
+   accessibility tree — invisible links must not be reachable by keyboard. */
+.sidebar.collapsed { width: var(--sidebar-rail); }
+.sidebar.collapsed > :not(.sidebar-toggle) { visibility: hidden; }
+
+/* Narrow screens: the rail stays, the open sidebar lies over the content
+   (the rail's space is kept by the shell's padding) with a scrim behind it. */
+@media (max-width: 767px) {
+  .app-shell { padding-left: var(--sidebar-rail); }
+  .sidebar {
+    position: fixed;
+    top: var(--appbar-height);
+    bottom: 0;
+    left: 0;
+    height: auto;
+    /* flex-start (needed for sticky on wide screens) would make a fixed box
+       only as tall as its content; stretch fills top to bottom. */
+    align-self: stretch;
+    z-index: var(--z-drawer);
+  }
+  .sidebar:not(.collapsed) { box-shadow: var(--elev-3); }
+  .app-shell:has(> .sidebar:not(.collapsed))::after {
+    content: '';
+    position: fixed;
+    inset: var(--appbar-height) 0 0 0;
+    background: var(--md-scrim);
+    z-index: calc(var(--z-drawer) - 1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar { transition: none; }
+}
+
+/* ======================================================= full-window app */
+/* .app-shell.fill: the page itself no longer scrolls. Appbar on top and
+   footer at the bottom stay put; sidebar and content scroll on their own.
+   For tools that need the whole window (matrix, graph, large tables) —
+   the default stays a document page that scrolls as a whole. */
+body:has(> .app-shell.fill) {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+body:has(> .app-shell.fill) > footer { flex: none; padding-top: 8px; padding-bottom: 8px; }
+.app-shell.fill {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+/* Content column: a wrapper (toolbar, filter bar, main) is a column whose
+   main takes the rest; main itself scrolls and uses the full width. */
+.app-shell.fill > :not(.sidebar):not(main) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.app-shell.fill main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  max-width: none;
+  margin: 0;
+}
+/* Wide screens: the sidebar fills the shell's height and scrolls inside.
+   Narrow screens keep the overlay behaviour of the normal sidebar. */
+@media (min-width: 768px) {
+  .app-shell.fill > .sidebar {
+    position: static;
+    height: auto;
+    align-self: stretch;
+  }
+}
+
+/* ================================================================ toolbar */
+/* Band directly below the appbar for filters, selects and view tabs. */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 9px clamp(12px, 4vw, 32px);
+  background: var(--md-surface-1);
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+.toolbar .grow { flex: 1; }
+
+/* Pin: keeps the toolbar under the appbar while the page scrolls. Off by
+   default; js/design-system.js toggles .pinned and remembers the choice.
+   Last item in the toolbar, pushed to the right. */
+.toolbar-pin {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  min-height: 0;
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--md-on-surface-variant);
+}
+.toolbar-pin:hover:not(:disabled) { background: var(--md-surface-3); color: var(--md-on-surface); filter: none; }
+.toolbar-pin[aria-pressed="true"] { color: var(--md-on-surface); }
+.toolbar-pin svg { width: 18px; height: 18px; fill: currentColor; }
+
+.toolbar.pinned {
+  position: sticky;
+  top: var(--appbar-height);
+  z-index: calc(var(--z-appbar) - 1);
+}
+
+/* Pin group: everything that should stay with the toolbar — tabs, a heading
+   band, whatever belongs under it. Wrap them together and the group sticks as
+   one piece.
+
+   The group sticks, not its parts. Letting each band stick on its own would
+   mean giving every one of them an offset computed from the heights of the
+   bands above it — and those change with wrapping, with content and with the
+   window. One sticky box has none of that. */
+.pin-group:has(> .toolbar.pinned) {
+  position: sticky;
+  top: var(--appbar-height);
+  z-index: calc(var(--z-appbar) - 1);
+  background: var(--md-surface-1);
+}
+/* Inside a pinned group the toolbar does not stick itself — the group does it
+   for it, and two nested sticky boxes would only fight over the same offset. */
+.pin-group > .toolbar.pinned { position: static; }
+
+/* Filter bar: one band for the active filters — label, removable chips,
+   "Alle zurücksetzen", and a counter on the right. Sits under the toolbar,
+   inside the .pin-group if it should stay with it when pinned. */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  padding: 6px clamp(12px, 4vw, 32px);
+  background: var(--md-surface-1);
+  border-bottom: 1px solid var(--md-outline-variant);
+  font-size: var(--fs-xs);
+  color: var(--md-on-surface-variant);
+}
+.filter-bar > .label { font-weight: 500; margin-right: 2px; }
+.filter-bar > .none { font-style: italic; }
+.filter-bar > .grow { flex: 1; }
+.filter-bar > .count { white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* Compact text button so the band stays low. */
+.filter-bar > button.text { min-height: 28px; padding: 0 10px; font-size: var(--fs-xs); }
+
+/* Anchor jumps and focus scrolling land below the sticky bars: the appbar
+   plus a pinned toolbar or pin group. js/design-system.js keeps
+   --pinned-height up to date (0 when nothing is pinned or on narrow screens). */
+html { scroll-padding-top: calc(var(--appbar-height) + var(--pinned-height, 0px) + 8px); }
+
+/* Narrow screens: the toolbar wraps to several rows — pinned it would eat
+   the screen. No pin there, the toolbar always scrolls along. */
+@media (max-width: 767px) {
+  .toolbar-pin { display: none; }
+  .toolbar.pinned { position: static; }
+  .pin-group:has(> .toolbar.pinned) { position: static; }
+}
+/* Tabs as the toolbar's content: the toolbar draws the line, the tabs sit
+   flush on it. */
+.toolbar:has(> .tab-bar) { padding-top: 0; padding-bottom: 0; }
+.toolbar > .tab-bar { border-bottom: none; flex: 1; min-width: 0; }
+
+/* Compact select for toolbars (the floating-label .field is for forms). */
+.sel {
+  font: inherit;
+  font-size: var(--fs-sm);
+  padding: 5px 9px;
+  border: 1px solid var(--md-outline);
+  border-radius: var(--radius-s);
+  background: var(--md-surface-1);
+  color: var(--md-on-surface);
+  max-width: 250px;
+}
+.sel:disabled { opacity: 0.6; }
+
+/* ================================================================ tabs */
+.tab-bar {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid var(--md-outline-variant);
+  overflow-x: auto;
+  /* overflow-x: auto turns the y axis to auto as well; the active tab's
+     border then causes a tiny vertical scrollbar. */
+  overflow-y: hidden;
+}
+
+.tab-bar > button,
+.tab-bar > .tab-btn {
+  min-height: auto;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  font: 500 var(--fs-sm)/1 var(--font);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  white-space: nowrap;
+}
+
+.tab-bar > button:hover:not(:disabled),
+.tab-bar > .tab-btn:hover:not(:disabled) {
+  background: transparent;
+  filter: none;
+  color: var(--md-on-surface);
+}
+
+.tab-bar > button.active,
+.tab-bar > .tab-btn.active {
+  background: transparent;
+  color: var(--md-primary-strong);
+  border-bottom-color: var(--md-primary-strong);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .tab-bar > button.active,
+  :root:not([data-theme="light"]) .tab-bar > .tab-btn.active {
+    color: var(--md-primary);
+    border-bottom-color: var(--md-primary);
+  }
+}
+
+:root[data-theme="dark"] .tab-bar > button.active,
+:root[data-theme="dark"] .tab-bar > .tab-btn.active {
+  color: var(--md-primary);
+  border-bottom-color: var(--md-primary);
+}
+
+/* ================================================================ main */
+main {
+  /* width: body is a flex column, and auto margins would shrink main to its
+     content otherwise. */
+  width: 100%;
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+  padding: clamp(12px, 3vw, 24px);
+}
+
+/* ================================================================== cards */
+/* Hairline instead of a shadow: the card is held by a fine outline. */
+.card {
+  background: var(--md-surface-1);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--radius-m);
+  padding: clamp(14px, 3vw, 22px);
+  margin-bottom: 20px;
+}
+
+.card > h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--fs-md);
+  font-weight: 500;
+  margin: 0 0 4px;
+}
+
+.card > h2 .step,
+.card-head > h2 .step {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  flex: none;
+}
+
+.card > .hint {
+  color: var(--md-on-surface-variant);
+  font-size: var(--fs-sm);
+  margin: 0 0 16px;
+}
+
+.card[aria-disabled="true"] { opacity: 0.55; }
+.card[aria-disabled="true"] :is(input, select, button, textarea) {
+  pointer-events: none;
+}
+
+/* ================================================================ grid */
+.grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(12, 1fr);
+  align-items: end;
+}
+
+.col-3  { grid-column: span 3; }
+.col-4  { grid-column: span 4; }
+.col-5  { grid-column: span 5; }
+.col-6  { grid-column: span 6; }
+.col-8  { grid-column: span 8; }
+.col-12 { grid-column: span 12; }
+
+@media (max-width: 767px) {
+  .grid > * { grid-column: 1 / -1 !important; }
+}
+
+/* ============================================= outlined text fields */
+.field { position: relative; display: block; }
+
+.field > :is(input, select, textarea) {
+  width: 100%;
+  font: inherit;
+  color: var(--md-on-surface);
+  background: transparent;
+  border: 1px solid var(--md-outline);
+  border-radius: var(--radius-s);
+  padding: 15px 12px 7px;
+  min-height: 52px;
+  appearance: none;
+}
+
+.field > textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.field > select {
+  padding-right: 34px;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+                    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: right 17px top 55%, right 12px top 55%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
+.field > label {
+  position: absolute;
+  left: 9px;
+  top: 15px;
+  font-size: 0.95rem;
+  color: var(--md-on-surface-variant);
+  background: var(--md-surface-1);
+  padding: 0 3px;
+  pointer-events: none;
+  transition: var(--duration-short) var(--easing);
+  max-width: calc(100% - 20px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.field:focus-within > label,
+.field > input:not(:placeholder-shown) + label,
+.field > textarea:not(:placeholder-shown) + label,
+.field > select + label {
+  top: 4px;
+  font-size: var(--fs-xs);
+}
+
+.field > input::placeholder,
+.field > textarea::placeholder { color: transparent; }
+
+.field:focus-within > label { color: var(--md-primary); }
+
+.field:focus-within > :is(input, select, textarea) {
+  border-color: var(--md-primary);
+  border-width: 2px;
+  padding: 14px 11px 6px;
+}
+
+.field > :is(input, select, textarea):disabled {
+  border-style: dashed;
+  color: var(--md-on-surface-variant);
+  cursor: not-allowed;
+}
+
+.field.invalid > :is(input, select, textarea) { border-color: var(--md-error); }
+.field.invalid > label { color: var(--md-error); }
+
+.field-error {
+  display: block;
+  font-size: var(--fs-xs);
+  color: var(--md-on-surface-variant);
+  padding: 4px 12px 0;
+  min-height: 1em;
+}
+.field-error.is-error { color: var(--md-error); }
+
+/* Checkbox with its label in one row. */
+.check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  margin-bottom: 12px;
+}
+.check > input { accent-color: var(--md-primary-strong); width: 16px; height: 16px; }
+
+/* ============================================================= buttons */
+:where(button, .btn) {
+  font: 500 var(--fs-sm)/1 var(--font);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 20px;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  cursor: pointer;
+  transition: filter var(--duration-short), background var(--duration-short);
+  white-space: nowrap;
+}
+
+button:hover:not(:disabled), .btn:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+
+button:active:not(:disabled), .btn:active:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+button:disabled, .btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+button.outlined, .btn.outlined {
+  background: transparent;
+  color: var(--md-primary-strong);
+  border-color: var(--md-outline);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) button.outlined,
+  :root:not([data-theme="light"]) .btn.outlined {
+    color: var(--md-primary);
+  }
+}
+
+:root[data-theme="dark"] button.outlined,
+:root[data-theme="dark"] .btn.outlined { color: var(--md-primary); }
+
+button.text, .btn.text {
+  background: transparent;
+  color: var(--md-primary-strong);
+  padding: 0 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) button.text,
+  :root:not([data-theme="light"]) .btn.text {
+    color: var(--md-primary);
+  }
+}
+
+:root[data-theme="dark"] button.text,
+:root[data-theme="dark"] .btn.text { color: var(--md-primary); }
+
+button.danger, .btn.danger {
+  background: var(--md-error);
+  color: var(--md-on-error);
+}
+
+button.danger.outlined, .btn.danger.outlined {
+  background: transparent;
+  color: var(--md-error);
+  border-color: var(--md-error);
+}
+
+button.icon, .btn.icon {
+  min-height: 38px;
+  width: 38px;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--md-on-surface-variant);
+}
+
+button.icon:hover:not(:disabled), .btn.icon:hover:not(:disabled) {
+  background: var(--md-surface-3);
+  filter: none;
+}
+
+button.icon.danger, .btn.icon.danger {
+  color: var(--md-error);
+  background: transparent;
+}
+
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+/* ============================================================= caret */
+/* Disclosure chevron from the sprite (ic-chevron-right). The box has line
+   height and the symbol is centred in it, so it turns about its middle and
+   does not wander. Points right when closed, down when open. */
+.caret {
+  flex: none;
+  width: 16px;
+  height: calc(var(--fs-sm) * 1.35);
+  fill: currentColor;
+  transition: transform var(--duration-short) var(--easing);
+}
+[aria-expanded="true"] > .caret,
+.caret.down { transform: rotate(90deg); }
+.caret.up { transform: rotate(-90deg); }
+
+/* The chevron alone as a button. No padding and no min-height — a 40px
+   button would reach invisibly over its neighbours. The symbol is only 16px
+   wide, too small to hit, so the hit area grows via a pseudo element and
+   shifts nothing. */
+.caret-toggle {
+  flex: none;
+  position: relative;
+  background: none;
+  border: none;
+  padding: 0;
+  min-height: 0;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  border-radius: var(--radius-xs);
+}
+.caret-toggle::after { content: ''; position: absolute; inset: -6px; }
+.caret-toggle:hover { color: var(--md-primary-hover); }
+
+/* ============================================================= icons */
+svg.i {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+  flex: none;
+}
+
+/* ============================================================= status */
+.status {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-m);
+  font-size: var(--fs-sm);
+  margin: 14px 0 0;
+}
+
+.status svg.i { margin-top: 1px; }
+.status.info    { background: var(--md-info-container);    color: var(--md-on-info-container); }
+.status.ok      { background: var(--md-success-container); color: var(--md-on-success-container); }
+.status.warn    { background: var(--md-warning-container); color: var(--md-on-warning-container); }
+.status.err     { background: var(--md-error-container);   color: var(--md-on-error-container); }
+.status[hidden] { display: none; }
+.status code    { font-family: var(--mono); font-size: 0.95em; word-break: break-all; }
+.status p       { margin: 0 0 6px; }
+.status p:last-child { margin-bottom: 0; }
+
+/* ============================================================= table */
+.table-wrap {
+  position: relative;
+  overflow-x: auto;
+  margin-top: 8px;
+  border-radius: var(--radius-m);
+}
+
+:where(table) { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+
+:where(th, td) {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--md-outline-variant);
+  vertical-align: middle;
+}
+
+:where(th) {
+  font-weight: 500;
+  color: var(--md-on-surface-variant);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+:where(tbody tr:hover) { background: var(--md-surface-2); }
+
+td.mono { font-family: var(--mono); word-break: break-all; }
+
+td.actions { text-align: right; white-space: nowrap; width: 1%; }
+td.actions .btn-row { justify-content: flex-end; gap: 2px; }
+
+tr.editing { background: var(--md-surface-3); }
+tr.editing input {
+  width: 100%;
+  font: inherit;
+  font-family: var(--mono);
+  padding: 8px 10px;
+  min-height: 38px;
+  border: 1px solid var(--md-primary);
+  border-radius: var(--radius-s);
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+}
+tr.editing input.invalid { border-color: var(--md-error); }
+
+:where(tfoot td) { border-bottom: none; padding-top: 14px; }
+
+.empty {
+  text-align: center;
+  color: var(--md-on-surface-variant);
+  padding: 28px 12px;
+  font-size: var(--fs-sm);
+}
+
+.count {
+  font-weight: 400;
+  color: var(--md-on-surface-variant);
+  font-size: var(--fs-xs);
+}
+
+/* ================================================================= pills */
+/* Counter: a number in a pill, next to a heading, tab or column title. */
+.n {
+  min-width: 24px;
+  padding: 1px 9px;
+  border-radius: var(--radius-full);
+  background: var(--md-surface-3);
+  color: var(--md-on-surface);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  text-align: center;
+}
+/* Nothing counted is not a result — an empty count stays neutral. */
+.n.zero { background: var(--md-surface-dim); color: var(--md-on-surface-variant); }
+/* Open work that should catch the eye. */
+.n.warn { background: var(--md-attention); color: var(--md-on-warning-container); }
+
+/* Label pill: a person, state or source in running text — lightly tinted so
+   it stands out in a block of text. */
+.pill {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: var(--radius-full);
+  background: var(--md-surface-3);
+  color: var(--md-on-surface);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.pill.ok   { background: var(--md-success-container); color: var(--md-on-success-container); }
+.pill.warn { background: var(--md-warning-container); color: var(--md-on-warning-container); }
+.pill.err  { background: var(--md-error-container);   color: var(--md-on-error-container); }
+.pill.info { background: var(--md-info-container);    color: var(--md-on-info-container); }
+
+/* Filter chip: a toggle in pill form, pressed state via aria-pressed. */
+.chip {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 11px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--md-outline-variant);
+  color: var(--md-on-surface-variant);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+}
+.chip:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; }
+.chip[aria-pressed="true"] {
+  background: var(--md-surface-3);
+  color: var(--md-on-surface);
+  border-color: transparent;
+}
+
+/* Status dot, e.g. for a sync or connection indicator. */
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--md-outline);
+  flex: none;
+}
+.dot.ok   { background: var(--md-progress); }
+.dot.warn,
+.dot.busy { background: var(--md-warning); }
+.dot.err  { background: var(--md-error); }
+
+/* ============================================================= progress */
+.progress-bar {
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--md-progress-track);
+  overflow: hidden;
+}
+/* Fill via --w (e.g. bar.style.setProperty('--w', '62%')) — works under a
+   strict CSP without inline styles. A style="width: …" still wins. */
+.progress-bar > i {
+  display: block;
+  height: 100%;
+  width: var(--w, 0%);
+  background: var(--md-progress);
+  transition: width var(--duration-short) var(--easing);
+}
+
+/* ===================================================== segmented control */
+/* Exactly one mode of a view (simple/expert, packets/bytes, chart/table).
+   Tabs pick a view, chips switch several filters, .seg picks one mode.
+   Active via aria-pressed="true" (.active as an alias). Only the ground
+   changes on the active button, the weight stays — so the group does not
+   jump when the selection moves. */
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--md-outline);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.seg > button,
+.seg > .seg-btn {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 4px 14px;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--md-on-surface-variant);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.seg > button + button,
+.seg > .seg-btn + .seg-btn { border-left: 1px solid var(--md-outline); }
+.seg > button:hover:not(:disabled):not([aria-pressed="true"]):not(.active) { color: var(--md-on-surface); background: var(--md-surface-2); }
+.seg > button:hover { filter: none; }
+.seg > button[aria-pressed="true"],
+.seg > button.active {
+  background: var(--md-surface-3);
+  color: var(--md-on-surface);
+}
+.seg > button:focus-visible { outline: 2px solid var(--md-primary); outline-offset: -2px; }
+.seg > button:disabled { color: var(--md-outline); cursor: not-allowed; }
+
+/* ======================================================== search field */
+/* Text field with its own clear button inside. The button shows only while
+   there is text; js/design-system.js wires it (click and Escape clear the
+   field, fire an input event and keep the focus in the field). */
+.search-field {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 220px;
+}
+.search-field > .sel {
+  width: 100%;
+  max-width: none;
+  padding-right: 40px;
+}
+.search-field input::-webkit-search-cancel-button { display: none; }
+.search-field > .clear-btn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  min-height: 0;
+  padding: 0;
+}
+
+/* ===================================================== removable chips */
+/* An active filter that can be dropped: label plus a small × button.
+   Counterpart "Alle zurücksetzen" is a plain button.text. */
+.chip.removable {
+  gap: 2px;
+  padding: 2px 3px 2px 11px;
+  background: var(--md-surface-3);
+  color: var(--md-on-surface);
+  border-color: transparent;
+  cursor: default;
+}
+.chip.removable > button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--md-on-surface-variant);
+}
+.chip.removable > button:hover:not(:disabled) { background: var(--md-surface-dim); color: var(--md-on-surface); filter: none; }
+.chip.removable > button:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 1px; }
+.chip.removable > button svg { width: 14px; height: 14px; fill: currentColor; }
+
+/* ===================================================== severity scale */
+/* Four levels with the --md-sevN-* tokens. The project decides what each
+   level means; give every level its name and a symbol as well. */
+.sev {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.sev.s1 { background: var(--md-sev1-bg); color: var(--md-sev1-on); }
+.sev.s2 { background: var(--md-sev2-bg); color: var(--md-sev2-on); }
+.sev.s3 { background: var(--md-sev3-bg); color: var(--md-sev3-on); }
+.sev.s4 { background: var(--md-sev4-bg); color: var(--md-sev4-on); }
+
+/* Card with an accent edge, e.g. an overall result. */
+.card.accent { border-left: 6px solid var(--md-outline); }
+.card.accent.s1 { border-left-color: var(--md-sev1-mark); }
+.card.accent.s2 { border-left-color: var(--md-sev2-mark); }
+.card.accent.s3 { border-left-color: var(--md-sev3-mark); }
+.card.accent.s4 { border-left-color: var(--md-sev4-mark); }
+
+/* ========================================================== card head */
+/* Heading on the left, an action or switch on the right. */
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.card-head > h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: 500;
+}
+
+/* ========================================================== key figures */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--radius-s);
+  background: var(--md-surface-1);
+}
+.kpi .v { font-size: 1.2rem; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.kpi .k {
+  font-size: var(--fs-2xs);
+  color: var(--md-on-surface-variant);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kpi.s1 { border-left: 4px solid var(--md-sev1-mark); }
+.kpi.s2 { border-left: 4px solid var(--md-sev2-mark); }
+.kpi.s3 { border-left: 4px solid var(--md-sev3-mark); }
+.kpi.s4 { border-left: 4px solid var(--md-sev4-mark); }
+
+/* ========================================================= table extras */
+/* Number columns: right-aligned, digits of equal width. */
+td.num, th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* Table that scrolls inside its frame, header stays visible. Height per
+   project via --table-max-height. */
+.table-wrap.scroll {
+  max-height: var(--table-max-height, 70vh);
+  overflow: auto;
+  border: 1px solid var(--md-outline-variant);
+}
+.table-wrap.scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--md-surface-2);
+  box-shadow: inset 0 -1px 0 var(--md-outline-variant);
+}
+
+/* ========================================================== link button */
+/* A button that looks like a link, e.g. "Alle auswählen". */
+button.link {
+  all: unset;
+  cursor: pointer;
+  color: var(--md-primary-strong);
+  text-decoration: underline;
+}
+button.link:hover { color: var(--md-primary-hover); filter: none; }
+button.link:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; }
+button.link:disabled { color: var(--md-outline); cursor: not-allowed; text-decoration: none; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) button.link { color: var(--md-primary); }
+}
+:root[data-theme="dark"] button.link { color: var(--md-primary); }
+
+/* ========================================================= file dropzone */
+/* Area to drop files on. Deliberately not .dropzone — apps use that name for
+   other drop areas (e.g. Kanban boards). JS adds .over while a file hovers. */
+.file-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 26px 16px;
+  text-align: center;
+  border: 2px dashed var(--md-outline-variant);
+  border-radius: var(--radius-m);
+  background: var(--md-surface-1);
+  cursor: pointer;
+  transition: background var(--duration-short), border-color var(--duration-short);
+}
+.file-dropzone:hover,
+.file-dropzone:focus-visible { border-color: var(--md-outline); }
+.file-dropzone:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; }
+.file-dropzone.over { background: var(--md-primary-container); border-color: var(--md-primary); color: var(--md-on-primary-container); }
+.file-dropzone > svg.i { width: 36px; height: 36px; color: var(--md-on-surface-variant); }
+.file-dropzone.over > svg.i { color: inherit; }
+.file-dropzone .btn-row { justify-content: center; flex-wrap: wrap; margin-top: 6px; }
+/* Compact: one line, e.g. a second drop area inside a dialog. */
+.file-dropzone.compact { flex-direction: row; justify-content: center; padding: 12px 16px; }
+.file-dropzone.compact > svg.i { width: 24px; height: 24px; }
+
+/* ============================================================= details */
+details.adv { margin-top: 6px; }
+
+details.adv > summary {
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  color: var(--md-primary-strong);
+  padding: 6px 0;
+  width: fit-content;
+  list-style: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) details.adv > summary { color: var(--md-primary); }
+}
+
+:root[data-theme="dark"] details.adv > summary { color: var(--md-primary); }
+
+details.adv > summary::-webkit-details-marker { display: none; }
+details.adv > summary::before { content: "\25B8  "; }
+details.adv[open] > summary::before { content: "\25BE  "; }
+details.adv > .body { padding: 10px 0 2px; }
+
+/* ============================================================= dialog */
+dialog {
+  border: none;
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  background: var(--md-surface-1);
+  color: var(--md-on-surface);
+  box-shadow: var(--elev-3);
+  max-width: min(460px, 92vw);
+  width: 100%;
+}
+
+dialog::backdrop { background: rgba(0,0,0,.5); }
+dialog h3 { margin: 0 0 8px; font-size: var(--fs-md); font-weight: 500; }
+dialog p { margin: 0 0 18px; color: var(--md-on-surface-variant); font-size: var(--fs-sm); }
+dialog .dlg-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+
+/* Fields in a dialog: quieter than the solid outline, but still an outline.
+   They keep the dialog's own ground and are held by a dashed hairline; a fill
+   would tint every field and let neighbours run into each other. */
+dialog .field > :is(input, select, textarea) {
+  /* background-color, not the shorthand — select draws its arrow with a
+     background-image the shorthand would wipe out. */
+  background-color: transparent;
+  border: 1px dashed var(--md-outline-variant);
+}
+dialog .field:focus-within > :is(input, select, textarea) {
+  border-style: solid;
+  border-color: var(--md-primary);
+  border-width: 1px;
+  padding: 15px 12px 7px;   /* no 1px jump when the border turns solid */
+}
+/* Without vertical rhythm the boxes sit edge to edge and read as one block. */
+dialog form > .field { margin-bottom: 12px; }
+
+/* ============================================================= toast */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translate(-50%, 200%);
+  background: var(--md-on-surface);
+  color: var(--md-surface);
+  padding: 12px 20px;
+  border-radius: var(--radius-s);
+  box-shadow: var(--elev-2);
+  font-size: var(--fs-sm);
+  max-width: min(560px, 92vw);
+  z-index: var(--z-toast);
+  transition: transform var(--duration-medium) var(--easing);
+  pointer-events: none;
+}
+
+.toast.show { transform: translate(-50%, 0); }
+.toast.err { background: var(--md-error); color: var(--md-on-error); }
+
+/* ============================================================= spinner */
+.spinner {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation-duration: 2s; }
+  .toast { transition: none; }
+}
+
+.busy {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-sm);
+  color: var(--md-on-surface-variant);
+}
+.busy[hidden] { display: none; }
+
+/* ============================================================= footer */
+footer {
+  margin-top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 16px;
+  text-align: center;
+  padding: 24px 16px 32px;
+  color: var(--md-on-surface-variant);
+  font-size: var(--fs-xs);
+}
+
+footer .footer-brand { font-weight: 500; }
+footer .footer-version { opacity: 0.8; }
+
+footer .footer-sig {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+footer .footer-sig .ai-label {
+  height: 20px;
+  width: auto;
+  vertical-align: middle;
+}
+
+/* AI label: light and dark variant, switched with the theme. */
+footer .ai-label-dark { display: none; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) footer .ai-label-light { display: none; }
+  :root:not([data-theme="light"]) footer .ai-label-dark { display: inline; }
+}
+
+:root[data-theme="dark"] footer .ai-label-light { display: none; }
+:root[data-theme="dark"] footer .ai-label-dark { display: inline; }
+
+footer .footer-divider {
+  color: var(--md-outline-variant);
+}
+
+/* ============================================================= a11y */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ============================================ responsive utilities */
+@media (max-width: 767px) {
+  .hide-mobile { display: none !important; }
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+  .hide-tablet { display: none !important; }
+}
+@media (min-width: 1024px) {
+  .hide-desktop { display: none !important; }
+}
+
+/* ============================================ print */
+@media print {
+  .appbar, .toolbar, .theme-toggle, .sidebar, .app-menu, .toast, dialog { display: none !important; }
+  body { background: white; color: black; }
+  .card { border-color: #ccc; }
+  footer { color: #666; }
+}

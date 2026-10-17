@@ -1,6 +1,6 @@
 # Lizenzen von Drittkomponenten
 
-PacketAtlas vendort alle Drittkomponenten lokal (`vendor/`, `fonts/`), es werden keine CDN-Links zur Laufzeit verwendet. Diese Datei listet die verwendeten Komponenten mit Version und Lizenz.
+PacketAtlas vendort alle Drittkomponenten lokal (`vendor/`), es werden keine CDN-Links zur Laufzeit verwendet. Diese Datei listet die verwendeten Komponenten mit Version und Lizenz.
 
 ## JavaScript-Bibliotheken (`vendor/`)
 
@@ -20,19 +20,11 @@ PacketAtlas vendort alle Drittkomponenten lokal (`vendor/`, `fonts/`), es werden
 - **Zweck:** Erzeugung der `.xlsx`-Exportdatei (Sheets „Matrix" und „Rohdaten").
 - **Quelle:** https://sheetjs.com
 
-## Schriften (`fonts/`)
+## Icons
 
-### Roboto
+### Material Symbols / Material Icons
 
-- **Datei:** `fonts/roboto-latin-variable.woff2`
-- **Lizenz:** Apache License 2.0 (siehe `fonts/roboto.LICENSE`)
-- **Zweck:** Haupt-Schriftart gemäß Material Design.
-- **Quelle:** Google Fonts (https://fonts.google.com/specimen/Roboto)
-- Hinweis: Variable-Font-Datei (Latin-Subset), deckt die verwendeten Schriftschnitte (400/500/700) über die Gewichts-Achse ab.
-
-### Material Symbols Outlined
-
-- **Datei:** `fonts/material-symbols-outlined.woff2`
-- **Lizenz:** Apache License 2.0 (siehe `fonts/material-symbols.LICENSE`)
-- **Zweck:** Icon-Font für UI-Symbole (Import, Filter, Export, Tabs).
-- **Quelle:** Google Fonts (https://fonts.google.com/icons)
+- **Ort:** Inline-SVG-Sprite in `index.html` (Quelle: `icons/icon-sprite.svg` des Design Systems)
+- **Lizenz:** Apache License 2.0
+- **Zweck:** UI-Symbole (Datei öffnen, Export, Ansichten, Menü, Hell/Dunkel …), als SVG-Pfade statt Icon-Schrift.
+- **Quelle:** Google (https://fonts.google.com/icons)

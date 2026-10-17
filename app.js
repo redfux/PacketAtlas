@@ -15,19 +15,20 @@ import {
   formatSeconds,
   healthOf,
   formatTimestamp,
+  healthBadge,
   metricValue,
   pairKey,
   portListLabel,
   relatedDeviceIds,
-} from './data-model.js?v=1.8.0';
-import { renderMatrix } from './matrix-view.js?v=1.8.0';
-import { renderGraph, updateForces } from './graph-view.js?v=1.8.0';
-import { renderConnections } from './connections-view.js?v=1.8.0';
-import { renderConnectionsTable } from './connections-table-view.js?v=1.8.0';
-import { renderTimeline } from './timeline-view.js?v=1.8.0';
-import { renderStats } from './stats-view.js?v=1.8.0';
-import { exportActiveViewAsImage } from './export-image.js?v=1.8.0';
-import { exportToExcel, exportSelectionToExcel } from './export-excel.js?v=1.8.0';
+} from './data-model.js?v=2.0.0';
+import { renderMatrix } from './matrix-view.js?v=2.0.0';
+import { renderGraph, updateForces } from './graph-view.js?v=2.0.0';
+import { renderConnections } from './connections-view.js?v=2.0.0';
+import { renderConnectionsTable } from './connections-table-view.js?v=2.0.0';
+import { renderTimeline } from './timeline-view.js?v=2.0.0';
+import { renderStats } from './stats-view.js?v=2.0.0';
+import { exportActiveViewAsImage } from './export-image.js?v=2.0.0';
+import { exportToExcel, exportSelectionToExcel } from './export-excel.js?v=2.0.0';
 
 const LARGE_SELECTION_THRESHOLD = 50;
 const MAX_CONNECTIONS_RENDER = 400;
@@ -39,7 +40,7 @@ const MAX_TIMELINE_RENDER = 300;
 // browser. Appending the version as a query string changes the request URL
 // whenever the app updates, forcing a fresh fetch instead of silently
 // running old worker code after an update.
-const APP_VERSION = '1.8.0';
+const APP_VERSION = '2.0.0';
 
 const state = {
   devices: [],
@@ -79,6 +80,8 @@ const el = {
   fileInput: document.getElementById('file-input'),
   btnOpenFile: document.getElementById('btn-open-file'),
   dropZone: document.getElementById('drop-zone'),
+  startScreen: document.getElementById('start-screen'),
+  appClaim: document.getElementById('app-claim'),
   workspace: document.getElementById('workspace'),
   progressBanner: document.getElementById('progress-banner'),
   progressLabel: document.getElementById('progress-label'),
@@ -91,9 +94,9 @@ const el = {
   deviceList: document.getElementById('device-list'),
   deviceCount: document.getElementById('device-count'),
   deviceListSection: document.getElementById('device-list-section'),
-  deviceFilterExtras: document.getElementById('device-filter-extras'),
-  btnSelectAll: document.getElementById('btn-select-all'),
-  btnSelectNone: document.getElementById('btn-select-none'),
+  selectAll: document.getElementById('select-all'),
+  selectionCount: document.getElementById('selection-count'),
+  filterCount: document.getElementById('filter-count'),
   protocolFilters: document.getElementById('protocol-filters'),
   toggleHideBroadcast: document.getElementById('toggle-hide-broadcast'),
   toggleOnlyProblems: document.getElementById('toggle-only-problems'),
@@ -249,8 +252,11 @@ function onParseComplete(msg) {
   state.pinnedItems = [];
   renderPinnedPanel();
 
-  el.dropZone.hidden = true;
+  el.startScreen.hidden = true;
   el.workspace.hidden = false;
+  el.btnExport.disabled = false;
+  el.appClaim.textContent = `${state.originalFileName} · ${state.stats.totalPackets.toLocaleString('de-DE')} Pakete`;
+  el.appClaim.title = el.appClaim.textContent;
 
   setupAddressFamilyToggle();
   setSidebarTab('devices');
@@ -275,7 +281,7 @@ function setupAddressFamilyToggle() {
 
 function showProgress(percent, label) {
   el.progressBanner.hidden = false;
-  el.progressFill.style.width = `${percent}%`;
+  el.progressFill.style.setProperty('--w', `${percent}%`);
   el.progressLabel.textContent = label;
 }
 
@@ -293,16 +299,23 @@ el.fileInput.addEventListener('change', () => {
   el.fileInput.value = '';
 });
 
+el.dropZone.addEventListener('click', () => el.fileInput.click());
+el.dropZone.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    el.fileInput.click();
+  }
+});
 ['dragenter', 'dragover'].forEach((evt) => {
   el.dropZone.addEventListener(evt, (e) => {
     e.preventDefault();
-    el.dropZone.classList.add('is-dragover');
+    el.dropZone.classList.add('over');
   });
 });
 ['dragleave', 'drop'].forEach((evt) => {
   el.dropZone.addEventListener(evt, (e) => {
     e.preventDefault();
-    el.dropZone.classList.remove('is-dragover');
+    el.dropZone.classList.remove('over');
   });
 });
 el.dropZone.addEventListener('drop', (e) => {
@@ -313,9 +326,9 @@ el.dropZone.addEventListener('drop', (e) => {
 // --- Device list / filtering -------------------------------------------------
 
 function createDeviceListItem(device, isSelected) {
-  const label = deviceLabel(device);
+  const text = deviceLabel(device);
   const li = document.createElement('li');
-  li.className = isSelected ? 'device-list__item device-list__item--selected' : 'device-list__item';
+  if (isSelected) li.className = 'is-selected';
 
   const checkbox = document.createElement('input');
   checkbox.type = 'checkbox';
@@ -339,15 +352,18 @@ function createDeviceListItem(device, isSelected) {
   });
 
   const labelSpan = document.createElement('span');
-  labelSpan.className = 'device-list__label';
-  labelSpan.textContent = label;
-  labelSpan.title = label;
+  labelSpan.textContent = text;
+  labelSpan.title = text;
 
   const meta = document.createElement('span');
-  meta.className = 'device-list__meta';
+  meta.className = 'n';
   meta.textContent = device.packetCount.toLocaleString('de-DE');
 
-  li.append(checkbox, labelSpan, meta);
+  // The whole row text is the checkbox label, so it can be clicked too.
+  const label = document.createElement('label');
+  label.className = 'check';
+  label.append(checkbox, labelSpan);
+  li.append(label, meta);
   return li;
 }
 
@@ -361,12 +377,23 @@ function renderDeviceList() {
   for (const device of selected) el.deviceList.appendChild(createDeviceListItem(device, true));
   if (selected.length > 0 && rest.length > 0) {
     const divider = document.createElement('li');
-    divider.className = 'device-list__divider';
+    divider.className = 'pa-divider';
+    divider.setAttribute('aria-hidden', 'true');
     el.deviceList.appendChild(divider);
   }
   for (const device of rest) el.deviceList.appendChild(createDeviceListItem(device, false));
 
   el.deviceCount.textContent = filtered.length.toLocaleString('de-DE');
+  updateSelectAll();
+}
+
+/** "Alle" checkbox above the lists: checked, unchecked or in between. */
+function updateSelectAll() {
+  const total = state.devices.length;
+  const chosen = state.selectedIds.size;
+  el.selectAll.checked = total > 0 && chosen === total;
+  el.selectAll.indeterminate = chosen > 0 && chosen < total;
+  el.selectionCount.textContent = `${chosen.toLocaleString('de-DE')} von ${total.toLocaleString('de-DE')}`;
 }
 
 // --- Port list / filtering ----------------------------------------------------
@@ -382,7 +409,7 @@ function renderDeviceList() {
 
 function createPortListItem(entry, isSelected) {
   const li = document.createElement('li');
-  li.className = isSelected ? 'device-list__item device-list__item--selected' : 'device-list__item';
+  if (isSelected) li.className = 'is-selected';
 
   const checkbox = document.createElement('input');
   checkbox.type = 'checkbox';
@@ -400,15 +427,18 @@ function createPortListItem(entry, isSelected) {
 
   const fullLabel = `${portListLabel(entry.port)} · ${entry.protocolGroup}`;
   const labelSpan = document.createElement('span');
-  labelSpan.className = 'device-list__label';
   labelSpan.textContent = fullLabel;
   labelSpan.title = fullLabel;
 
   const meta = document.createElement('span');
-  meta.className = 'device-list__meta';
+  meta.className = 'n';
   meta.textContent = entry.packets.toLocaleString('de-DE');
 
-  li.append(checkbox, labelSpan, meta);
+  // The whole row text is the checkbox label, so it can be clicked too.
+  const label = document.createElement('label');
+  label.className = 'check';
+  label.append(checkbox, labelSpan);
+  li.append(label, meta);
   return li;
 }
 
@@ -428,7 +458,8 @@ function renderPortList() {
   for (const entry of selected) el.portList.appendChild(createPortListItem(entry, true));
   if (selected.length > 0 && rest.length > 0) {
     const divider = document.createElement('li');
-    divider.className = 'device-list__divider';
+    divider.className = 'pa-divider';
+    divider.setAttribute('aria-hidden', 'true');
     el.portList.appendChild(divider);
   }
   for (const entry of rest) el.portList.appendChild(createPortListItem(entry, false));
@@ -439,12 +470,11 @@ function renderPortList() {
 function setSidebarTab(tab) {
   state.sidebarTab = tab;
   const isPorts = tab === 'ports';
-  el.subtabDevices.classList.toggle('is-active', !isPorts);
+  el.subtabDevices.classList.toggle('active', !isPorts);
   el.subtabDevices.setAttribute('aria-selected', String(!isPorts));
-  el.subtabPorts.classList.toggle('is-active', isPorts);
+  el.subtabPorts.classList.toggle('active', isPorts);
   el.subtabPorts.setAttribute('aria-selected', String(isPorts));
   el.deviceListSection.hidden = isPorts;
-  el.deviceFilterExtras.hidden = isPorts;
   el.portListSection.hidden = !isPorts;
   el.deviceSearch.placeholder = isPorts ? 'Port oder Dienst …' : 'IP-Teilstring …';
 }
@@ -459,51 +489,37 @@ function applyDeviceSearch() {
   renderPortList();
 }
 
+// The clear button and Escape are handled by js/design-system.js (.search-field),
+// which empties the field and fires an input event.
 el.deviceSearch.addEventListener('input', applyDeviceSearch);
-el.deviceSearch.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && el.deviceSearch.value) {
-    el.deviceSearch.value = '';
-    applyDeviceSearch();
-  }
-});
-el.deviceSearchClear.addEventListener('click', () => {
-  el.deviceSearch.value = '';
-  applyDeviceSearch();
-  el.deviceSearch.focus();
-});
 
-el.btnSelectAll.addEventListener('click', () => {
-  state.selectedIds = new Set(state.devices.map((d) => d.id));
-  renderDeviceList();
-  renderPortList();
-  renderActiveView();
-});
-el.btnSelectNone.addEventListener('click', () => {
-  state.selectedIds.clear();
+el.selectAll.addEventListener('change', () => {
+  state.selectedIds = el.selectAll.checked ? new Set(state.devices.map((d) => d.id)) : new Set();
   renderDeviceList();
   renderPortList();
   renderActiveView();
 });
 
-/** The protocol chips and the "Nur Probleme" switch exist twice (sidebar, connections table) - both are driven from `state`. */
-function syncSidebarFilterControls() {
+/** Filter bar chips (protocols, "Nur Probleme", multicast/broadcast) follow `state`. */
+function syncFilterControls() {
   for (const chip of el.protocolFilters.querySelectorAll('.chip')) {
-    chip.classList.toggle('is-active', state.activeGroups.has(chip.dataset.protocol));
+    chip.setAttribute('aria-pressed', String(state.activeGroups.has(chip.dataset.protocol)));
   }
-  el.toggleOnlyProblems.checked = state.onlyProblems;
+  el.toggleOnlyProblems.setAttribute('aria-pressed', String(state.onlyProblems));
+  el.toggleHideBroadcast.setAttribute('aria-pressed', String(state.hideMulticast));
 }
 
 function toggleProtocolGroup(group) {
   if (state.activeGroups.has(group)) state.activeGroups.delete(group);
   else state.activeGroups.add(group);
-  syncSidebarFilterControls();
+  syncFilterControls();
   renderPortList();
   renderActiveView();
 }
 
 function setOnlyProblems(value) {
   state.onlyProblems = value;
-  syncSidebarFilterControls();
+  syncFilterControls();
   renderActiveView();
 }
 
@@ -512,14 +528,15 @@ el.protocolFilters.addEventListener('click', (e) => {
   if (chip) toggleProtocolGroup(chip.dataset.protocol);
 });
 
-el.toggleHideBroadcast.addEventListener('change', () => {
-  state.hideMulticast = el.toggleHideBroadcast.checked;
+el.toggleHideBroadcast.addEventListener('click', () => {
+  state.hideMulticast = !state.hideMulticast;
+  syncFilterControls();
   renderActiveView();
 });
 
 // Not applied to the PCAP export (its worker re-derives the filter from the raw
 // capture and has no notion of per-connection quality), only to the views and the Excel export.
-el.toggleOnlyProblems.addEventListener('change', () => setOnlyProblems(el.toggleOnlyProblems.checked));
+el.toggleOnlyProblems.addEventListener('click', () => setOnlyProblems(!state.onlyProblems));
 
 // --- Tabs / metric ------------------------------------------------------------
 
@@ -538,7 +555,7 @@ function setActiveTab(tab) {
   state.activeTab = tab;
   for (const [key, { tabButton, view }] of Object.entries(TABS)) {
     const isActive = key === tab;
-    tabButton().classList.toggle('is-active', isActive);
+    tabButton().classList.toggle('active', isActive);
     tabButton().setAttribute('aria-selected', String(isActive));
     view().hidden = !isActive;
   }
@@ -561,10 +578,8 @@ function updateImageExportAvailability() {
 
 function setConnectionsView(mode) {
   state.connectionsView = mode;
-  el.connectionsViewDiagram.classList.toggle('is-active', mode === 'diagram');
-  el.connectionsViewDiagram.setAttribute('aria-checked', String(mode === 'diagram'));
-  el.connectionsViewTable.classList.toggle('is-active', mode === 'table');
-  el.connectionsViewTable.setAttribute('aria-checked', String(mode === 'table'));
+  el.connectionsViewDiagram.setAttribute('aria-pressed', String(mode === 'diagram'));
+  el.connectionsViewTable.setAttribute('aria-pressed', String(mode === 'table'));
   updateImageExportAvailability();
   renderActiveView();
 }
@@ -580,12 +595,9 @@ el.tabStats.addEventListener('click', () => setActiveTab('stats'));
 
 function setMetric(metric) {
   state.metric = metric;
-  el.metricPackets.classList.toggle('is-active', metric === 'packets');
-  el.metricPackets.setAttribute('aria-checked', String(metric === 'packets'));
-  el.metricBytes.classList.toggle('is-active', metric === 'bytes');
-  el.metricBytes.setAttribute('aria-checked', String(metric === 'bytes'));
-  el.metricProblems.classList.toggle('is-active', metric === 'problems');
-  el.metricProblems.setAttribute('aria-checked', String(metric === 'problems'));
+  el.metricPackets.setAttribute('aria-pressed', String(metric === 'packets'));
+  el.metricBytes.setAttribute('aria-pressed', String(metric === 'bytes'));
+  el.metricProblems.setAttribute('aria-pressed', String(metric === 'problems'));
   el.matrixProblemsNote.hidden = metric !== 'problems';
   el.graphProblemsNote.hidden = metric !== 'problems';
   renderActiveView();
@@ -599,8 +611,7 @@ function setAddressFamily(family) {
   state.addressFamily = family;
   const buttons = { ipv4: el.familyIpv4, ipv6: el.familyIpv6, mac: el.familyMac };
   for (const [key, button] of Object.entries(buttons)) {
-    button.classList.toggle('is-active', key === family);
-    button.setAttribute('aria-checked', String(key === family));
+    button.setAttribute('aria-pressed', String(key === family));
   }
   renderActiveView();
 }
@@ -654,6 +665,8 @@ function renderActiveView() {
   const { devices: selectedDevices, pairs: visiblePairs, familyIds } = getVisibleDevicesAndPairs();
 
   el.largeSelectionWarning.hidden = state.activeTab === 'stats' || selectedDevices.length <= LARGE_SELECTION_THRESHOLD;
+  const visibleCount = getVisibleConnections(familyIds, 'packets').length;
+  el.filterCount.textContent = `${visibleCount.toLocaleString('de-DE')} von ${state.connections.length.toLocaleString('de-DE')} Verbindungen`;
   el.connectionsTruncatedWarning.hidden = true;
   el.timelineTruncatedWarning.hidden = true;
 
@@ -693,11 +706,7 @@ function renderActiveView() {
       idOf: connectionId,
       expandedIds: state.expandedConnectionIds,
       sort: state.connectionSort,
-      activeGroups: state.activeGroups,
-      onlyProblems: state.onlyProblems,
       handlers: {
-        onToggleProblems: () => setOnlyProblems(!state.onlyProblems),
-        onToggleGroup: toggleProtocolGroup,
         onSort: (key) => {
           const same = state.connectionSort.key === key;
           state.connectionSort = { key, dir: same ? (state.connectionSort.dir === 'asc' ? 'desc' : 'asc') : key === 'name' || key === 'protocol' ? 'asc' : 'desc' };
@@ -805,7 +814,7 @@ function qualityHtml(entry, { connectionLevel = false } = {}) {
     lines += `<div>ICMP-Fehlermeldungen: ${problems.toLocaleString('de-DE')}</div>`;
   }
   const timeline = connectionLevel && t ? problemTimelineHtml(t.problemTimes, entry.firstSeen, entry.lastSeen) : '';
-  return `<div class="quality"><div>Qualität: <span class="health-chip health-chip--${health.level}">${health.label}</span></div>${lines}${timeline}</div>`;
+  return `<div class="quality"><div>Qualität: ${healthBadge(health.level, health.label)}</div>${lines}${timeline}</div>`;
 }
 
 /**
@@ -994,24 +1003,29 @@ function renderPinnedPanel() {
 
   el.pinnedList.innerHTML = '';
   for (const item of state.pinnedItems) {
-    const card = document.createElement('div');
-    card.className = 'pinned-card';
+    const card = document.createElement('section');
+    card.className = 'card pa-pinned-card';
+    if (item.type !== 'device') {
+      const level = healthOf(item.type === 'connection' ? item.data.connection || item.data : item.data).level;
+      if (level !== 'ok') card.classList.add('accent', level === 'bad' ? 's4' : 's2');
+    }
 
     const header = document.createElement('div');
-    header.className = 'pinned-card__header';
+    header.className = 'pa-pinned-card__head';
     const type = document.createElement('span');
-    type.className = 'pinned-card__type';
+    type.className = 'pa-pinned-card__type';
     type.textContent = PINNED_TYPE_LABEL[item.type];
     const closeBtn = document.createElement('button');
     closeBtn.type = 'button';
-    closeBtn.className = 'pinned-card__close';
+    closeBtn.className = 'icon';
     closeBtn.setAttribute('aria-label', 'Kachel schließen');
-    closeBtn.innerHTML = '<span class="material-symbols-outlined icon--small" aria-hidden="true">close</span>';
+    closeBtn.title = 'Kachel schließen';
+    closeBtn.innerHTML = '<svg class="i" aria-hidden="true"><use href="#ic-close"></use></svg>';
     closeBtn.addEventListener('click', () => unpinItem(item.id));
     header.append(type, closeBtn);
 
     const body = document.createElement('div');
-    body.className = 'pinned-card__body';
+
     if (item.type === 'pair') {
       body.innerHTML = item.directional
         ? matrixCellDetailsHtml(item.data, item.deviceA, item.deviceB)
@@ -1031,27 +1045,27 @@ el.btnClearPinned.addEventListener('click', () => {
 
 // --- Export ------------------------------------------------------------------------
 
-el.btnExport.addEventListener('click', (e) => {
-  e.stopPropagation();
-  el.exportMenu.hidden = !el.exportMenu.hidden;
-});
-document.addEventListener('click', () => { el.exportMenu.hidden = true; });
+// The export menu is a popover (popovertarget on #btn-export): Escape and a
+// click outside close it without any script; each entry closes it as well.
+function closeExportMenu() {
+  el.exportMenu.hidePopover();
+}
 
 el.exportPng.addEventListener('click', () => {
-  el.exportMenu.hidden = true;
+  closeExportMenu();
   if (state.activeSvg) exportActiveViewAsImage(state.activeSvg, 'png', `packetatlas-${state.activeTab}`);
 });
 el.exportSvg.addEventListener('click', () => {
-  el.exportMenu.hidden = true;
+  closeExportMenu();
   if (state.activeSvg) exportActiveViewAsImage(state.activeSvg, 'svg', `packetatlas-${state.activeTab}`);
 });
 el.exportXlsx.addEventListener('click', () => {
-  el.exportMenu.hidden = true;
+  closeExportMenu();
   const { devices: selectedDevices, pairs: visiblePairs } = getVisibleDevicesAndPairs();
   exportToExcel({ devices: selectedDevices, pairs: visiblePairs, metric: state.metric, filenameBase: `packetatlas-kommunikationsmatrix-${state.addressFamily}` });
 });
 el.exportPinnedXlsx.addEventListener('click', () => {
-  el.exportMenu.hidden = true;
+  closeExportMenu();
   if (state.pinnedItems.length === 0) return;
   exportSelectionToExcel({ items: state.pinnedItems, deviceIndex: state.deviceIndex, filenameBase: 'packetatlas-angeheftete-auswahl' });
 });
@@ -1074,15 +1088,15 @@ function currentPcapPayloadMode() {
 
 function resetPcapStep(labelEl, fillEl, checkEl, label) {
   labelEl.textContent = label;
-  fillEl.style.width = '0%';
-  fillEl.classList.remove('progress-bar__fill--success');
+  fillEl.style.setProperty('--w', '0%');
+  fillEl.parentElement.classList.remove('is-done');
   checkEl.hidden = true;
 }
 
 function completePcapStep(labelEl, fillEl, checkEl, label) {
   labelEl.textContent = label;
-  fillEl.style.width = '100%';
-  fillEl.classList.add('progress-bar__fill--success');
+  fillEl.style.setProperty('--w', '100%');
+  fillEl.parentElement.classList.add('is-done');
   checkEl.hidden = false;
 }
 
@@ -1102,23 +1116,27 @@ function showPcapAwaitingInput(introText) {
 
 function openPcapExportDialog() {
   el.pcapExportError.hidden = true;
-  el.pcapDropZone.classList.remove('is-dragover');
+  el.pcapDropZone.classList.remove('over');
   el.pcapExportCancel.textContent = 'Abbrechen';
   el.pcapStepHash.hidden = true;
   el.pcapStepBuild.hidden = true;
   resetPcapStep(el.pcapStepHashLabel, el.pcapStepHashFill, el.pcapStepHashCheck, 'Prüfsumme wird verglichen …');
   resetPcapStep(el.pcapStepBuildLabel, el.pcapStepBuildFill, el.pcapStepBuildCheck, 'PCAP-Datei wird erstellt …');
   showPcapAwaitingInput();
-  el.pcapExportOverlay.hidden = false;
+  el.pcapExportOverlay.showModal();
 }
 
 function closePcapExportDialog() {
-  el.pcapExportOverlay.hidden = true;
+  if (el.pcapExportOverlay.open) el.pcapExportOverlay.close();
+}
+
+// Runs for every way of closing (button, backdrop, Escape): stop a running export.
+el.pcapExportOverlay.addEventListener('close', () => {
   if (pcapExportWorker) {
     pcapExportWorker.terminate();
     pcapExportWorker = null;
   }
-}
+});
 
 function showPcapExportError(message) {
   showPcapAwaitingInput();
@@ -1132,7 +1150,7 @@ async function handlePcapReupload(file) {
   el.pcapUploadSection.hidden = true;
   el.pcapExportProgress.hidden = false;
   el.pcapStepHash.hidden = false;
-  el.pcapStepHashFill.style.width = '40%';
+  el.pcapStepHashFill.style.setProperty('--w', '40%');
   try {
     const buffer = await file.arrayBuffer();
     const hash = await sha256Hex(buffer);
@@ -1164,7 +1182,7 @@ function runPcapExport(buffer) {
   pcapExportWorker.onmessage = (event) => {
     const msg = event.data;
     if (msg.type === 'progress') {
-      el.pcapStepBuildFill.style.width = `${msg.percent}%`;
+      el.pcapStepBuildFill.style.setProperty('--w', `${msg.percent}%`);
     } else if (msg.type === 'error') {
       showPcapExportError(msg.message);
     } else if (msg.type === 'result') {
@@ -1209,7 +1227,7 @@ function downloadPcapResult(msg) {
 }
 
 el.exportPcap.addEventListener('click', () => {
-  el.exportMenu.hidden = true;
+  closeExportMenu();
   openPcapExportDialog();
 });
 el.pcapExportCancel.addEventListener('click', closePcapExportDialog);
@@ -1217,10 +1235,17 @@ el.pcapExportClose.addEventListener('click', closePcapExportDialog);
 el.pcapExportConfirm.addEventListener('click', () => {
   if (state.originalFileBuffer) runPcapExport(state.originalFileBuffer);
 });
+// A click on the backdrop lands on the <dialog> element itself.
 el.pcapExportOverlay.addEventListener('click', (e) => {
   if (e.target === el.pcapExportOverlay) closePcapExportDialog();
 });
 el.pcapDropZone.addEventListener('click', () => el.pcapFileInput.click());
+el.pcapDropZone.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    el.pcapFileInput.click();
+  }
+});
 el.pcapFileInput.addEventListener('change', () => {
   if (el.pcapFileInput.files[0]) handlePcapReupload(el.pcapFileInput.files[0]);
   el.pcapFileInput.value = '';
@@ -1229,18 +1254,18 @@ el.pcapFileInput.addEventListener('change', () => {
   el.pcapDropZone.addEventListener(evt, (e) => {
     e.preventDefault();
     e.stopPropagation();
-    el.pcapDropZone.classList.add('is-dragover');
+    el.pcapDropZone.classList.add('over');
   });
 });
 el.pcapDropZone.addEventListener('dragleave', (e) => {
   e.preventDefault();
   e.stopPropagation();
-  el.pcapDropZone.classList.remove('is-dragover');
+  el.pcapDropZone.classList.remove('over');
 });
 el.pcapDropZone.addEventListener('drop', (e) => {
   e.preventDefault();
   e.stopPropagation();
-  el.pcapDropZone.classList.remove('is-dragover');
+  el.pcapDropZone.classList.remove('over');
   const file = e.dataTransfer.files[0];
   if (file) handlePcapReupload(file);
 });
