@@ -47,6 +47,20 @@ function servicePortOf(decoded) {
   return Math.min(decoded.srcPort, decoded.dstPort);
 }
 
+/**
+ * Identity of the connection a packet belongs to (device pair + protocol + service
+ * port), or null for frames that belong to none: layer-2 control frames, frames
+ * without addresses and self-talk. The Aggregator files packets under exactly this
+ * key, and the scoped statistics (see computeScopedStats()) select packets by it.
+ */
+function connectionKeyOf(decoded) {
+  if (decoded.protocol === 'L2') return null;
+  const srcId = decoded.srcIp || decoded.srcMac;
+  const dstId = decoded.dstIp || decoded.dstMac;
+  if (!srcId || !dstId || srcId === dstId) return null;
+  return `${pairKey(srcId, dstId)}|${decoded.protocol}|${servicePortOf(decoded)}`;
+}
+
 // Per pair / connection TCP quality counters (see traffic-stats.js for how the
 // events are detected). `problemTimes` (timestamps of retransmits/gaps/resets/
 // zero-window events, capped) is only kept on connections, where the detail
@@ -207,14 +221,11 @@ class Aggregator {
   addPacket(decoded, tcpEvents, hints) {
     // Layer-2 control frames (STP, CDP, LLDP, ...) only feed the statistics: their
     // multicast destination MACs must not become "devices" in the matrix.
-    if (decoded.protocol === 'L2') return;
-    const hasSrc = Boolean(decoded.srcIp || decoded.srcMac);
-    const hasDst = Boolean(decoded.dstIp || decoded.dstMac);
-    if (!hasSrc || !hasDst) return;
+    const connectionKey = connectionKeyOf(decoded);
+    if (connectionKey === null) return;
 
     const srcId = decoded.srcIp || decoded.srcMac;
     const dstId = decoded.dstIp || decoded.dstMac;
-    if (srcId === dstId) return; // ignore loopback/self-talk, not a meaningful "pair"
 
     const srcDevice = this.getOrCreateDevice(srcId, decoded.srcIp ? 'ip' : 'mac', decoded.srcIp, decoded.srcMac);
     const dstDevice = this.getOrCreateDevice(dstId, decoded.dstIp ? 'ip' : 'mac', decoded.dstIp, decoded.dstMac);
@@ -223,11 +234,9 @@ class Aggregator {
     dstDevice.packetCount++;
     dstDevice.byteCount += decoded.frameLength;
 
-    const key = pairKey(srcId, dstId);
     const problems = problemCountOf(decoded, tcpEvents);
 
     const servicePort = servicePortOf(decoded);
-    const connectionKey = `${key}|${decoded.protocol}|${servicePort}`;
     let connection = this.connections.get(connectionKey);
     if (!connection) {
       connection = {
@@ -319,23 +328,72 @@ class Aggregator {
   }
 }
 
+// The capture itself stays in the worker after parsing (up to this size) so statistics can be
+// recomputed for any subset of connections without the page holding the file. While a capture
+// is open this costs its size in memory - the same amount reading it needed at its peak.
+const MAX_RETAINED_BYTES = 1024 * 1024 * 1024;
+let retainedBuffer = null;
+let latestScopeRequest = 0;
+// How many packets a scoped recomputation processes before it lets a newer request in.
+const SCOPE_YIELD_EVERY = 5000;
+
 self.onmessage = (event) => {
+  const data = event.data;
+  if (data.type === 'scope') {
+    computeScopedStats(data).catch((err) => {
+      self.postMessage({ type: 'scopeError', requestId: data.requestId, message: (err && (err.message || String(err))) || 'Unbekannter Fehler bei der Auswertung.' });
+    });
+    return;
+  }
   try {
-    processBuffer(event.data.buffer);
+    processBuffer(data.buffer);
   } catch (err) {
     self.postMessage({ type: 'error', message: (err && (err.message || String(err))) || 'Unbekannter Parsing-Fehler.' });
   }
 };
 
-function processBuffer(buffer) {
-  let frames;
-  if (isPcapng(buffer)) {
-    frames = parsePcapng(buffer);
-  } else if (isClassicPcap(buffer)) {
-    frames = parsePcap(buffer);
-  } else {
-    throw new Error('Datei ist weder ein gültiges pcap- noch pcapng-Format (Magic Number nicht erkannt).');
+function parseFrames(buffer) {
+  if (isPcapng(buffer)) return parsePcapng(buffer);
+  if (isClassicPcap(buffer)) return parsePcap(buffer);
+  throw new Error('Datei ist weder ein gültiges pcap- noch pcapng-Format (Magic Number nicht erkannt).');
+}
+
+/**
+ * Everything the analysers take from one decoded packet: TrafficStats counters, TLS
+ * hello, mDNS/DNS names, layer-2 details. Used by the full pass and the scoped pass, so
+ * both produce identical numbers for the same packets. `hints` collects what the packet
+ * reveals about its connection; `aggregator` (full pass only) also learns host names.
+ * Returns the TCP analysis events (null for non-TCP packets).
+ */
+function analysePacket(buffer, frame, decoded, stats, hints, aggregator) {
+  const tcpEvents = stats.add(decoded, hints);
+  // TLS handshake sniffing: a TCP payload that starts with a ClientHello/ServerHello record.
+  // Retransmitted segments are skipped so one handshake isn't counted twice.
+  if (tcpEvents && tcpEvents.dataSegment && !tcpEvents.retransmission && decoded.headerEndOffset != null) {
+    const available = Math.min(decoded.tcpPayloadLength, frame.offset + frame.length - decoded.headerEndOffset);
+    const tls = available > 0 ? parseTlsHello(buffer, decoded.headerEndOffset, available) : null;
+    if (tls) stats.addTls(decoded, tls, hints);
   }
+  if (decoded.protocol === 'L2') stats.addL2(decoded, parseL2Details(buffer, decoded));
+  if (decoded.udpPayloadOffset != null && (decoded.srcPort === 5353 || decoded.dstPort === 5353)) {
+    const mdns = parseMdnsNames(buffer, decoded.udpPayloadOffset, decoded.udpPayloadLength);
+    if (mdns) stats.addMdns(decoded, mdns);
+  }
+  if (decoded.udpPayloadOffset != null && (decoded.srcPort === DNS_PORT || decoded.dstPort === DNS_PORT)) {
+    const dnsMessage = parseDnsMessage(buffer, decoded.udpPayloadOffset, decoded.udpPayloadLength);
+    if (dnsMessage) stats.addDns(decoded, dnsMessage, hints);
+    if (aggregator) {
+      for (const { ip, hostname } of extractDnsHostnames(buffer, decoded.udpPayloadOffset, decoded.udpPayloadLength)) {
+        aggregator.addHostname(ip, hostname);
+      }
+    }
+  }
+  return tcpEvents;
+}
+
+function processBuffer(buffer) {
+  retainedBuffer = null;
+  const frames = parseFrames(buffer);
 
   const aggregator = new Aggregator();
   const trafficStats = new TrafficStats();
@@ -348,28 +406,9 @@ function processBuffer(buffer) {
     const decoded = decodeFrame(buffer, frame.offset, frame.length, frame.linkType, frame.timestamp, frame.origLen);
     if (decoded) {
       // What this packet reveals about its connection (TLS, DNS, relay, Apple, ...); the
-      // analysers below fill it, the Aggregator stores it as the connection's filter facets.
+      // analysers fill it, the Aggregator stores it as the connection's filter facets.
       const hints = {};
-      const tcpEvents = trafficStats.add(decoded, hints);
-      // TLS handshake sniffing: a TCP payload that starts with a ClientHello/ServerHello record.
-      // Retransmitted segments are skipped so one handshake isn't counted twice.
-      if (tcpEvents && tcpEvents.dataSegment && !tcpEvents.retransmission && decoded.headerEndOffset != null) {
-        const available = Math.min(decoded.tcpPayloadLength, frame.offset + frame.length - decoded.headerEndOffset);
-        const tls = available > 0 ? parseTlsHello(buffer, decoded.headerEndOffset, available) : null;
-        if (tls) trafficStats.addTls(decoded, tls, hints);
-      }
-      if (decoded.protocol === 'L2') trafficStats.addL2(decoded, parseL2Details(buffer, decoded));
-      if (decoded.udpPayloadOffset != null && (decoded.srcPort === 5353 || decoded.dstPort === 5353)) {
-        const mdns = parseMdnsNames(buffer, decoded.udpPayloadOffset, decoded.udpPayloadLength);
-        if (mdns) trafficStats.addMdns(decoded, mdns);
-      }
-      if (decoded.udpPayloadOffset != null && (decoded.srcPort === DNS_PORT || decoded.dstPort === DNS_PORT)) {
-        const dnsMessage = parseDnsMessage(buffer, decoded.udpPayloadOffset, decoded.udpPayloadLength);
-        if (dnsMessage) trafficStats.addDns(decoded, dnsMessage, hints);
-        for (const { ip, hostname } of extractDnsHostnames(buffer, decoded.udpPayloadOffset, decoded.udpPayloadLength)) {
-          aggregator.addHostname(ip, hostname);
-        }
-      }
+      const tcpEvents = analysePacket(buffer, frame, decoded, trafficStats, hints, aggregator);
       aggregator.addPacket(decoded, tcpEvents, hints);
     }
 
@@ -387,11 +426,42 @@ function processBuffer(buffer) {
 
   aggregator.addAnnouncedNames(trafficStats.l2DeviceNames());
   const result = aggregator.toResult();
+  if (buffer.byteLength <= MAX_RETAINED_BYTES) retainedBuffer = buffer;
   self.postMessage({
     type: 'result',
     devices: result.devices,
     connections: result.connections,
     stats: { ...trafficStats.toResult(), totalPackets: packetCount },
     packetCount,
+    scopeAvailable: retainedBuffer !== null,
   });
+}
+
+/**
+ * Statistics for just the packets of the given connections (`keys`, see connectionKeyOf()),
+ * exactly as the full pass would have computed them had the capture contained nothing else.
+ * Layer-2 control frames belong to no connection and are therefore never part of a scope.
+ * A newer request makes an older one stop at its next yield - the user has already moved on.
+ */
+async function computeScopedStats({ requestId, keys }) {
+  latestScopeRequest = requestId;
+  const buffer = retainedBuffer;
+  if (!buffer) throw new Error('Die Datei wird nicht mehr im Speicher gehalten.');
+  const scope = new Set(keys);
+  const stats = new TrafficStats();
+  let processed = 0;
+  for (const frame of parseFrames(buffer)) {
+    const decoded = decodeFrame(buffer, frame.offset, frame.length, frame.linkType, frame.timestamp, frame.origLen);
+    if (decoded) {
+      const key = connectionKeyOf(decoded);
+      if (key !== null && scope.has(key)) analysePacket(buffer, frame, decoded, stats, {}, null);
+    }
+    if (++processed % SCOPE_YIELD_EVERY === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      if (latestScopeRequest !== requestId) return;
+    }
+  }
+  if (latestScopeRequest !== requestId) return;
+  const result = stats.toResult();
+  self.postMessage({ type: 'scopedStats', requestId, stats: { ...result, totalPackets: result.decodedPackets } });
 }

@@ -64,6 +64,13 @@ const state = {
   onlyProblems: false,
   facets: createFacetState(), // extra filters from the chip bar, see filters.js
   facetOptions: [], // what the capture offers per facet dimension (for the "+ Filter" menu)
+  // Statistics for the current filters come from the worker (it keeps the capture): the answers
+  // are cached per set of visible connections, requests are numbered so stale ones can be told apart.
+  scopeAvailable: false,
+  scopeCache: new Map(), // scope signature -> stats
+  scopeRequests: new Map(), // request id -> scope signature
+  scopeRequestCounter: 0,
+  latestScopeSignature: null,
   connectionsView: 'diagram', // 'diagram' | 'table'
   connectionSort: { key: 'status', dir: 'desc' },
   expandedConnectionIds: new Set(),
@@ -245,6 +252,10 @@ function handleWorkerMessage(event) {
     showError(msg.message);
   } else if (msg.type === 'result') {
     onParseComplete(msg);
+  } else if (msg.type === 'scopedStats') {
+    onScopedStats(msg);
+  } else if (msg.type === 'scopeError') {
+    onScopeError(msg);
   }
 }
 
@@ -262,6 +273,10 @@ function onParseComplete(msg) {
   state.facets = createFacetState();
   state.facetOptions = collectFacetOptions(state.connections);
   state.stats = msg.stats;
+  state.scopeAvailable = Boolean(msg.scopeAvailable);
+  state.scopeCache.clear();
+  state.scopeRequests.clear();
+  state.latestScopeSignature = null;
   state.expandedConnectionIds = new Set();
   state.deviceIndex = new Map(state.devices.map((d) => [d.id, d]));
   state.selectedIds = new Set(state.devices.map((d) => d.id));
@@ -807,16 +822,124 @@ function getVisibleConnections(familyIds, order, onlyProblems = state.onlyProble
   return filtered.sort((a, b) => b.packets - a.packets);
 }
 
+// --- Statistics for the current filters ----------------------------------------------------
+//
+// The statistics tab shows the connections that pass the selection and all filters (the address-
+// family toggle does not apply: the statistics are not split by family). Without any restriction
+// that is the whole capture and the numbers from the first pass are used. Otherwise the worker -
+// which keeps the capture - recomputes them for exactly those connections; answers are cached per
+// set of connections, and the previous numbers stay visible (dimmed) while a new request runs.
+
+const SCOPE_CACHE_LIMIT = 8;
+const SCOPE_LOADING_DELAY_MS = 150;
+
+function getStatsScopeConnections() {
+  return computeVisibleConnections(state.connections, state.selectedIds, state.activeGroups, state.hideMulticast, state.onlyProblems, facetPredicate(state.facets));
+}
+
+/** Cheap fingerprint of an ordered list of connections (count + FNV-1a over the keys). */
+function scopeSignature(connections) {
+  let hash = 0x811c9dc5;
+  for (const connection of connections) {
+    const key = connection.key;
+    for (let i = 0; i < key.length; i++) {
+      hash ^= key.charCodeAt(i);
+      hash = Math.imul(hash, 0x01000193);
+    }
+    hash ^= 124;
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `${connections.length}:${(hash >>> 0).toString(16)}`;
+}
+
+function showStats(stats, scope, pairs) {
+  el.statsContainer.classList.remove('is-loading');
+  el.statsContainer.removeAttribute('aria-busy');
+  renderStats(el.statsContainer, {
+    stats,
+    globalStats: state.stats,
+    scope,
+    metric: state.metric,
+    talkers: { devices: computeDeviceTraffic(pairs), pairs },
+    deviceIndex: state.deviceIndex,
+  });
+}
+
+function renderStatsTab() {
+  const connections = getStatsScopeConnections();
+  const total = state.connections.length;
+  el.filterCount.textContent = `${connections.length.toLocaleString('de-DE')} von ${total.toLocaleString('de-DE')} Verbindungen`;
+  const scope = { filtered: connections.length !== total, shown: connections.length, total, unavailable: false };
+
+  if (!scope.filtered) {
+    showStats(state.stats, scope, state.pairs);
+    return;
+  }
+  if (!state.scopeAvailable) {
+    // Too large to keep in memory: fall back to the whole capture and say so.
+    showStats(state.stats, { ...scope, filtered: false, unavailable: true }, state.pairs);
+    return;
+  }
+
+  const signature = scopeSignature(connections);
+  state.latestScopeSignature = signature;
+  const cached = state.scopeCache.get(signature);
+  if (cached) {
+    showStats(cached, scope, derivePairs(connections));
+    return;
+  }
+
+  const requestId = ++state.scopeRequestCounter;
+  state.scopeRequests.set(requestId, signature);
+  worker.postMessage({ type: 'scope', requestId, keys: connections.map((c) => c.key) });
+  el.statsContainer.setAttribute('aria-busy', 'true');
+  if (el.statsContainer.childElementCount === 0) {
+    el.statsContainer.innerHTML = '<div class="busy"><div class="spinner"></div> Statistik wird berechnet …</div>';
+  } else {
+    setTimeout(() => {
+      if (state.latestScopeSignature === signature && !state.scopeCache.has(signature)) el.statsContainer.classList.add('is-loading');
+    }, SCOPE_LOADING_DELAY_MS);
+  }
+}
+
+function onScopedStats(msg) {
+  const signature = state.scopeRequests.get(msg.requestId);
+  state.scopeRequests.delete(msg.requestId);
+  if (!signature) return;
+  state.scopeCache.set(signature, msg.stats);
+  while (state.scopeCache.size > SCOPE_CACHE_LIMIT) state.scopeCache.delete(state.scopeCache.keys().next().value);
+  if (state.activeTab === 'stats' && signature === state.latestScopeSignature) renderActiveView();
+}
+
+function onScopeError(msg) {
+  state.scopeRequests.delete(msg.requestId);
+  el.statsContainer.classList.remove('is-loading');
+  el.statsContainer.removeAttribute('aria-busy');
+  const box = document.createElement('div');
+  box.className = 'status err';
+  box.setAttribute('role', 'alert');
+  box.textContent = `Die Statistik für die gefilterte Auswahl konnte nicht berechnet werden: ${msg.message}`;
+  el.statsContainer.replaceChildren(box);
+}
+
 function renderActiveView() {
   if (state.devices.length === 0) return;
 
-  const { devices: selectedDevices, pairs: visiblePairs, familyIds } = getVisibleDevicesAndPairs();
-
-  el.largeSelectionWarning.hidden = state.activeTab === 'stats' || selectedDevices.length <= LARGE_SELECTION_THRESHOLD;
-  const visibleCount = getVisibleConnections(familyIds, 'packets').length;
-  el.filterCount.textContent = `${visibleCount.toLocaleString('de-DE')} von ${state.connections.length.toLocaleString('de-DE')} Verbindungen`;
   el.connectionsTruncatedWarning.hidden = true;
   el.timelineTruncatedWarning.hidden = true;
+  if (state.activeTab === 'stats') {
+    el.largeSelectionWarning.hidden = true;
+    renderStatsTab();
+    state.activeSvg = null;
+    state.graphSimulation = null;
+    return;
+  }
+
+  const { devices: selectedDevices, pairs: visiblePairs, familyIds } = getVisibleDevicesAndPairs();
+
+  el.largeSelectionWarning.hidden = selectedDevices.length <= LARGE_SELECTION_THRESHOLD;
+  const visibleCount = getVisibleConnections(familyIds, 'packets').length;
+  el.filterCount.textContent = `${visibleCount.toLocaleString('de-DE')} von ${state.connections.length.toLocaleString('de-DE')} Verbindungen`;
 
   if (state.activeTab === 'matrix') {
     state.activeSvg = renderMatrix(el.matrixContainer, {
@@ -886,15 +1009,6 @@ function renderActiveView() {
       onLeave: hideTooltip,
       onClick: (event, connection) => pinConnection(connection),
     });
-    state.graphSimulation = null;
-  } else if (state.activeTab === 'stats') {
-    renderStats(el.statsContainer, {
-      stats: state.stats,
-      metric: state.metric,
-      talkers: { devices: computeDeviceTraffic(state.pairs), pairs: state.pairs },
-      deviceIndex: state.deviceIndex,
-    });
-    state.activeSvg = null;
     state.graphSimulation = null;
   } else {
     const allConnections = getVisibleConnections(familyIds, 'timeline');

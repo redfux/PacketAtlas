@@ -258,7 +258,7 @@ function chip(level, text) {
   return healthBadge(level, text);
 }
 
-function l2Card(stats, metric) {
+function l2Card(stats, metric, scoped = false) {
   const l2 = stats.l2;
   if (!l2) return '';
   const protocolRows = l2.protocols.map((p) => ({
@@ -320,7 +320,7 @@ function l2Card(stats, metric) {
     body += `<div class="stats-subtitle">VLANs (getaggte Frames)${l2.vlanCount > l2.vlans.length ? ` – ${countFormat.format(l2.vlanCount)} gesehen` : ''}</div>`;
     body += barRows(l2.vlans.map((v) => ({ label: `VLAN ${v.id}`, value: valueOf(v, metric), color: '--md-cat-1', display: formatValue(valueOf(v, metric), metric) })), '');
   }
-  return card('Layer-2-Protokolle', body, 'stats-card--wide', 'Nur was der Messpunkt sieht: Mirror-Ports und manche Netzwerkkarten filtern Steuerframes (STP, CDP, LLDP, LACP) heraus. Die Namen aus CDP/LLDP erscheinen zusätzlich als Beschriftung der Geräte, sofern deren Management-IP im Capture vorkommt.');
+  return card('Layer-2-Protokolle', body, 'stats-card--wide', `${scoped ? 'Gilt für den gesamten Capture, nicht für die gefilterte Auswahl: Layer-2-Frames gehören zu keiner Verbindung. ' : ''}Nur was der Messpunkt sieht: Mirror-Ports und manche Netzwerkkarten filtern Steuerframes (STP, CDP, LLDP, LACP) heraus. Die Namen aus CDP/LLDP erscheinen zusätzlich als Beschriftung der Geräte, sofern deren Management-IP im Capture vorkommt.`);
 }
 
 function appleCard(stats, metric) {
@@ -592,7 +592,24 @@ function streamsCard(stats) {
 }
 
 /** Renders the whole statistics tab into `container`. `metric` is 'packets' | 'bytes'. */
-export function renderStats(container, { stats, metric, talkers, deviceIndex }) {
+/** One line above the cards saying what the numbers cover. */
+function scopeNote(scope) {
+  if (scope && scope.unavailable) {
+    return 'Die Datei ist zu groß, um für gefilterte Auswertungen im Speicher gehalten zu werden – die Statistik zeigt immer den gesamten Capture, die Filter wirken hier nicht.';
+  }
+  if (scope && scope.filtered) {
+    return `Umfang: ${countFormat.format(scope.shown)} von ${countFormat.format(scope.total)} Verbindungen nach den aktuellen Filtern (Geräteauswahl, Protokolle, weitere Filter).`;
+  }
+  return 'Umfang: alle Verbindungen des Captures (keine Filter aktiv).';
+}
+
+/**
+ * `stats` are the numbers to show (for the whole capture or for the filtered connections),
+ * `globalStats` always those of the whole capture (layer-2 frames belong to no connection),
+ * `scope` = { filtered, shown, total, unavailable }, `talkers` = { devices, pairs } for the same
+ * connections as `stats`.
+ */
+export function renderStats(container, { stats, globalStats, scope, metric, talkers, deviceIndex }) {
   if (!stats) {
     container.innerHTML = '<p class="stats-empty">Keine Statistikdaten vorhanden.</p>';
     return;
@@ -631,7 +648,7 @@ export function renderStats(container, { stats, metric, talkers, deviceIndex }) 
   );
 
   container.innerHTML = `
-    <p class="stats-scope">Statistik über den gesamten Capture – Geräteauswahl und Filterleiste wirken hier (noch) nicht.</p>
+    <p class="stats-scope">${esc(scopeNote(scope))}</p>
     <div class="stats-kpis">${kpis}</div>
     <div class="stats-grid">
       ${distribution}
@@ -645,7 +662,7 @@ export function renderStats(container, { stats, metric, talkers, deviceIndex }) 
       ${relayCard(stats)}
       ${appleCard(stats, metric)}
       ${tlsCard(stats)}
-      ${l2Card(stats, metric)}
+      ${l2Card(globalStats || stats, metric, Boolean(scope && scope.filtered))}
       ${sizesCard(stats, metric)}
       ${mtuFragmentationCard(stats)}
       ${timelineCard(stats, metric)}
