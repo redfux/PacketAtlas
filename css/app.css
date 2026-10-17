@@ -303,7 +303,7 @@
 
 .stats-kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -326,7 +326,7 @@
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
   gap: 16px;
 }
 .stats-card {
@@ -342,7 +342,7 @@
 .stats-card__summary strong { color: var(--md-on-surface); font-weight: 600; }
 .stats-card__note { margin: 12px 0 0; font-size: var(--fs-2xs); color: var(--md-on-surface-variant); }
 
-.stats-card--shares { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); column-gap: 24px; }
+.stats-card--shares { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); column-gap: 24px; }
 .stats-card--shares .stats-card__title, .stats-card--shares .stats-card__note { grid-column: 1 / -1; }
 .stats-share { min-width: 0; }
 .stats-share__title { margin-bottom: 8px; font-size: var(--fs-xs); font-weight: 600; }
@@ -366,6 +366,16 @@
 .stats-swatch--inline { display: inline-block; vertical-align: middle; }
 .stats-bar { height: 8px; border-radius: 4px; background: var(--md-surface-2); overflow: hidden; }
 .stats-bar i { display: block; height: 100%; border-radius: 4px; }
+
+/* Phones: label and value share the first line, the bar gets the full width below. */
+@media (max-width: 639px) {
+  .view { padding: 12px; }
+  .stats-card { padding: 12px 14px 14px; }
+  .stats-row, .stats-row--wide { grid-template-columns: minmax(0, 1fr) auto; row-gap: 3px; padding: 5px 0; }
+  .stats-row > .stats-bar { grid-column: 1 / -1; grid-row: 2; }
+  .stats-row__value { white-space: nowrap; }
+  .stats-legend li { grid-template-columns: 10px 1fr auto auto; }
+}
 
 .stats-timeline { display: flex; align-items: flex-end; gap: 1px; height: 90px; border-bottom: 1px solid var(--md-outline-variant); }
 .stats-timeline i { flex: 1; min-width: 1px; background: var(--md-cat-1); border-radius: 2px 2px 0 0; }

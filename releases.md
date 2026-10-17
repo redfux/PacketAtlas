@@ -24,6 +24,7 @@ Neue Oberfläche auf Basis eines gemeinsamen Design Systems (Material-Design-3-G
 ### Fixed
 
 - Protokoll- und Filter-Chips sahen nach dem Wiedereinschalten noch aus wie ausgeschaltet, solange der Zeiger darauf stand (am Handy bis zum nächsten Tippen) – behoben im Design System 3.1.1 (Hover hellt gedrückte Chips nicht mehr auf).
+- Statistik auf dem Handy (hochkant): Die Balken der Top-Talker und anderer Ranglisten verschwanden, Werte ragten aus der Kachel. Unter 640 px stehen Name und Wert jetzt in einer Zeile, der Balken darunter in voller Breite; das Kachelraster verlangt keine 420 px Mindestbreite mehr.
 
 ### Removed
 
