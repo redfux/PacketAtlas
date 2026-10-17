@@ -5,7 +5,7 @@
 // parser.worker.js (traffic-stats.js), so this only formats and lays it out.
 // thought up by human, created by ai
 
-import { deviceLabel, dnsRcodeName, formatBytes, healthBadge, icmpTypeCodeLabel, portListLabel } from './data-model.js?v=2.0.0';
+import { deviceLabel, dnsRcodeName, formatBytes, healthBadge, icmpTypeCodeLabel, portListLabel } from './data-model.js?v=2.1.0';
 
 const percentFormat = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 });
 const countFormat = new Intl.NumberFormat('de-DE');

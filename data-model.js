@@ -186,36 +186,136 @@ export function protocolGroupOf(protocol) {
   return 'OTHER';
 }
 
-export function pairMatchesProtocolFilter(pair, activeGroups) {
-  return pair.protocols.some((proto) => activeGroups.has(protocolGroupOf(proto)));
-}
-
 /**
- * Derives the filtered set of pairs visible in both views from the full
- * result, the current device selection, protocol filter and metric.
+ * The connections (device pair + protocol + service port) that pass the sidebar
+ * selection (both endpoints selected), the protocol chips, "Multicast/Broadcast
+ * ausblenden", "Nur Probleme" and - via `extraPredicate`, built from the filter
+ * chips in filters.js - any further criterion. Every view takes its data from
+ * this one list (matrix and graph via derivePairs()), so they never disagree.
  */
-export function computeVisiblePairs(pairs, selectedIds, activeGroups, hideMulticast, onlyProblems = false) {
-  return pairs.filter((pair) => {
-    if (!selectedIds.has(pair.a) || !selectedIds.has(pair.b)) return false;
-    if (hideMulticast && pair.multicastOrBroadcast) return false;
-    if (onlyProblems && !(pair.problems > 0)) return false;
-    if (!pairMatchesProtocolFilter(pair, activeGroups)) return false;
-    return true;
-  });
-}
-
-/**
- * Derives the filtered per-connection (device pair + protocol + port) breakdown
- * visible in the connections view, using the same selection/protocol/multicast
- * filters as computeVisiblePairs() so all views stay consistent with each other.
- */
-export function computeVisibleConnections(connections, selectedIds, activeGroups, hideMulticast, onlyProblems = false) {
+export function computeVisibleConnections(connections, selectedIds, activeGroups, hideMulticast, onlyProblems = false, extraPredicate = null) {
   return connections.filter((connection) => {
     if (!selectedIds.has(connection.a) || !selectedIds.has(connection.b)) return false;
     if (hideMulticast && connection.multicastOrBroadcast) return false;
     if (onlyProblems && !(connection.problems > 0)) return false;
     if (!activeGroups.has(protocolGroupOf(connection.protocol))) return false;
+    if (extraPredicate && !extraPredicate(connection)) return false;
     return true;
+  });
+}
+
+const TCP_SUMMARY_SUM_FIELDS = ['dataSegments', 'retransmissions', 'fastRetransmissions', 'duplicateAcks', 'outOfOrder', 'lostSegments', 'zeroWindow', 'resets', 'fins', 'handshakeCount', 'handshakeSum'];
+
+function emptyDirection() {
+  return { packets: 0, bytes: 0, problems: 0, srcPorts: new Set(), dstPorts: new Set(), firstSeen: null, lastSeen: null };
+}
+
+function addToDirection(target, direction) {
+  if (!direction || direction.packets === 0) return;
+  target.packets += direction.packets;
+  target.bytes += direction.bytes;
+  target.problems += direction.problems;
+  for (const port of direction.srcPorts) target.srcPorts.add(port);
+  for (const port of direction.dstPorts) target.dstPorts.add(port);
+  if (target.firstSeen === null || direction.firstSeen < target.firstSeen) target.firstSeen = direction.firstSeen;
+  if (target.lastSeen === null || direction.lastSeen > target.lastSeen) target.lastSeen = direction.lastSeen;
+}
+
+function finishDirection(direction) {
+  return { ...direction, srcPorts: Array.from(direction.srcPorts), dstPorts: Array.from(direction.dstPorts) };
+}
+
+/**
+ * One entry per device pair, built from a list of connections: the pair's totals,
+ * per-direction totals, per-device ports and per-protocol breakdown are sums over
+ * its connections. With the full connection list this is the whole capture; with
+ * the visible connections it is exactly what the matrix, graph and Excel export
+ * should show for the current filters (so e.g. a protocol chip also reduces the
+ * packet counts of a pair, not just hides pairs).
+ *
+ * `a`/`b` are the sender of the pair's first connection (by first-seen time), like
+ * "who spoke first" everywhere else; port lists and the protocol list are in
+ * order of first appearance.
+ */
+export function derivePairs(connections) {
+  const ordered = connections.length > 1 ? [...connections].sort((x, y) => x.firstSeen - y.firstSeen) : connections;
+  const byKey = new Map();
+
+  for (const c of ordered) {
+    const key = pairKey(c.a, c.b);
+    let pair = byKey.get(key);
+    if (!pair) {
+      pair = {
+        a: c.a,
+        b: c.b,
+        packets: 0,
+        bytes: 0,
+        problems: 0,
+        tcp: null,
+        protocols: [],
+        portsA: new Set(),
+        portsB: new Set(),
+        firstSeen: c.firstSeen,
+        lastSeen: c.lastSeen,
+        multicastOrBroadcast: false,
+        aToB: emptyDirection(),
+        bToA: emptyDirection(),
+        byProtocol: new Map(),
+      };
+      byKey.set(key, pair);
+    }
+
+    pair.packets += c.packets;
+    pair.bytes += c.bytes;
+    pair.problems += c.problems || 0;
+    if (c.firstSeen < pair.firstSeen) pair.firstSeen = c.firstSeen;
+    if (c.lastSeen > pair.lastSeen) pair.lastSeen = c.lastSeen;
+    if (c.multicastOrBroadcast) pair.multicastOrBroadcast = true;
+    if (c.protocol && !pair.protocols.includes(c.protocol)) pair.protocols.push(c.protocol);
+
+    if (c.tcp) {
+      if (!pair.tcp) pair.tcp = { ...Object.fromEntries(TCP_SUMMARY_SUM_FIELDS.map((field) => [field, 0])), handshakeMax: 0, problemTimes: null };
+      for (const field of TCP_SUMMARY_SUM_FIELDS) pair.tcp[field] += c.tcp[field];
+      pair.tcp.handshakeMax = Math.max(pair.tcp.handshakeMax, c.tcp.handshakeMax);
+    }
+
+    // The connection's own directions are a->b / b->a of ITS first sender; map them onto the pair's a/b.
+    const sentByA = c.a === pair.a ? c.aToB : c.bToA;
+    const sentByB = c.a === pair.a ? c.bToA : c.aToB;
+    addToDirection(pair.aToB, sentByA);
+    addToDirection(pair.bToA, sentByB);
+    for (const port of sentByA.srcPorts) pair.portsA.add(port);
+    for (const port of sentByA.dstPorts) pair.portsB.add(port);
+    for (const port of sentByB.srcPorts) pair.portsB.add(port);
+    for (const port of sentByB.dstPorts) pair.portsA.add(port);
+
+    const protocolKey = c.protocol || 'OTHER';
+    let entry = pair.byProtocol.get(protocolKey);
+    if (!entry) {
+      entry = { protocol: protocolKey, packets: 0, bytes: 0, portsA: new Set(), portsB: new Set(), firstSeen: c.firstSeen, lastSeen: c.lastSeen, multicastOrBroadcast: false };
+      pair.byProtocol.set(protocolKey, entry);
+    }
+    entry.packets += c.packets;
+    entry.bytes += c.bytes;
+    if (c.firstSeen < entry.firstSeen) entry.firstSeen = c.firstSeen;
+    if (c.lastSeen > entry.lastSeen) entry.lastSeen = c.lastSeen;
+    if (c.multicastOrBroadcast) entry.multicastOrBroadcast = true;
+    for (const port of sentByA.srcPorts) entry.portsA.add(port);
+    for (const port of sentByA.dstPorts) entry.portsB.add(port);
+    for (const port of sentByB.srcPorts) entry.portsB.add(port);
+    for (const port of sentByB.dstPorts) entry.portsA.add(port);
+  }
+
+  return Array.from(byKey.values()).map((pair) => {
+    const { byProtocol, ...rest } = pair;
+    return {
+      ...rest,
+      portsA: Array.from(pair.portsA),
+      portsB: Array.from(pair.portsB),
+      aToB: finishDirection(pair.aToB),
+      bToA: finishDirection(pair.bToA),
+      protocolBreakdown: Array.from(byProtocol.values()).map((entry) => ({ ...entry, portsA: Array.from(entry.portsA), portsB: Array.from(entry.portsB) })),
+    };
   });
 }
 

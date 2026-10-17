@@ -8,7 +8,7 @@ import {
   computeDeviceTraffic,
   computePortEntries,
   computeVisibleConnections,
-  computeVisiblePairs,
+  derivePairs,
   deviceLabel,
   escapeHtml,
   formatBytes,
@@ -20,15 +20,24 @@ import {
   pairKey,
   portListLabel,
   relatedDeviceIds,
-} from './data-model.js?v=2.0.0';
-import { renderMatrix } from './matrix-view.js?v=2.0.0';
-import { renderGraph, updateForces } from './graph-view.js?v=2.0.0';
-import { renderConnections } from './connections-view.js?v=2.0.0';
-import { renderConnectionsTable } from './connections-table-view.js?v=2.0.0';
-import { renderTimeline } from './timeline-view.js?v=2.0.0';
-import { renderStats } from './stats-view.js?v=2.0.0';
-import { exportActiveViewAsImage } from './export-image.js?v=2.0.0';
-import { exportToExcel, exportSelectionToExcel } from './export-excel.js?v=2.0.0';
+} from './data-model.js?v=2.1.0';
+import {
+  collectFacetOptions,
+  createFacetState,
+  facetEntries,
+  facetPredicate,
+  hasFacets,
+  isFacetActive,
+  toggleFacet,
+} from './filters.js?v=2.1.0';
+import { renderMatrix } from './matrix-view.js?v=2.1.0';
+import { renderGraph, updateForces } from './graph-view.js?v=2.1.0';
+import { renderConnections } from './connections-view.js?v=2.1.0';
+import { renderConnectionsTable } from './connections-table-view.js?v=2.1.0';
+import { renderTimeline } from './timeline-view.js?v=2.1.0';
+import { renderStats } from './stats-view.js?v=2.1.0';
+import { exportActiveViewAsImage } from './export-image.js?v=2.1.0';
+import { exportToExcel, exportSelectionToExcel } from './export-excel.js?v=2.1.0';
 
 const LARGE_SELECTION_THRESHOLD = 50;
 const MAX_CONNECTIONS_RENDER = 400;
@@ -40,7 +49,7 @@ const MAX_TIMELINE_RENDER = 300;
 // browser. Appending the version as a query string changes the request URL
 // whenever the app updates, forcing a fresh fetch instead of silently
 // running old worker code after an update.
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '2.1.0';
 
 const state = {
   devices: [],
@@ -53,6 +62,8 @@ const state = {
   activeGroups: new Set(Object.keys(PROTOCOL_GROUPS)),
   hideMulticast: false,
   onlyProblems: false,
+  facets: createFacetState(), // extra filters from the chip bar, see filters.js
+  facetOptions: [], // what the capture offers per facet dimension (for the "+ Filter" menu)
   connectionsView: 'diagram', // 'diagram' | 'table'
   connectionSort: { key: 'status', dir: 'desc' },
   expandedConnectionIds: new Set(),
@@ -100,6 +111,11 @@ const el = {
   protocolFilters: document.getElementById('protocol-filters'),
   toggleHideBroadcast: document.getElementById('toggle-hide-broadcast'),
   toggleOnlyProblems: document.getElementById('toggle-only-problems'),
+  facetChips: document.getElementById('facet-chips'),
+  facetNone: document.getElementById('facet-none'),
+  facetMenu: document.getElementById('facet-menu'),
+  btnAddFilter: document.getElementById('btn-add-filter'),
+  btnResetFilters: document.getElementById('btn-reset-filters'),
   subtabDevices: document.getElementById('subtab-devices'),
   subtabPorts: document.getElementById('subtab-ports'),
   portListSection: document.getElementById('port-list-section'),
@@ -240,8 +256,11 @@ function onParseComplete(msg) {
   }
 
   state.devices = msg.devices;
-  state.pairs = msg.pairs;
   state.connections = msg.connections;
+  // Pairs are not delivered by the worker: they are always derived from connections (see derivePairs()).
+  state.pairs = derivePairs(state.connections);
+  state.facets = createFacetState();
+  state.facetOptions = collectFacetOptions(state.connections);
   state.stats = msg.stats;
   state.expandedConnectionIds = new Set();
   state.deviceIndex = new Map(state.devices.map((d) => [d.id, d]));
@@ -260,6 +279,8 @@ function onParseComplete(msg) {
 
   setupAddressFamilyToggle();
   setSidebarTab('devices');
+  buildFacetMenu();
+  renderFacetBar();
   renderDeviceList();
   renderPortList();
   renderActiveView();
@@ -507,6 +528,7 @@ function syncFilterControls() {
   }
   el.toggleOnlyProblems.setAttribute('aria-pressed', String(state.onlyProblems));
   el.toggleHideBroadcast.setAttribute('aria-pressed', String(state.hideMulticast));
+  el.btnResetFilters.hidden = !filtersDeviateFromDefault();
 }
 
 function toggleProtocolGroup(group) {
@@ -537,6 +559,131 @@ el.toggleHideBroadcast.addEventListener('click', () => {
 // Not applied to the PCAP export (its worker re-derives the filter from the raw
 // capture and has no notion of per-connection quality), only to the views and the Excel export.
 el.toggleOnlyProblems.addEventListener('click', () => setOnlyProblems(!state.onlyProblems));
+
+// --- Extra filters (facets) ---------------------------------------------------
+//
+// Beside the protocol chips and the two switches there are "facets": criteria on
+// what a connection contains (TLS version, port, DNS answer code, ...), see
+// filters.js. Active ones show as removable chips in the filter bar; the "+ Filter"
+// menu lists what the capture offers. Values of one dimension combine with OR,
+// different dimensions with AND.
+
+const FACET_MENU_MAX_OPTIONS = 40;
+
+function filtersDeviateFromDefault() {
+  return state.activeGroups.size !== Object.keys(PROTOCOL_GROUPS).length || state.onlyProblems || state.hideMulticast || hasFacets(state.facets);
+}
+
+function renderFacetBar() {
+  const entries = facetEntries(state.facets);
+  el.facetChips.replaceChildren();
+  for (const entry of entries) {
+    const text = `${entry.dimensionLabel}: ${entry.valueLabel}`;
+    const chip = document.createElement('span');
+    chip.className = 'chip removable';
+    chip.append(document.createTextNode(`${text} `));
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.dataset.dimension = entry.dimension;
+    remove.dataset.value = entry.value;
+    remove.setAttribute('aria-label', `Filter „${text}“ entfernen`);
+    remove.title = 'Filter entfernen';
+    remove.innerHTML = '<svg class="i"><use href="#ic-close"></use></svg>';
+    chip.append(remove);
+    el.facetChips.append(chip);
+  }
+  el.facetNone.hidden = entries.length > 0;
+  el.btnResetFilters.hidden = !filtersDeviateFromDefault();
+  refreshFacetMenu();
+}
+
+function buildFacetMenu() {
+  const menu = el.facetMenu;
+  menu.replaceChildren();
+  if (state.facetOptions.length === 0) {
+    const none = document.createElement('div');
+    none.className = 'app-menu-head';
+    none.textContent = 'Dieser Capture bietet keine weiteren Filter an.';
+    menu.append(none);
+    return;
+  }
+  for (const group of state.facetOptions) {
+    const head = document.createElement('div');
+    head.className = 'app-menu-head';
+    head.textContent = group.label;
+    menu.append(head);
+    for (const option of group.options.slice(0, FACET_MENU_MAX_OPTIONS)) {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'app-menu-item pa-facet-item';
+      item.dataset.dimension = group.dimension;
+      item.dataset.value = option.value;
+      const label = document.createElement('span');
+      label.textContent = option.label;
+      label.title = option.label;
+      const count = document.createElement('span');
+      count.className = 'n';
+      count.textContent = option.count.toLocaleString('de-DE');
+      item.append(label, count);
+      menu.append(item);
+    }
+    if (group.options.length > FACET_MENU_MAX_OPTIONS) {
+      const more = document.createElement('div');
+      more.className = 'pa-facet-more';
+      more.textContent = `${(group.options.length - FACET_MENU_MAX_OPTIONS).toLocaleString('de-DE')} weitere nicht angezeigt`;
+      menu.append(more);
+    }
+  }
+  const hint = document.createElement('div');
+  hint.className = 'pa-facet-more';
+  hint.textContent = 'Werte einer Gruppe gelten als „oder“, verschiedene Gruppen als „und“.';
+  menu.append(hint);
+  refreshFacetMenu();
+}
+
+/** Marks the menu entries that are currently active (also drives the ✓ in front of them). */
+function refreshFacetMenu() {
+  for (const item of el.facetMenu.querySelectorAll('.pa-facet-item')) {
+    item.setAttribute('aria-pressed', String(isFacetActive(state.facets, item.dataset.dimension, item.dataset.value)));
+  }
+}
+
+function toggleFacetValue(dimension, value) {
+  toggleFacet(state.facets, dimension, value);
+  renderFacetBar();
+  renderActiveView();
+}
+
+function resetFilters() {
+  state.activeGroups = new Set(Object.keys(PROTOCOL_GROUPS));
+  state.onlyProblems = false;
+  state.hideMulticast = false;
+  state.facets = createFacetState();
+  syncFilterControls();
+  renderFacetBar();
+  renderPortList();
+  renderActiveView();
+}
+
+el.facetChips.addEventListener('click', (e) => {
+  const button = e.target.closest('button[data-dimension]');
+  if (button) toggleFacetValue(button.dataset.dimension, button.dataset.value);
+});
+el.facetMenu.addEventListener('click', (e) => {
+  const item = e.target.closest('.pa-facet-item');
+  if (item) toggleFacetValue(item.dataset.dimension, item.dataset.value);
+});
+el.btnResetFilters.addEventListener('click', resetFilters);
+
+// The menu hangs below the "+ Filter" button instead of the design system's default (top right).
+el.facetMenu.addEventListener('beforetoggle', (e) => {
+  if (e.newState !== 'open') return;
+  const anchor = el.btnAddFilter.getBoundingClientRect();
+  const width = Math.min(360, window.innerWidth - 16);
+  el.facetMenu.style.top = `${Math.round(anchor.bottom + 4)}px`;
+  el.facetMenu.style.left = `${Math.round(Math.max(8, Math.min(anchor.left, window.innerWidth - width - 8)))}px`;
+  el.facetMenu.style.right = 'auto';
+});
 
 // --- Tabs / metric ------------------------------------------------------------
 
@@ -632,16 +779,17 @@ el.forceDistance.addEventListener('input', () => {
 // --- Rendering -----------------------------------------------------------------
 
 /**
- * Devices/pairs for the current selection, protocol filter and address-family
- * toggle, with devices sorted ascending by address - shared by both views and
- * by the export handlers so they always show/export exactly what's on screen.
+ * Devices, connections and pairs for the current selection, protocol chips,
+ * extra filters and address-family toggle, devices sorted ascending by address.
+ * The pairs of matrix, graph and Excel export are derived from exactly the
+ * visible connections, so all views and the export show the same numbers.
  */
 function getVisibleDevicesAndPairs() {
   const familyDevices = state.devices.filter((d) => state.selectedIds.has(d.id) && addressFamilyOf(d) === state.addressFamily);
   const familyIds = new Set(familyDevices.map((d) => d.id));
   const devices = [...familyDevices].sort(compareDevicesByAddress);
-  const pairs = computeVisiblePairs(state.pairs, familyIds, state.activeGroups, state.hideMulticast, state.onlyProblems);
-  return { devices, pairs, familyIds };
+  const connections = computeVisibleConnections(state.connections, familyIds, state.activeGroups, state.hideMulticast, state.onlyProblems, facetPredicate(state.facets));
+  return { devices, pairs: derivePairs(connections), familyIds };
 }
 
 /**
@@ -652,7 +800,7 @@ function getVisibleDevicesAndPairs() {
  * connection began).
  */
 function getVisibleConnections(familyIds, order, onlyProblems = state.onlyProblems) {
-  const filtered = computeVisibleConnections(state.connections, familyIds, state.activeGroups, state.hideMulticast, onlyProblems);
+  const filtered = computeVisibleConnections(state.connections, familyIds, state.activeGroups, state.hideMulticast, onlyProblems, facetPredicate(state.facets));
   if (order === 'timeline') {
     return filtered.sort((a, b) => a.firstSeen - b.firstSeen);
   }

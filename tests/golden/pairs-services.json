@@ -1,0 +1,1020 @@
+[
+ {
+  "a": "10.0.0.1",
+  "b": "1.1.1.1",
+  "packets": 1,
+  "bytes": 134,
+  "problems": 0,
+  "tcp": {
+   "dataSegments": 1,
+   "retransmissions": 0,
+   "fastRetransmissions": 0,
+   "duplicateAcks": 0,
+   "outOfOrder": 0,
+   "lostSegments": 0,
+   "zeroWindow": 0,
+   "resets": 0,
+   "fins": 0,
+   "handshakeCount": 0,
+   "handshakeSum": 0,
+   "handshakeMax": 0
+  },
+  "protocols": [
+   "TCP"
+  ],
+  "portsA": [
+   53000
+  ],
+  "portsB": [
+   853
+  ],
+  "firstSeen": 2100019,
+  "lastSeen": 2100019,
+  "multicastOrBroadcast": false,
+  "aToB": {
+   "packets": 1,
+   "bytes": 134,
+   "problems": 0,
+   "srcPorts": [
+    53000
+   ],
+   "dstPorts": [
+    853
+   ],
+   "firstSeen": 2100019,
+   "lastSeen": 2100019
+  },
+  "bToA": {
+   "packets": 0,
+   "bytes": 0,
+   "problems": 0,
+   "srcPorts": [],
+   "dstPorts": [],
+   "firstSeen": null,
+   "lastSeen": null
+  },
+  "protocolBreakdown": [
+   {
+    "protocol": "TCP",
+    "packets": 1,
+    "bytes": 134,
+    "portsA": [
+     53000
+    ],
+    "portsB": [
+     853
+    ],
+    "firstSeen": 2100019,
+    "lastSeen": 2100019,
+    "multicastOrBroadcast": false
+   }
+  ]
+ },
+ {
+  "a": "10.0.0.1",
+  "b": "10.0.0.20",
+  "packets": 2,
+  "bytes": 226,
+  "problems": 0,
+  "tcp": {
+   "dataSegments": 2,
+   "retransmissions": 0,
+   "fastRetransmissions": 0,
+   "duplicateAcks": 0,
+   "outOfOrder": 0,
+   "lostSegments": 0,
+   "zeroWindow": 0,
+   "resets": 0,
+   "fins": 0,
+   "handshakeCount": 0,
+   "handshakeSum": 0,
+   "handshakeMax": 0
+  },
+  "protocols": [
+   "TCP"
+  ],
+  "portsA": [
+   53100
+  ],
+  "portsB": [
+   443
+  ],
+  "firstSeen": 2100018.4,
+  "lastSeen": 2100018.5,
+  "multicastOrBroadcast": false,
+  "aToB": {
+   "packets": 1,
+   "bytes": 117,
+   "problems": 0,
+   "srcPorts": [
+    53100
+   ],
+   "dstPorts": [
+    443
+   ],
+   "firstSeen": 2100018.4,
+   "lastSeen": 2100018.4
+  },
+  "bToA": {
+   "packets": 1,
+   "bytes": 109,
+   "problems": 0,
+   "srcPorts": [
+    443
+   ],
+   "dstPorts": [
+    53100
+   ],
+   "firstSeen": 2100018.5,
+   "lastSeen": 2100018.5
+  },
+  "protocolBreakdown": [
+   {
+    "protocol": "TCP",
+    "packets": 2,
+    "bytes": 226,
+    "portsA": [
+     53100
+    ],
+    "portsB": [
+     443
+    ],
+    "firstSeen": 2100018.4,
+    "lastSeen": 2100018.5,
+    "multicastOrBroadcast": false
+   }
+  ]
+ },
+ {
+  "a": "10.0.0.1",
+  "b": "10.0.0.21",
+  "packets": 2,
+  "bytes": 220,
+  "problems": 0,
+  "tcp": {
+   "dataSegments": 2,
+   "retransmissions": 0,
+   "fastRetransmissions": 0,
+   "duplicateAcks": 0,
+   "outOfOrder": 0,
+   "lostSegments": 0,
+   "zeroWindow": 0,
+   "resets": 0,
+   "fins": 0,
+   "handshakeCount": 0,
+   "handshakeSum": 0,
+   "handshakeMax": 0
+  },
+  "protocols": [
+   "TCP"
+  ],
+  "portsA": [
+   53101
+  ],
+  "portsB": [
+   443
+  ],
+  "firstSeen": 2100018.6,
+  "lastSeen": 2100018.7,
+  "multicastOrBroadcast": false,
+  "aToB": {
+   "packets": 1,
+   "bytes": 117,
+   "problems": 0,
+   "srcPorts": [
+    53101
+   ],
+   "dstPorts": [
+    443
+   ],
+   "firstSeen": 2100018.6,
+   "lastSeen": 2100018.6
+  },
+  "bToA": {
+   "packets": 1,
+   "bytes": 103,
+   "problems": 0,
+   "srcPorts": [
+    443
+   ],
+   "dstPorts": [
+    53101
+   ],
+   "firstSeen": 2100018.7,
+   "lastSeen": 2100018.7
+  },
+  "protocolBreakdown": [
+   {
+    "protocol": "TCP",
+    "packets": 2,
+    "bytes": 220,
+    "portsA": [
+     53101
+    ],
+    "portsB": [
+     443
+    ],
+    "firstSeen": 2100018.6,
+    "lastSeen": 2100018.7,
+    "multicastOrBroadcast": false
+   }
+  ]
+ },
+ {
+  "a": "10.0.0.1",
+  "b": "10.0.0.22",
+  "packets": 2,
+  "bytes": 218,
+  "problems": 0,
+  "tcp": {
+   "dataSegments": 2,
+   "retransmissions": 0,
+   "fastRetransmissions": 0,
+   "duplicateAcks": 0,
+   "outOfOrder": 0,
+   "lostSegments": 0,
+   "zeroWindow": 0,
+   "resets": 0,
+   "fins": 0,
+   "handshakeCount": 0,
+   "handshakeSum": 0,
+   "handshakeMax": 0
+  },
+  "protocols": [
+   "TCP"
+  ],
+  "portsA": [
+   53102
+  ],
+  "portsB": [
+   8443
+  ],
+  "firstSeen": 2100018.8,
+  "lastSeen": 2100018.9,
+  "multicastOrBroadcast": false,
+  "aToB": {
+   "packets": 1,
+   "bytes": 115,
+   "problems": 0,
+   "srcPorts": [
+    53102
+   ],
+   "dstPorts": [
+    8443
+   ],
+   "firstSeen": 2100018.8,
+   "lastSeen": 2100018.8
+  },
+  "bToA": {
+   "packets": 1,
+   "bytes": 103,
+   "problems": 0,
+   "srcPorts": [
+    8443
+   ],
+   "dstPorts": [
+    53102
+   ],
+   "firstSeen": 2100018.9,
+   "lastSeen": 2100018.9
+  },
+  "protocolBreakdown": [
+   {
+    "protocol": "TCP",
+    "packets": 2,
+    "bytes": 218,
+    "portsA": [
+     53102
+    ],
+    "portsB": [
+     8443
+    ],
+    "firstSeen": 2100018.8,
+    "lastSeen": 2100018.9,
+    "multicastOrBroadcast": false
+   }
+  ]
+ },
+ {
+  "a": "10.0.0.1",
+  "b": "10.0.0.53",
+  "packets": 8,
+  "bytes": 678,
+  "problems": 0,
+  "tcp": null,
+  "protocols": [
+   "UDP"
+  ],
+  "portsA": [
+   40100,
+   40101,
+   40102,
+   40103
+  ],
+  "portsB": [
+   53
+  ],
+  "firstSeen": 2100000.9,
+  "lastSeen": 2100001.28,
+  "multicastOrBroadcast": false,
+  "aToB": {
+   "packets": 4,
+   "bytes": 307,
+   "problems": 0,
+   "srcPorts": [
+    40100,
+    40101,
+    40102,
+    40103
+   ],
+   "dstPorts": [
+    53
+   ],
+   "firstSeen": 2100000.9,
+   "lastSeen": 2100001.26
+  },
+  "bToA": {
+   "packets": 4,
+   "bytes": 371,
+   "problems": 0,
+   "srcPorts": [
+    53
+   ],
+   "dstPorts": [
+    40100,
+    40101,
+    40102,
+    40103
+   ],
+   "firstSeen": 2100000.92,
+   "lastSeen": 2100001.28
+  },
+  "protocolBreakdown": [
+   {
+    "protocol": "UDP",
+    "packets": 8,
+    "bytes": 678,
+    "portsA": [
+     40100,
+     40101,
+     40102,
+     40103
+    ],
+    "portsB": [
+     53
+    ],
+    "firstSeen": 2100000.9,
+    "lastSeen": 2100001.28,
+    "multicastOrBroadcast": false
+   }
+  ]
+ },
+ {
+  "a": "10.0.0.1",
+  "b": "17.253.144.10",
+  "packets": 2,
+  "bytes": 2484,
+  "problems": 0,
+  "tcp": null,
+  "protocols": [
+   "UDP"
+  ],
+  "portsA": [
+   50000
+  ],
+  "portsB": [
+   443
+  ],
+  "firstSeen": 2100017.8,
+  "lastSeen": 2100017.9,
+  "multicastOrBroadcast": false,
+  "aToB": {
+   "packets": 1,
+   "bytes": 1242,
+   "problems": 0,
+   "srcPorts": [
+    50000
+   ],
+   "dstPorts": [
+    443
+   ],
+   "firstSeen": 2100017.8,
+   "lastSeen": 2100017.8
+  },
+  "bToA": {
+   "packets": 1,
+   "bytes": 1242,
+   "problems": 0,
+   "srcPorts": [
+    443
+   ],
+   "dstPorts": [
+    50000
+   ],
+   "firstSeen": 2100017.9,
+   "lastSeen": 2100017.9
+  },
+  "protocolBreakdown": [
+   {
+    "protocol": "UDP",
+    "packets": 2,
+    "bytes": 2484,
+    "portsA": [
+     50000
+    ],
+    "portsB": [
+     443
+    ],
+    "firstSeen": 2100017.8,
+    "lastSeen": 2100017.9,
+    "multicastOrBroadcast": false
+   }
+  ]
+ },
+ {
+  "a": "10.0.0.1",
+  "b": "17.253.34.125",
+  "packets": 1,
+  "bytes": 90,
+  "problems": 0,
+  "tcp": null,
+  "protocols": [
+   "UDP"
+  ],
+  "portsA": [
+   51001
+  ],
+  "portsB": [
+   123
+  ],
+  "firstSeen": 2100018.1,
+  "lastSeen": 2100018.1,
+  "multicastOrBroadcast": false,
+  "aToB": {
+   "packets": 1,
+   "bytes": 90,
+   "problems": 0,
+   "srcPorts": [
+    51001
+   ],
+   "dstPorts": [
+    123
+   ],
+   "firstSeen": 2100018.1,
+   "lastSeen": 2100018.1
+  },
+  "bToA": {
+   "packets": 0,
+   "bytes": 0,
+   "problems": 0,
+   "srcPorts": [],
+   "dstPorts": [],
+   "firstSeen": null,
+   "lastSeen": null
+  },
+  "protocolBreakdown": [
+   {
+    "protocol": "UDP",
+    "packets": 1,
+    "bytes": 90,
+    "portsA": [
+     51001
+    ],
+    "portsB": [
+     123
+    ],
+    "firstSeen": 2100018.1,
+    "lastSeen": 2100018.1,
+    "multicastOrBroadcast": false
+   }
+  ]
+ },
+ {
+  "a": "10.0.0.1",
+  "b": "17.57.144.1",
+  "packets": 1,
+  "bytes": 154,
+  "problems": 0,
+  "tcp": {
+   "dataSegments": 1,
+   "retransmissions": 0,
+   "fastRetransmissions": 0,
+   "duplicateAcks": 0,
+   "outOfOrder": 0,
+   "lostSegments": 0,
+   "zeroWindow": 0,
+   "resets": 0,
+   "fins": 0,
+   "handshakeCount": 0,
+   "handshakeSum": 0,
+   "handshakeMax": 0
+  },
+  "protocols": [
+   "TCP"
+  ],
+  "portsA": [
+   51000
+  ],
+  "portsB": [
+   5223
+  ],
+  "firstSeen": 2100018,
+  "lastSeen": 2100018,
+  "multicastOrBroadcast": false,
+  "aToB": {
+   "packets": 1,
+   "bytes": 154,
+   "problems": 0,
+   "srcPorts": [
+    51000
+   ],
+   "dstPorts": [
+    5223
+   ],
+   "firstSeen": 2100018,
+   "lastSeen": 2100018
+  },
+  "bToA": {
+   "packets": 0,
+   "bytes": 0,
+   "problems": 0,
+   "srcPorts": [],
+   "dstPorts": [],
+   "firstSeen": null,
+   "lastSeen": null
+  },
+  "protocolBreakdown": [
+   {
+    "protocol": "TCP",
+    "packets": 1,
+    "bytes": 154,
+    "portsA": [
+     51000
+    ],
+    "portsB": [
+     5223
+    ],
+    "firstSeen": 2100018,
+    "lastSeen": 2100018,
+    "multicastOrBroadcast": false
+   }
+  ]
+ },
+ {
+  "a": "10.0.0.1",
+  "b": "208.67.222.222",
+  "packets": 8,
+  "bytes": 652,
+  "problems": 0,
+  "tcp": null,
+  "protocols": [
+   "UDP"
+  ],
+  "portsA": [
+   40105,
+   40106,
+   40107,
+   40108
+  ],
+  "portsB": [
+   53
+  ],
+  "firstSeen": 2100001.5,
+  "lastSeen": 2100001.88,
+  "multicastOrBroadcast": false,
+  "aToB": {
+   "packets": 4,
+   "bytes": 310,
+   "problems": 0,
+   "srcPorts": [
+    40105,
+    40106,
+    40107,
+    40108
+   ],
+   "dstPorts": [
+    53
+   ],
+   "firstSeen": 2100001.5,
+   "lastSeen": 2100001.86
+  },
+  "bToA": {
+   "packets": 4,
+   "bytes": 342,
+   "problems": 0,
+   "srcPorts": [
+    53
+   ],
+   "dstPorts": [
+    40105,
+    40106,
+    40107,
+    40108
+   ],
+   "firstSeen": 2100001.52,
+   "lastSeen": 2100001.88
+  },
+  "protocolBreakdown": [
+   {
+    "protocol": "UDP",
+    "packets": 8,
+    "bytes": 652,
+    "portsA": [
+     40105,
+     40106,
+     40107,
+     40108
+    ],
+    "portsB": [
+     53
+    ],
+    "firstSeen": 2100001.5,
+    "lastSeen": 2100001.88,
+    "multicastOrBroadcast": false
+   }
+  ]
+ },
+ {
+  "a": "10.0.0.1",
+  "b": "224.0.0.251",
+  "packets": 1,
+  "bytes": 107,
+  "problems": 0,
+  "tcp": null,
+  "protocols": [
+   "UDP"
+  ],
+  "portsA": [
+   5353
+  ],
+  "portsB": [
+   5353
+  ],
+  "firstSeen": 2100019.2,
+  "lastSeen": 2100019.2,
+  "multicastOrBroadcast": true,
+  "aToB": {
+   "packets": 1,
+   "bytes": 107,
+   "problems": 0,
+   "srcPorts": [
+    5353
+   ],
+   "dstPorts": [
+    5353
+   ],
+   "firstSeen": 2100019.2,
+   "lastSeen": 2100019.2
+  },
+  "bToA": {
+   "packets": 0,
+   "bytes": 0,
+   "problems": 0,
+   "srcPorts": [],
+   "dstPorts": [],
+   "firstSeen": null,
+   "lastSeen": null
+  },
+  "protocolBreakdown": [
+   {
+    "protocol": "UDP",
+    "packets": 1,
+    "bytes": 107,
+    "portsA": [
+     5353
+    ],
+    "portsB": [
+     5353
+    ],
+    "firstSeen": 2100019.2,
+    "lastSeen": 2100019.2,
+    "multicastOrBroadcast": true
+   }
+  ]
+ },
+ {
+  "a": "10.0.0.1",
+  "b": "8.8.8.8",
+  "packets": 3,
+  "bytes": 300,
+  "problems": 0,
+  "tcp": {
+   "dataSegments": 1,
+   "retransmissions": 0,
+   "fastRetransmissions": 0,
+   "duplicateAcks": 0,
+   "outOfOrder": 0,
+   "lostSegments": 0,
+   "zeroWindow": 0,
+   "resets": 0,
+   "fins": 0,
+   "handshakeCount": 0,
+   "handshakeSum": 0,
+   "handshakeMax": 0
+  },
+  "protocols": [
+   "TCP",
+   "UDP"
+  ],
+  "portsA": [
+   40104,
+   53001
+  ],
+  "portsB": [
+   53,
+   443
+  ],
+  "firstSeen": 2100001.38,
+  "lastSeen": 2100019.1,
+  "multicastOrBroadcast": false,
+  "aToB": {
+   "packets": 2,
+   "bytes": 209,
+   "problems": 0,
+   "srcPorts": [
+    40104,
+    53001
+   ],
+   "dstPorts": [
+    53,
+    443
+   ],
+   "firstSeen": 2100001.38,
+   "lastSeen": 2100019.1
+  },
+  "bToA": {
+   "packets": 1,
+   "bytes": 91,
+   "problems": 0,
+   "srcPorts": [
+    53
+   ],
+   "dstPorts": [
+    40104
+   ],
+   "firstSeen": 2100001.4,
+   "lastSeen": 2100001.4
+  },
+  "protocolBreakdown": [
+   {
+    "protocol": "TCP",
+    "packets": 1,
+    "bytes": 134,
+    "portsA": [
+     53001
+    ],
+    "portsB": [
+     443
+    ],
+    "firstSeen": 2100019.1,
+    "lastSeen": 2100019.1,
+    "multicastOrBroadcast": false
+   },
+   {
+    "protocol": "UDP",
+    "packets": 2,
+    "bytes": 166,
+    "portsA": [
+     40104
+    ],
+    "portsB": [
+     53
+    ],
+    "firstSeen": 2100001.38,
+    "lastSeen": 2100001.4,
+    "multicastOrBroadcast": false
+   }
+  ]
+ },
+ {
+  "a": "10.0.0.2",
+  "b": "208.67.222.222",
+  "packets": 15,
+  "bytes": 1224,
+  "problems": 0,
+  "tcp": null,
+  "protocols": [
+   "UDP"
+  ],
+  "portsA": [
+   40109,
+   40110,
+   40111,
+   40112,
+   40113,
+   40114,
+   40115,
+   40116
+  ],
+  "portsB": [
+   53
+  ],
+  "firstSeen": 2100001.98,
+  "lastSeen": 2100017.7,
+  "multicastOrBroadcast": false,
+  "aToB": {
+   "packets": 8,
+   "bytes": 603,
+   "problems": 0,
+   "srcPorts": [
+    40109,
+    40110,
+    40111,
+    40112,
+    40113,
+    40114,
+    40115,
+    40116
+   ],
+   "dstPorts": [
+    53
+   ],
+   "firstSeen": 2100001.98,
+   "lastSeen": 2100017.68
+  },
+  "bToA": {
+   "packets": 7,
+   "bytes": 621,
+   "problems": 0,
+   "srcPorts": [
+    53
+   ],
+   "dstPorts": [
+    40109,
+    40110,
+    40111,
+    40112,
+    40113,
+    40114,
+    40116
+   ],
+   "firstSeen": 2100004.48,
+   "lastSeen": 2100017.7
+  },
+  "protocolBreakdown": [
+   {
+    "protocol": "UDP",
+    "packets": 15,
+    "bytes": 1224,
+    "portsA": [
+     40109,
+     40110,
+     40111,
+     40112,
+     40113,
+     40114,
+     40115,
+     40116
+    ],
+    "portsB": [
+     53
+    ],
+    "firstSeen": 2100001.98,
+    "lastSeen": 2100017.7,
+    "multicastOrBroadcast": false
+   }
+  ]
+ },
+ {
+  "a": "10.0.0.3",
+  "b": "17.253.1.1",
+  "packets": 1,
+  "bytes": 139,
+  "problems": 0,
+  "tcp": {
+   "dataSegments": 1,
+   "retransmissions": 0,
+   "fastRetransmissions": 0,
+   "duplicateAcks": 0,
+   "outOfOrder": 0,
+   "lostSegments": 0,
+   "zeroWindow": 0,
+   "resets": 0,
+   "fins": 0,
+   "handshakeCount": 0,
+   "handshakeSum": 0,
+   "handshakeMax": 0
+  },
+  "protocols": [
+   "TCP"
+  ],
+  "portsA": [
+   52001
+  ],
+  "portsB": [
+   443
+  ],
+  "firstSeen": 2100018.3,
+  "lastSeen": 2100018.3,
+  "multicastOrBroadcast": false,
+  "aToB": {
+   "packets": 1,
+   "bytes": 139,
+   "problems": 0,
+   "srcPorts": [
+    52001
+   ],
+   "dstPorts": [
+    443
+   ],
+   "firstSeen": 2100018.3,
+   "lastSeen": 2100018.3
+  },
+  "bToA": {
+   "packets": 0,
+   "bytes": 0,
+   "problems": 0,
+   "srcPorts": [],
+   "dstPorts": [],
+   "firstSeen": null,
+   "lastSeen": null
+  },
+  "protocolBreakdown": [
+   {
+    "protocol": "TCP",
+    "packets": 1,
+    "bytes": 139,
+    "portsA": [
+     52001
+    ],
+    "portsB": [
+     443
+    ],
+    "firstSeen": 2100018.3,
+    "lastSeen": 2100018.3,
+    "multicastOrBroadcast": false
+   }
+  ]
+ },
+ {
+  "a": "10.0.0.3",
+  "b": "17.253.144.10",
+  "packets": 1,
+  "bytes": 141,
+  "problems": 0,
+  "tcp": {
+   "dataSegments": 1,
+   "retransmissions": 0,
+   "fastRetransmissions": 0,
+   "duplicateAcks": 0,
+   "outOfOrder": 0,
+   "lostSegments": 0,
+   "zeroWindow": 0,
+   "resets": 0,
+   "fins": 0,
+   "handshakeCount": 0,
+   "handshakeSum": 0,
+   "handshakeMax": 0
+  },
+  "protocols": [
+   "TCP"
+  ],
+  "portsA": [
+   52000
+  ],
+  "portsB": [
+   443
+  ],
+  "firstSeen": 2100018.2,
+  "lastSeen": 2100018.2,
+  "multicastOrBroadcast": false,
+  "aToB": {
+   "packets": 1,
+   "bytes": 141,
+   "problems": 0,
+   "srcPorts": [
+    52000
+   ],
+   "dstPorts": [
+    443
+   ],
+   "firstSeen": 2100018.2,
+   "lastSeen": 2100018.2
+  },
+  "bToA": {
+   "packets": 0,
+   "bytes": 0,
+   "problems": 0,
+   "srcPorts": [],
+   "dstPorts": [],
+   "firstSeen": null,
+   "lastSeen": null
+  },
+  "protocolBreakdown": [
+   {
+    "protocol": "TCP",
+    "packets": 1,
+    "bytes": 141,
+    "portsA": [
+     52000
+    ],
+    "portsB": [
+     443
+    ],
+    "firstSeen": 2100018.2,
+    "lastSeen": 2100018.2,
+    "multicastOrBroadcast": false
+   }
+  ]
+ }
+]

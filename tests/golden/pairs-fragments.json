@@ -1,0 +1,71 @@
+[
+ {
+  "a": "3.3.3.3",
+  "b": "4.4.4.4",
+  "packets": 3,
+  "bytes": 1830,
+  "problems": 0,
+  "tcp": null,
+  "protocols": [
+   "OTHER",
+   "UDP"
+  ],
+  "portsA": [
+   1000
+  ],
+  "portsB": [
+   2000
+  ],
+  "firstSeen": 2200000.1,
+  "lastSeen": 2200000.3,
+  "multicastOrBroadcast": false,
+  "aToB": {
+   "packets": 3,
+   "bytes": 1830,
+   "problems": 0,
+   "srcPorts": [
+    1000
+   ],
+   "dstPorts": [
+    2000
+   ],
+   "firstSeen": 2200000.1,
+   "lastSeen": 2200000.3
+  },
+  "bToA": {
+   "packets": 0,
+   "bytes": 0,
+   "problems": 0,
+   "srcPorts": [],
+   "dstPorts": [],
+   "firstSeen": null,
+   "lastSeen": null
+  },
+  "protocolBreakdown": [
+   {
+    "protocol": "OTHER",
+    "packets": 1,
+    "bytes": 234,
+    "portsA": [],
+    "portsB": [],
+    "firstSeen": 2200000.2,
+    "lastSeen": 2200000.2,
+    "multicastOrBroadcast": false
+   },
+   {
+    "protocol": "UDP",
+    "packets": 2,
+    "bytes": 1596,
+    "portsA": [
+     1000
+    ],
+    "portsB": [
+     2000
+    ],
+    "firstSeen": 2200000.1,
+    "lastSeen": 2200000.3,
+    "multicastOrBroadcast": false
+   }
+  ]
+ }
+]

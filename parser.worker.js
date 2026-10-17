@@ -119,24 +119,6 @@ function problemCountOf(decoded, tcpEvents) {
   return count;
 }
 
-function createDirectionalEntry(timestamp) {
-  return { packets: 0, bytes: 0, problems: 0, srcPorts: new Set(), dstPorts: new Set(), firstSeen: timestamp, lastSeen: timestamp };
-}
-
-/** `null` (never any traffic that way) serializes to an explicit zero entry, not `null`, so callers never need a null-check. */
-function serializeDirectional(entry) {
-  if (!entry) return { packets: 0, bytes: 0, problems: 0, srcPorts: [], dstPorts: [], firstSeen: null, lastSeen: null };
-  return {
-    packets: entry.packets,
-    bytes: entry.bytes,
-    problems: entry.problems,
-    srcPorts: Array.from(entry.srcPorts),
-    dstPorts: Array.from(entry.dstPorts),
-    firstSeen: entry.firstSeen,
-    lastSeen: entry.lastSeen,
-  };
-}
-
 function createConnectionDirectional(decoded) {
   // Unlike a Pair's directional entry, a Connection is already scoped to one
   // protocol + service port, so a single representative srcPort/dstPort (from
@@ -145,12 +127,56 @@ function createConnectionDirectional(decoded) {
   // ICMP traffic together regardless of type (echo request, echo reply, ...);
   // icmpTypes tracks the distinct types actually seen in this direction so
   // the Connections view can show e.g. "Echo Request" instead of just "ICMP".
-  return { packets: 0, bytes: 0, problems: 0, srcPort: decoded.srcPort, dstPort: decoded.dstPort, icmpTypes: new Set(), firstSeen: decoded.timestamp, lastSeen: decoded.timestamp };
+  // srcPorts/dstPorts hold EVERY port seen in this direction (not just the representative one above):
+  // the pair-level port lists are derived from them (see derivePairs() in data-model.js).
+  return { packets: 0, bytes: 0, problems: 0, srcPort: decoded.srcPort, dstPort: decoded.dstPort, srcPorts: new Set(), dstPorts: new Set(), icmpTypes: new Set(), firstSeen: decoded.timestamp, lastSeen: decoded.timestamp };
 }
 
 function serializeConnectionDirectional(entry) {
-  if (!entry) return { packets: 0, bytes: 0, problems: 0, srcPort: null, dstPort: null, icmpTypes: [], firstSeen: null, lastSeen: null };
-  return { ...entry, icmpTypes: Array.from(entry.icmpTypes) };
+  if (!entry) return { packets: 0, bytes: 0, problems: 0, srcPort: null, dstPort: null, srcPorts: [], dstPorts: [], icmpTypes: [], firstSeen: null, lastSeen: null };
+  return { ...entry, icmpTypes: Array.from(entry.icmpTypes), srcPorts: Array.from(entry.srcPorts), dstPorts: Array.from(entry.dstPorts) };
+}
+
+/**
+ * Attributes a connection carries for the filter chips (see filters.js): what the
+ * packets on it revealed about TLS, DNS, Private Relay, Apple services, ICMP and
+ * fragmentation. Created lazily - most connections never get one.
+ */
+function createConnectionFacets() {
+  return {
+    tlsVersions: new Set(),
+    tlsCiphers: new Set(),
+    icmp: new Set(),
+    dnsRcodes: new Set(),
+    dnsProviders: new Set(),
+    relay: new Set(),
+    apple: new Set(),
+    fragments: false,
+  };
+}
+
+function accumulateFacets(facets, hints) {
+  if (hints.tlsVersion) facets.tlsVersions.add(hints.tlsVersion);
+  if (hints.tlsCipher) facets.tlsCiphers.add(hints.tlsCipher);
+  if (hints.icmp) facets.icmp.add(hints.icmp);
+  if (hints.dnsRcode !== undefined) facets.dnsRcodes.add(hints.dnsRcode);
+  if (hints.dnsProvider) facets.dnsProviders.add(hints.dnsProvider);
+  if (hints.relay) for (const value of hints.relay) facets.relay.add(value);
+  if (hints.apple) for (const value of hints.apple) facets.apple.add(value);
+  if (hints.fragment) facets.fragments = true;
+}
+
+function serializeFacets(facets) {
+  return {
+    tlsVersions: Array.from(facets.tlsVersions),
+    tlsCiphers: Array.from(facets.tlsCiphers),
+    icmp: Array.from(facets.icmp),
+    dnsRcodes: Array.from(facets.dnsRcodes),
+    dnsProviders: Array.from(facets.dnsProviders),
+    relay: Array.from(facets.relay),
+    apple: Array.from(facets.apple),
+    fragments: facets.fragments,
+  };
 }
 
 /**
@@ -162,7 +188,6 @@ function serializeConnectionDirectional(entry) {
 class Aggregator {
   constructor() {
     this.devices = new Map();
-    this.pairs = new Map();
     this.connections = new Map();
     this.hostnames = new Map();
     this.macNames = new Map(); // MAC -> name announced via CDP/LLDP
@@ -179,7 +204,7 @@ class Aggregator {
     return device;
   }
 
-  addPacket(decoded, tcpEvents) {
+  addPacket(decoded, tcpEvents, hints) {
     // Layer-2 control frames (STP, CDP, LLDP, ...) only feed the statistics: their
     // multicast destination MACs must not become "devices" in the matrix.
     if (decoded.protocol === 'L2') return;
@@ -199,97 +224,14 @@ class Aggregator {
     dstDevice.byteCount += decoded.frameLength;
 
     const key = pairKey(srcId, dstId);
-    let pair = this.pairs.get(key);
-    if (!pair) {
-      pair = {
-        a: srcId,
-        b: dstId,
-        packets: 0,
-        bytes: 0,
-        problems: 0,
-        tcp: null,
-        protocols: new Set(),
-        // Ports are tracked per device (not per src/dst direction): a pair
-        // aggregates traffic both ways, so "source port" flips depending on
-        // which side happens to be sending a given packet, but "which ports
-        // does device X use" is stable regardless of direction.
-        portsA: new Set(),
-        portsB: new Set(),
-        firstSeen: decoded.timestamp,
-        lastSeen: decoded.timestamp,
-        multicastOrBroadcast: false,
-        // Per-protocol sub-aggregates, so the Excel export can emit one row
-        // per protocol instead of merging e.g. TCP and UDP ports together.
-        byProtocol: new Map(),
-        // Per-direction sub-aggregates (which of the two devices sent this
-        // specific packet), created lazily so a direction that never carries
-        // any traffic (e.g. a one-way UDP fire-and-forget) serializes as an
-        // explicit zero entry instead of falsely inheriting the other
-        // direction's first-ever timestamp. The matrix view uses these to
-        // show each of a pair's two mirrored cells independently, instead of
-        // both cells displaying the same direction-agnostic combined value.
-        aToB: null,
-        bToA: null,
-      };
-      this.pairs.set(key, pair);
-    }
-    pair.packets++;
-    pair.bytes += decoded.frameLength;
-    if (decoded.protocol) pair.protocols.add(decoded.protocol);
-    const [srcPortSet, dstPortSet] = srcId === pair.a ? [pair.portsA, pair.portsB] : [pair.portsB, pair.portsA];
-    if (decoded.srcPort != null) srcPortSet.add(decoded.srcPort);
-    if (decoded.dstPort != null) dstPortSet.add(decoded.dstPort);
-    if (decoded.timestamp < pair.firstSeen) pair.firstSeen = decoded.timestamp;
-    if (decoded.timestamp > pair.lastSeen) pair.lastSeen = decoded.timestamp;
-    if (decoded.multicastOrBroadcast) pair.multicastOrBroadcast = true;
-
     const problems = problemCountOf(decoded, tcpEvents);
-    pair.problems += problems;
-    if (tcpEvents) {
-      if (!pair.tcp) pair.tcp = createTcpSummary(false);
-      accumulateTcpEvents(pair.tcp, tcpEvents, decoded.timestamp);
-    }
-
-    const directionKey = srcId === pair.a ? 'aToB' : 'bToA';
-    if (!pair[directionKey]) pair[directionKey] = createDirectionalEntry(decoded.timestamp);
-    const directional = pair[directionKey];
-    directional.packets++;
-    directional.bytes += decoded.frameLength;
-    directional.problems += problems;
-    if (decoded.srcPort != null) directional.srcPorts.add(decoded.srcPort);
-    if (decoded.dstPort != null) directional.dstPorts.add(decoded.dstPort);
-    if (decoded.timestamp < directional.firstSeen) directional.firstSeen = decoded.timestamp;
-    if (decoded.timestamp > directional.lastSeen) directional.lastSeen = decoded.timestamp;
-
-    const protocolKey = decoded.protocol || 'OTHER';
-    let protoEntry = pair.byProtocol.get(protocolKey);
-    if (!protoEntry) {
-      protoEntry = {
-        protocol: protocolKey,
-        packets: 0,
-        bytes: 0,
-        portsA: new Set(),
-        portsB: new Set(),
-        firstSeen: decoded.timestamp,
-        lastSeen: decoded.timestamp,
-        multicastOrBroadcast: false,
-      };
-      pair.byProtocol.set(protocolKey, protoEntry);
-    }
-    protoEntry.packets++;
-    protoEntry.bytes += decoded.frameLength;
-    const [protoSrcPortSet, protoDstPortSet] = srcId === pair.a ? [protoEntry.portsA, protoEntry.portsB] : [protoEntry.portsB, protoEntry.portsA];
-    if (decoded.srcPort != null) protoSrcPortSet.add(decoded.srcPort);
-    if (decoded.dstPort != null) protoDstPortSet.add(decoded.dstPort);
-    if (decoded.timestamp < protoEntry.firstSeen) protoEntry.firstSeen = decoded.timestamp;
-    if (decoded.timestamp > protoEntry.lastSeen) protoEntry.lastSeen = decoded.timestamp;
-    if (decoded.multicastOrBroadcast) protoEntry.multicastOrBroadcast = true;
 
     const servicePort = servicePortOf(decoded);
     const connectionKey = `${key}|${decoded.protocol}|${servicePort}`;
     let connection = this.connections.get(connectionKey);
     if (!connection) {
       connection = {
+        key: connectionKey, // also what the PCAP export and the scoped statistics use to refer to this connection
         a: srcId,
         b: dstId,
         protocol: decoded.protocol,
@@ -303,6 +245,7 @@ class Aggregator {
         bytes: 0,
         problems: 0,
         tcp: null,
+        facets: null,
         firstSeen: decoded.timestamp,
         lastSeen: decoded.timestamp,
         multicastOrBroadcast: false,
@@ -322,6 +265,10 @@ class Aggregator {
       if (!connection.tcp) connection.tcp = createTcpSummary(true);
       accumulateTcpEvents(connection.tcp, tcpEvents, decoded.timestamp);
     }
+    if (hints && Object.keys(hints).length > 0) {
+      if (!connection.facets) connection.facets = createConnectionFacets();
+      accumulateFacets(connection.facets, hints);
+    }
     if (decoded.timestamp < connection.firstSeen) connection.firstSeen = decoded.timestamp;
     if (decoded.timestamp > connection.lastSeen) connection.lastSeen = decoded.timestamp;
     if (decoded.multicastOrBroadcast) connection.multicastOrBroadcast = true;
@@ -332,6 +279,8 @@ class Aggregator {
     connectionDirectional.packets++;
     connectionDirectional.bytes += decoded.frameLength;
     connectionDirectional.problems += problems;
+    if (decoded.srcPort != null) connectionDirectional.srcPorts.add(decoded.srcPort);
+    if (decoded.dstPort != null) connectionDirectional.dstPorts.add(decoded.dstPort);
     if (decoded.icmpType != null) connectionDirectional.icmpTypes.add(decoded.icmpType);
     if (decoded.timestamp < connectionDirectional.firstSeen) connectionDirectional.firstSeen = decoded.timestamp;
     if (decoded.timestamp > connectionDirectional.lastSeen) connectionDirectional.lastSeen = decoded.timestamp;
@@ -362,25 +311,9 @@ class Aggregator {
     }
     return {
       devices: Array.from(this.devices.values()),
-      pairs: Array.from(this.pairs.values()).map((p) => {
-        const { byProtocol, aToB, bToA, ...rest } = p;
-        return {
-          ...rest,
-          protocols: Array.from(p.protocols),
-          portsA: Array.from(p.portsA),
-          portsB: Array.from(p.portsB),
-          protocolBreakdown: Array.from(byProtocol.values()).map((pe) => ({
-            ...pe,
-            portsA: Array.from(pe.portsA),
-            portsB: Array.from(pe.portsB),
-          })),
-          aToB: serializeDirectional(aToB),
-          bToA: serializeDirectional(bToA),
-        };
-      }),
       connections: Array.from(this.connections.values()).map((c) => {
-        const { aToB, bToA, ...rest } = c;
-        return { ...rest, aToB: serializeConnectionDirectional(aToB), bToA: serializeConnectionDirectional(bToA) };
+        const { aToB, bToA, facets, ...rest } = c;
+        return { ...rest, facets: facets ? serializeFacets(facets) : null, aToB: serializeConnectionDirectional(aToB), bToA: serializeConnectionDirectional(bToA) };
       }),
     };
   }
@@ -414,14 +347,16 @@ function processBuffer(buffer) {
   for (const frame of frames) {
     const decoded = decodeFrame(buffer, frame.offset, frame.length, frame.linkType, frame.timestamp, frame.origLen);
     if (decoded) {
-      const tcpEvents = trafficStats.add(decoded);
-      aggregator.addPacket(decoded, tcpEvents);
+      // What this packet reveals about its connection (TLS, DNS, relay, Apple, ...); the
+      // analysers below fill it, the Aggregator stores it as the connection's filter facets.
+      const hints = {};
+      const tcpEvents = trafficStats.add(decoded, hints);
       // TLS handshake sniffing: a TCP payload that starts with a ClientHello/ServerHello record.
       // Retransmitted segments are skipped so one handshake isn't counted twice.
       if (tcpEvents && tcpEvents.dataSegment && !tcpEvents.retransmission && decoded.headerEndOffset != null) {
         const available = Math.min(decoded.tcpPayloadLength, frame.offset + frame.length - decoded.headerEndOffset);
         const tls = available > 0 ? parseTlsHello(buffer, decoded.headerEndOffset, available) : null;
-        if (tls) trafficStats.addTls(decoded, tls);
+        if (tls) trafficStats.addTls(decoded, tls, hints);
       }
       if (decoded.protocol === 'L2') trafficStats.addL2(decoded, parseL2Details(buffer, decoded));
       if (decoded.udpPayloadOffset != null && (decoded.srcPort === 5353 || decoded.dstPort === 5353)) {
@@ -430,11 +365,12 @@ function processBuffer(buffer) {
       }
       if (decoded.udpPayloadOffset != null && (decoded.srcPort === DNS_PORT || decoded.dstPort === DNS_PORT)) {
         const dnsMessage = parseDnsMessage(buffer, decoded.udpPayloadOffset, decoded.udpPayloadLength);
-        if (dnsMessage) trafficStats.addDns(decoded, dnsMessage);
+        if (dnsMessage) trafficStats.addDns(decoded, dnsMessage, hints);
         for (const { ip, hostname } of extractDnsHostnames(buffer, decoded.udpPayloadOffset, decoded.udpPayloadLength)) {
           aggregator.addHostname(ip, hostname);
         }
       }
+      aggregator.addPacket(decoded, tcpEvents, hints);
     }
 
     packetCount++;
@@ -454,7 +390,6 @@ function processBuffer(buffer) {
   self.postMessage({
     type: 'result',
     devices: result.devices,
-    pairs: result.pairs,
     connections: result.connections,
     stats: { ...trafficStats.toResult(), totalPackets: packetCount },
     packetCount,

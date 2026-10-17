@@ -5,6 +5,20 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [2.1.0] – (in Arbeit, Branch `feature/filter-facets`)
+
+Phase 0 und 1 des Plans „Filter, Facetten, Statistik nach Auswahl“ (siehe `features.md`). Ohne aktive Zusatzfilter sieht die Anwendung wie 2.0.0 aus.
+
+### Added
+
+- **Weitere Filter (Facetten)** in der Filterleiste: Menü „+ Filter“ listet, was der Capture hergibt – Port, Problem (Retransmits, Lücken, RST, Zero-Window, Dup-ACKs, Out-of-Order, ICMP-Fehler), TLS-Version, Cipher Suite, ICMP-Typ, DNS-Antwortcode, DNS-Anbieter, Private-Relay-Zustand (abgefragt, NODATA, NXDOMAIN, Adressen, Blockseite, Fehler, Relay-Verkehr, Relay-SNI), Apple-Dienst und IP-Fragmentierung – jeweils mit der Anzahl betroffener Verbindungen. Gewählte Werte erscheinen als entfernbare Chips („TLS-Version: TLS 1.0 ×“); Werte einer Gruppe gelten als „oder“, verschiedene Gruppen als „und“. „Alle zurücksetzen“ setzt zusätzlich Protokoll-Chips, „Nur Probleme“ und „Multicast/Broadcast ausblenden“ zurück. Die Filter wirken in Matrix, Graph, Verbindungen (Diagramm und Tabelle), Zeitleiste und beim Excel-Export; der Zähler „x von y Verbindungen“ folgt ihnen. Die Statistik und der PCAP-Export berücksichtigen sie noch nicht (nächste Phasen).
+- **Tests:** `node tests/run.js` (20 Fälle) prüft Analysen, abgeleitete Paare und Filter gegen synthetische, per Skript erzeugte Captures.
+
+### Changed
+
+- **Matrix, Graph und Excel-Export rechnen aus den sichtbaren Verbindungen.** Der Worker liefert keine Paare mehr; sie werden im Browser aus den Verbindungen abgeleitet (`derivePairs()`). Sichtbare Folge: Ein Protokoll-Chip oder „Nur Probleme“ verkleinert jetzt auch die Paket-/Byte-Summen und Port-Listen eines Paares (bisher blieben die Gesamtsummen stehen und es wurden nur Paare ausgeblendet), und „Multicast/Broadcast ausblenden“ blendet nur die betroffenen Verbindungen aus, nicht jedes Paar, das irgendwann ein Multicast-Paket hatte. Ohne aktive Filter sind die abgeleiteten Paare identisch zu den bisherigen (geprüft an den synthetischen Captures und drei echten Captures).
+- Verbindungen tragen zusätzlich einen Schlüssel (`key`), vollständige Port-Mengen je Richtung und ihre Facetten; die Worker-Nachricht enthält dafür keine Paare mehr.
+
 ## [2.0.0] – 2026-10-17
 
 Neue Oberfläche auf Basis eines gemeinsamen Design Systems (Material-Design-3-Grundlage, Theme „Neutral“ in Stahlblau). Funktionen, Datenmodell und Exporte bleiben unverändert; geändert haben sich Aufbau, Bedienelemente und Aussehen – daher Hauptversion.

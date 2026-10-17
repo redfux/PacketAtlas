@@ -6,11 +6,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'none'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';">
   <title>PacketAtlas</title>
-  <link rel="stylesheet" href="css/design-tokens.css?v=2.0.0">
-  <link rel="stylesheet" href="css/design-components.css?v=2.0.0">
-  <link rel="stylesheet" href="css/app.css?v=2.0.0">
+  <link rel="stylesheet" href="css/design-tokens.css?v=2.1.0">
+  <link rel="stylesheet" href="css/design-components.css?v=2.1.0">
+  <link rel="stylesheet" href="css/app.css?v=2.1.0">
   <!-- Classic script in <head>: applies the saved light/dark choice before the first paint. -->
-  <script src="js/design-system.js?v=2.0.0"></script>
+  <script src="js/design-system.js?v=2.1.0"></script>
 </head>
 <body>
 <!-- Icon sprite (inline: an external sprite file stays invisible under file://). Source: icons/icon-sprite-inline.html -->
@@ -83,6 +83,9 @@
     <button type="button" id="export-pcap" class="app-menu-item">Als PCAP (gefiltert) …</button>
     <button type="button" id="export-pinned-xlsx" class="app-menu-item" disabled>Nur angeheftete Auswahl (.xlsx) …</button>
   </div>
+
+  <!-- Filter facets: what the capture offers, filled in by app.js once a capture is loaded. -->
+  <div class="app-menu pa-facet-menu" id="facet-menu" popover aria-label="Weitere Filter"></div>
 
   <div class="app-menu" id="app-menu" popover>
     <a class="app-menu-item" href="https://github.com/redfux/PacketAtlas" target="_blank" rel="noopener">PacketAtlas auf GitHub</a>
@@ -195,6 +198,14 @@
         <span class="pa-sep" aria-hidden="true"></span>
         <button type="button" class="chip" id="toggle-only-problems" aria-pressed="false">Nur Probleme</button>
         <button type="button" class="chip" id="toggle-hide-broadcast" aria-pressed="false">Multicast/Broadcast ausblenden</button>
+        <span class="pa-sep" aria-hidden="true"></span>
+        <span class="pa-facet-group">
+          <span class="label">Weitere Filter</span>
+          <span id="facet-chips" class="pa-chip-group"></span>
+          <span class="none" id="facet-none">keine</span>
+          <button type="button" class="outlined" id="btn-add-filter" popovertarget="facet-menu">+ Filter</button>
+          <button type="button" class="text" id="btn-reset-filters" hidden>Alle zurücksetzen</button>
+        </span>
         <span class="grow"></span>
         <span class="count" id="filter-count"></span>
       </div>
@@ -347,6 +358,6 @@
 
   <script src="vendor/d3.min.js"></script>
   <script src="vendor/xlsx.full.min.js"></script>
-  <script type="module" src="app.js?v=2.0.0"></script>
+  <script type="module" src="app.js?v=2.1.0"></script>
 </body>
 </html>

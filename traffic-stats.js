@@ -95,6 +95,12 @@ function createTcpDirection() {
   return { init: false, nextSeq: 0, lastAck: null, lastWindow: null, dupAcks: 0, lastDataTs: 0 };
 }
 
+/** Adds `value` to the array `hints[field]` (created on first use). */
+function pushHint(hints, field, value) {
+  if (!hints[field]) hints[field] = [];
+  if (hints[field].indexOf(value) === -1) hints[field].push(value);
+}
+
 class TrafficStats {
   constructor() {
     this.decodedPackets = 0;
@@ -189,8 +195,14 @@ class TrafficStats {
     this.icmpMtuValues = new Map(); // `${protocol}|${mtu}` -> packets reporting it
   }
 
-  /** Returns the TCP analysis events for this packet (null for non-TCP packets). */
-  add(decoded) {
+  /**
+   * Returns the TCP analysis events for this packet (null for non-TCP packets).
+   * `hints` (optional) collects what this packet says about its connection -
+   * Apple group, ICMP type/code, fragmentation, DNS provider, relay traffic -
+   * for the Aggregator, which stores it as per-connection facets (the
+   * attributes the filter chips work on).
+   */
+  add(decoded, hints = {}) {
     const size = decoded.frameLength;
     this.decodedPackets++;
     this.decodedBytes += size;
@@ -224,14 +236,20 @@ class TrafficStats {
     }
 
     this.addSizeAndFragmentation(decoded, size);
+    if (decoded.isFragment) hints.fragment = true;
     if (decoded.protocol === 'L2') return null; // layer-2 control frame: detail comes via addL2()
-    this.addApplePacket(decoded, size);
+    const appleGroup = this.addApplePacket(decoded, size);
+    if (appleGroup) pushHint(hints, 'apple', appleGroup);
     if (decoded.protocol === 'TCP' || decoded.protocol === 'UDP') {
       this.addPort(decoded, size);
-      this.addResolverTraffic(decoded);
-      this.addRelayTraffic(decoded, size);
+      const resolver = this.addResolverTraffic(decoded);
+      if (resolver) hints.dnsProvider = resolver;
+      if (this.addRelayTraffic(decoded, size)) pushHint(hints, 'relay', 'traffic');
     }
-    if (decoded.protocol === 'ICMP' || decoded.protocol === 'ICMPv6') this.addIcmp(decoded);
+    if (decoded.protocol === 'ICMP' || decoded.protocol === 'ICMPv6') {
+      const icmp = this.addIcmp(decoded);
+      if (icmp) hints.icmp = icmp;
+    }
     if (decoded.protocol === 'TCP' && decoded.tcpSeq !== null) return this.addTcp(decoded);
     return null;
   }
@@ -342,9 +360,10 @@ class TrafficStats {
 
   // ------------------------------------------------------------- Apple
 
+  /** Counts the packet towards its Apple traffic group; returns the group name or null. */
   addApplePacket(decoded, size) {
     const hit = classifyApplePacket(decoded);
-    if (!hit) return;
+    if (!hit) return null;
     const a = this.apple;
     let group = a.groups.get(hit.group);
     if (!group) {
@@ -352,18 +371,20 @@ class TrafficStats {
       a.groups.set(hit.group, group);
     }
     bump(group, size);
-    if (group.generic) return; // Bonjour is vendor-neutral: counted as a group, not as "Apple traffic" per client
+    if (group.generic) return hit.group; // Bonjour is vendor-neutral: counted as a group, not as "Apple traffic" per client
     let client = a.clients.get(hit.client);
     if (!client && a.clients.size < MAX_TRACKED_CLIENTS) {
       client = createCounter();
       a.clients.set(hit.client, client);
     }
     if (client) bump(client, size);
+    return hit.group;
   }
 
+  /** Counts a DNS / SNI name towards its Apple service group; returns the group name or null. */
   addAppleName(name, kind) {
     const group = classifyAppleName(name);
-    if (!group) return;
+    if (!group) return null;
     const a = this.apple;
     const target = kind === 'sni' ? a.sniGroups : a.dnsGroups;
     target.set(group, (target.get(group) || 0) + 1);
@@ -372,6 +393,7 @@ class TrafficStats {
       if (known) known.count++;
       else if (a.dnsNames.size < APPLE_MAX_NAMES) a.dnsNames.set(name, { group, count: 1 });
     }
+    return group;
   }
 
   /** One parsed mDNS message (see parseMdnsNames() in dns-resolver.js). */
@@ -430,9 +452,15 @@ class TrafficStats {
   addResolverTraffic(decoded) {
     const r = this.resolvers;
     let target = null;
-    if (decoded.dstPort === 853) target = r.dot;
-    else if (decoded.dstPort === 443 && DNS_PROVIDER_BY_IP.has(decoded.dstIp)) target = r.doh;
-    if (!target) return;
+    let suffix = '';
+    if (decoded.dstPort === 853) {
+      target = r.dot;
+      suffix = ' (DoT)';
+    } else if (decoded.dstPort === 443 && DNS_PROVIDER_BY_IP.has(decoded.dstIp)) {
+      target = r.doh;
+      suffix = ' (Port 443)';
+    }
+    if (!target) return null;
     const key = `${decoded.srcIp}|${decoded.dstIp}`;
     let entry = target.get(key);
     if (!entry && target.size < MAX_TRACKED_RESOLVERS) {
@@ -441,6 +469,7 @@ class TrafficStats {
       target.set(key, entry);
     }
     if (entry) entry.packets++;
+    return `${classifyResolver(decoded.dstIp).label}${suffix}`; // filter facet value: provider + how it was reached
   }
 
   resolversResult() {
@@ -553,20 +582,23 @@ class TrafficStats {
         }
       }
     }
+    return outcome;
   }
 
   /** TCP/UDP 443 to or from an address a watched name resolved to: the relay in use. */
+  /** Returns true if the packet was counted as relay traffic. */
   addRelayTraffic(decoded, size) {
     const relay = this.relay;
-    if (relay.ips.size === 0 || (decoded.srcPort !== 443 && decoded.dstPort !== 443)) return;
+    if (relay.ips.size === 0 || (decoded.srcPort !== 443 && decoded.dstPort !== 443)) return false;
     let clientIp = null;
     if (relay.ips.has(decoded.dstIp)) clientIp = decoded.srcIp;
     else if (relay.ips.has(decoded.srcIp)) clientIp = decoded.dstIp;
-    if (!clientIp) return;
+    if (!clientIp) return false;
     const client = this.getRelayClient(clientIp);
-    if (!client) return;
+    if (!client) return false;
     bump(client, size);
     if (decoded.protocol === 'UDP') client.quicPackets++;
+    return true;
   }
 
   relayResult() {
@@ -635,19 +667,23 @@ class TrafficStats {
   }
 
   /** One TLS ClientHello / ServerHello found at the start of a TCP payload (see parseTlsHello() in tls-parser.js). */
-  addTls(decoded, hello) {
+  addTls(decoded, hello, hints = {}) {
     const t = this.tls;
     if (hello.kind === 'client') {
       t.clientHellos++;
       if (hello.sni) {
-        this.addAppleName(hello.sni, 'sni');
+        const appleGroup = this.addAppleName(hello.sni, 'sni');
+        if (appleGroup) pushHint(hints, 'apple', appleGroup);
         if (isPrivateRelayName(hello.sni)) {
           const client = this.getRelayClient(decoded.srcIp);
           if (client) client.sniHits++;
+          pushHint(hints, 'relay', 'sni');
         }
       }
       return;
     }
+    hints.tlsVersion = tlsVersionName(hello.version);
+    if (hello.cipher !== null) hints.tlsCipher = tlsCipherInfo(hello.cipher).name;
     t.serverHellos++;
     t.versions.set(hello.version, (t.versions.get(hello.version) || 0) + 1);
     if (hello.cipher !== null) t.ciphers.set(hello.cipher, (t.ciphers.get(hello.cipher) || 0) + 1);
@@ -675,7 +711,7 @@ class TrafficStats {
   }
 
   /** One parsed DNS message on UDP port 53 (see parseDnsMessage() in dns-resolver.js). */
-  addDns(decoded, message) {
+  addDns(decoded, message, hints = {}) {
     const d = this.dns;
     if (!message.isResponse) {
       if (decoded.dstPort !== 53) return;
@@ -686,6 +722,7 @@ class TrafficStats {
 
       const server = this.getResolver(decoded.dstIp);
       if (server) {
+        hints.dnsProvider = server.label;
         server.queries++;
         if (server.clients.size < 200) server.clients.add(decoded.srcIp);
         const categories = this.resolvers.clientCategories;
@@ -697,8 +734,12 @@ class TrafficStats {
         if (perClient) perClient.set(server.category, (perClient.get(server.category) || 0) + 1);
       }
       if (message.name) {
-        this.addAppleName(message.name, 'dns');
-        if (isPrivateRelayName(message.name)) this.noteRelayQuery(decoded, message, queryKey);
+        const appleGroup = this.addAppleName(message.name, 'dns');
+        if (appleGroup) pushHint(hints, 'apple', appleGroup);
+        if (isPrivateRelayName(message.name)) {
+          this.noteRelayQuery(decoded, message, queryKey);
+          pushHint(hints, 'relay', 'queried');
+        }
       }
       return;
     }
@@ -707,13 +748,18 @@ class TrafficStats {
     const responseKey = `${decoded.dstIp}|${decoded.srcIp}|${message.id}`;
     d.pending.delete(responseKey);
     d.rcodes.set(message.rcode, (d.rcodes.get(message.rcode) || 0) + 1);
-    if (message.name && isPrivateRelayName(message.name)) this.noteRelayResponse(decoded, message, responseKey);
+    hints.dnsRcode = message.rcode;
+    if (message.name && isPrivateRelayName(message.name)) {
+      const outcome = this.noteRelayResponse(decoded, message, responseKey);
+      pushHint(hints, 'relay', outcome === 'servfail' || outcome === 'refused' || outcome === 'other' ? 'errors' : outcome);
+    }
 
     const resolver = d.resolvers.get(decoded.srcIp) || { responses: 0, failures: 0 };
     resolver.responses++;
     d.resolvers.set(decoded.srcIp, resolver);
     const serverEntry = this.getResolver(decoded.srcIp);
     if (serverEntry) {
+      hints.dnsProvider = serverEntry.label;
       serverEntry.responses++;
       if (message.rcode !== 0) serverEntry.failures++;
     }
@@ -765,8 +811,9 @@ class TrafficStats {
     bump(entry, size);
   }
 
+  /** Counts the message; returns its `protocol|type|code` key (also the filter facet value), or null. */
   addIcmp(decoded) {
-    if (decoded.icmpType === null) return;
+    if (decoded.icmpType === null) return null;
     const code = decoded.icmpCode === null ? 0 : decoded.icmpCode;
     const key = `${decoded.protocol}|${decoded.icmpType}|${code}`;
     let entry = this.icmp.get(key);
@@ -775,6 +822,7 @@ class TrafficStats {
       this.icmp.set(key, entry);
     }
     entry.packets++;
+    return key;
   }
 
   getStream(decoded) {

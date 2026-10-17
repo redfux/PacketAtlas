@@ -5,7 +5,7 @@
 // provides the time scale, axis rendering and zoom/pan behavior.
 // thought up by human, created by ai
 
-import { deviceLabel, healthOf } from './data-model.js?v=2.0.0';
+import { deviceLabel, healthOf } from './data-model.js?v=2.1.0';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
