@@ -1,6 +1,6 @@
 /* ==========================================================================
    Design System — Behaviour
-   Version: 3.1.1
+   Version: 3.2.0
    Stand: 17.10.2026
 
    Optional companion to the CSS. Load js/design-system.js in <head> as a
@@ -10,6 +10,9 @@
 
    - Theme: applies the saved light/dark choice at once, wires every
      .theme-toggle [data-theme] button (menu footer or appbar).
+   - Palette: applies the saved colour palette at once (data-palette on
+     <html>, only themes with palettes react to it), wires every
+     .palette-picker [data-palette] button.
    - Sidebar: .sidebar-toggle[aria-controls] collapses/expands its .sidebar,
      keeps aria-expanded, label and icon in step, remembers the state on
      wide screens. On narrow screens it starts collapsed and closes on
@@ -28,6 +31,8 @@
   'use strict';
 
   const THEME_KEY = 'theme';
+  const PALETTE_KEY = 'palette';
+  const DEFAULT_PALETTE = 'steel';
   const SIDEBAR_KEY = 'sidebar-collapsed';
   const TOOLBAR_KEY = 'toolbar-pinned';
   const NARROW = window.matchMedia('(max-width: 767px)');
@@ -73,6 +78,27 @@
 
   // Runs while <head> is parsed: no flash of the wrong theme.
   applyTheme(normalise(read(THEME_KEY)));
+
+  /* ---------------------------------------------------------------- palette */
+  function applyPalette(name) {
+    if (!name || name === DEFAULT_PALETTE) document.documentElement.removeAttribute('data-palette');
+    else document.documentElement.setAttribute('data-palette', name);
+  }
+
+  function markPalette(name) {
+    document.querySelectorAll('.palette-picker [data-palette]').forEach((btn) => {
+      btn.setAttribute('aria-pressed', btn.dataset.palette === name ? 'true' : 'false');
+    });
+  }
+
+  function setPalette(name) {
+    name = name || DEFAULT_PALETTE;
+    applyPalette(name);
+    write(PALETTE_KEY, name);
+    markPalette(name);
+  }
+
+  applyPalette(read(PALETTE_KEY));
 
   /* ---------------------------------------------------------------- sidebar */
   function setupSidebar(toggle) {
@@ -181,6 +207,10 @@
     document.querySelectorAll('.theme-toggle [data-theme]').forEach((btn) => {
       btn.addEventListener('click', () => setTheme(btn.dataset.theme));
     });
+    markPalette(read(PALETTE_KEY) || DEFAULT_PALETTE);
+    document.querySelectorAll('.palette-picker [data-palette]').forEach((btn) => {
+      btn.addEventListener('click', () => setPalette(btn.dataset.palette));
+    });
     document.querySelectorAll('.sidebar-toggle[aria-controls]').forEach(setupSidebar);
     document.querySelectorAll('.toolbar-pin').forEach(setupToolbarPin);
     document.querySelectorAll('.search-field').forEach(setupSearchField);
@@ -189,6 +219,6 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 
-  // Small API for apps that switch the theme from their own code.
-  window.DesignSystem = { setTheme };
+  // Small API for apps that switch theme or palette from their own code.
+  window.DesignSystem = { setTheme, setPalette };
 })();

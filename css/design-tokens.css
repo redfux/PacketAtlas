@@ -1,6 +1,6 @@
 /* ==========================================================================
    Design System — Theme "Neutral" (tokens)
-   Version: 3.1.1
+   Version: 3.2.0
    Stand: 17.10.2026
 
    Theme file: design tokens (CSS custom properties) only. Brand-free: no
@@ -10,8 +10,8 @@
    (sync-design.sh --theme neutral).
 
    Every text/ground pairing is checked for at least 4.5:1, light and dark.
-   Palette "Stahlblau"; the colour tokens are one block, so further palettes
-   can be added later as alternative blocks.
+   Three palettes: "Stahlblau" (default, below), "Material-Blau" and
+   "Petrol" (at the end of the file, chosen with data-palette on <html>).
    thought up by human, coded by ai
    ========================================================================== */
 
@@ -219,3 +219,174 @@
   --elev-2: 0 2px 6px rgba(0,0,0,.35), 0 2px 24px rgba(0,0,0,.25);
   --elev-3: 0 4px 12px rgba(0,0,0,.40), 0 8px 32px rgba(0,0,0,.30);
 }
+
+/* ==========================================================================
+   Palettes. Stahlblau (above) is the default; further palettes are chosen
+   with data-palette on <html> — js/design-system.js sets it from the saved
+   choice (key "palette") and wires .palette-picker buttons. Each palette
+   replaces the identity colours (primary, surfaces, text, outlines); signal,
+   severity and chart colours stay the same in all palettes.
+   ========================================================================== */
+
+/* --- palette "material" */
+:root[data-palette="material"] {
+  --md-primary: #1A5B9A;
+  --md-on-primary: #FFFFFF;
+  --md-primary-hover: #154B80;
+  --md-primary-strong: #1A5B9A;
+  --md-primary-container: #23629F;
+  --md-on-primary-container: #FFFFFF;
+  --md-appbar: #EEF0F6;
+  --md-on-appbar: #1A1C1E;
+  --md-progress: #1A5B9A;
+  --md-progress-track: #D7E3F7;
+  --md-surface: #F9F9FF;
+  --md-surface-dim: #D9DBE1;
+  --md-surface-1: #EEF0F6;
+  --md-surface-2: #E3E5EB;
+  --md-surface-3: #D7E3F7;
+  --md-on-surface: #1A1C1E;
+  --md-on-surface-variant: #43474E;
+  --md-outline: #73777F;
+  --md-outline-variant: #C3C7CF;
+  --md-info: #1A5B9A;
+  --md-error: #BA1A1A;
+  --md-error-container: #FFDAD6;
+  --md-on-error-container: #410002;
+  --md-success: #2E6930;
+  --md-success-container: #B6F2AF;
+  --md-on-success-container: #072100;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-palette="material"]:not([data-theme="light"]) {
+    --md-primary: #A2C9FF;
+    --md-on-primary: #00325A;
+    --md-primary-hover: #B8D5FF;
+    --md-primary-strong: #A2C9FF;
+    --md-primary-container: #00477E;
+    --md-on-primary-container: #D3E4FF;
+    --md-appbar: #1E2023;
+    --md-on-appbar: #E2E2E6;
+    --md-progress: #A2C9FF;
+    --md-progress-track: #292B2F;
+    --md-surface: #121316;
+    --md-surface-dim: #121316;
+    --md-surface-1: #1E2023;
+    --md-surface-2: #292B2F;
+    --md-surface-3: #3C4A5E;
+    --md-on-surface: #E2E2E6;
+    --md-on-surface-variant: #C3C7CF;
+    --md-outline: #8D9199;
+    --md-outline-variant: #43474E;
+    --md-info: #A2C9FF;
+    --md-error: #FFB4AB;
+    --md-error-container: #93000A;
+    --md-on-error-container: #FFDAD6;
+    --md-success: #9BD598;
+    --md-success-container: #0E5116;
+    --md-on-success-container: #B6F2AF;
+  }
+}
+:root[data-palette="material"][data-theme="dark"] {
+  --md-primary: #A2C9FF;
+  --md-on-primary: #00325A;
+  --md-primary-hover: #B8D5FF;
+  --md-primary-strong: #A2C9FF;
+  --md-primary-container: #00477E;
+  --md-on-primary-container: #D3E4FF;
+  --md-appbar: #1E2023;
+  --md-on-appbar: #E2E2E6;
+  --md-progress: #A2C9FF;
+  --md-progress-track: #292B2F;
+  --md-surface: #121316;
+  --md-surface-dim: #121316;
+  --md-surface-1: #1E2023;
+  --md-surface-2: #292B2F;
+  --md-surface-3: #3C4A5E;
+  --md-on-surface: #E2E2E6;
+  --md-on-surface-variant: #C3C7CF;
+  --md-outline: #8D9199;
+  --md-outline-variant: #43474E;
+  --md-info: #A2C9FF;
+  --md-error: #FFB4AB;
+  --md-error-container: #93000A;
+  --md-on-error-container: #FFDAD6;
+  --md-success: #9BD598;
+  --md-success-container: #0E5116;
+  --md-on-success-container: #B6F2AF;
+}
+
+/* --- palette "petrol" */
+:root[data-palette="petrol"] {
+  --md-primary: #0E7C8C;
+  --md-on-primary: #FFFFFF;
+  --md-primary-hover: #0B6573;
+  --md-primary-strong: #0B3F4A;
+  --md-primary-container: #0E6E7C;
+  --md-on-primary-container: #FFFFFF;
+  --md-appbar: #D5EEF0;
+  --md-on-appbar: #0B3F4A;
+  --md-progress: #4FB3BF;
+  --md-progress-track: #D5EEF0;
+  --md-surface: #F6FAFA;
+  --md-surface-dim: #EDF3F3;
+  --md-surface-1: #FFFFFF;
+  --md-surface-2: #EAF4F5;
+  --md-surface-3: #D5EEF0;
+  --md-on-surface: #0B3F4A;
+  --md-on-surface-variant: #475A5E;
+  --md-outline: #5F7B80;
+  --md-outline-variant: #C4DFE2;
+  --md-info: #3463C4;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-palette="petrol"]:not([data-theme="light"]) {
+    --md-primary: #5ED3E0;
+    --md-on-primary: #04262B;
+    --md-primary-hover: #86E0EA;
+    --md-primary-strong: #0B3F4A;
+    --md-primary-container: #0F4A54;
+    --md-on-primary-container: #D3F3F6;
+    --md-appbar: #0C2A30;
+    --md-on-appbar: #E0F2F4;
+    --md-progress: #4FB3BF;
+    --md-progress-track: #163238;
+    --md-surface: #081417;
+    --md-surface-dim: #060F11;
+    --md-surface-1: #0D1E22;
+    --md-surface-2: #11282D;
+    --md-surface-3: #163238;
+    --md-on-surface: #E0F2F4;
+    --md-on-surface-variant: #A8C4C8;
+    --md-outline: #6F9095;
+    --md-outline-variant: #22454B;
+    --md-info: #7FA6F0;
+  }
+}
+:root[data-palette="petrol"][data-theme="dark"] {
+  --md-primary: #5ED3E0;
+  --md-on-primary: #04262B;
+  --md-primary-hover: #86E0EA;
+  --md-primary-strong: #0B3F4A;
+  --md-primary-container: #0F4A54;
+  --md-on-primary-container: #D3F3F6;
+  --md-appbar: #0C2A30;
+  --md-on-appbar: #E0F2F4;
+  --md-progress: #4FB3BF;
+  --md-progress-track: #163238;
+  --md-surface: #081417;
+  --md-surface-dim: #060F11;
+  --md-surface-1: #0D1E22;
+  --md-surface-2: #11282D;
+  --md-surface-3: #163238;
+  --md-on-surface: #E0F2F4;
+  --md-on-surface-variant: #A8C4C8;
+  --md-outline: #6F9095;
+  --md-outline-variant: #22454B;
+  --md-info: #7FA6F0;
+}
+
+/* Swatches of the palette picker (fixed: they show each palette, not the active one). */
+.palette-picker [data-palette="steel"] { --swatch: #2F5D8C; }
+.palette-picker [data-palette="material"] { --swatch: #1A5B9A; }
+.palette-picker [data-palette="petrol"] { --swatch: #0E7C8C; }

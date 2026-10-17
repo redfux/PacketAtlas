@@ -1,6 +1,6 @@
 /* ==========================================================================
    Design System — Components
-   Version: 3.1.1
+   Version: 3.2.0
    Stand: 17.10.2026
 
    Material Design 3 inspired components using semantic tokens from
@@ -175,6 +175,28 @@ code, pre {
 }
 
 .theme-toggle svg { width: 18px; height: 18px; fill: currentColor; }
+
+/* ======================================================== palette picker */
+/* Round swatches for the colour palettes of a theme (theme "Neutral": steel,
+   material, petrol), usually in the menu footer next to the theme toggle.
+   Each button shows its own palette (--swatch, set by the theme file);
+   js/design-system.js sets data-palette on <html> and keeps aria-pressed. */
+.palette-picker { display: inline-flex; gap: 6px; }
+.palette-picker button {
+  all: unset;
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: var(--swatch, var(--md-primary));
+  box-shadow: inset 0 0 0 2px var(--md-surface);
+  cursor: pointer;
+}
+.palette-picker button:hover:not(:disabled) { filter: none; border-color: var(--md-outline); }
+.palette-picker button[aria-pressed="true"],
+.palette-picker button[aria-pressed="true"]:hover:not(:disabled) { border-color: var(--md-on-surface); }
+.palette-picker button:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; }
 
 /* ============================================================== app menu */
 /* Hamburger button in the appbar, left of the brand mark. It opens the
