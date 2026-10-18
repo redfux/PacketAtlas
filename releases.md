@@ -5,9 +5,9 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
-## [2.1.0] – (in Arbeit, Branch `feature/filter-facets`)
+## [2.1.0] – 2026-10-18
 
-Phase 0 und 1 des Plans „Filter, Facetten, Statistik nach Auswahl“ (siehe `features.md`). Ohne aktive Zusatzfilter sieht die Anwendung wie 2.0.0 aus.
+Filter, Facetten und Statistik nach Auswahl (Plan siehe `features.md`): weitere Filter in der Filterleiste, Statistik und PCAP-Export folgen den Filtern, Klick-Filter aus der Statistik. Ohne aktive Zusatzfilter sieht die Anwendung wie 2.0.0 aus.
 
 ### Added
 
