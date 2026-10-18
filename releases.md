@@ -5,6 +5,12 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [2.1.1] – 2026-10-18
+
+### Changed
+
+- Design System von 3.3.1 auf 3.4.2 nachgezogen (Theme Neutral): `css/design-tokens.css`, `css/design-components.css`, `js/design-system.js`. Für PacketAtlas ändert sich sichtbar nichts; das Skript behandelt die Standardpalette (Stahlblau) jetzt sauber und lässt eine von der App gesetzte Vorgabe gelten, bis jemand eine Palette wählt.
+
 ## [2.1.0] – 2026-10-18
 
 Filter, Facetten und Statistik nach Auswahl (Plan siehe `features.md`): weitere Filter in der Filterleiste, Statistik und PCAP-Export folgen den Filtern, Klick-Filter aus der Statistik. Ohne aktive Zusatzfilter sieht die Anwendung wie 2.0.0 aus.

@@ -1,6 +1,6 @@
 /* ==========================================================================
    Design System — Behaviour
-   Version: 3.3.1
+   Version: 3.4.2
    Stand: 17.10.2026
 
    Optional companion to the CSS. Load js/design-system.js in <head> as a
@@ -12,7 +12,8 @@
      .theme-toggle [data-theme] button (menu footer or appbar).
    - Palette: applies the saved colour palette at once (data-palette on
      <html>, only themes with palettes react to it), wires every
-     .palette-picker [data-palette] button.
+     .palette-picker [data-palette] button. An app may preset its own
+     default with data-palette on <html>; it holds until the user chooses.
    - Sidebar: .sidebar-toggle[aria-controls] collapses/expands its .sidebar,
      keeps aria-expanded, label and icon in step, remembers the state on
      wide screens. On narrow screens it starts collapsed and closes on
@@ -32,7 +33,8 @@
 
   const THEME_KEY = 'theme';
   const PALETTE_KEY = 'palette';
-  const DEFAULT_PALETTE = 'steel';
+  // The first palette of a theme needs no attribute: 'steel' (Neutral), 'default' (Bechtle).
+  const DEFAULT_PALETTES = ['steel', 'default'];
   const SIDEBAR_KEY = 'sidebar-collapsed';
   const TOOLBAR_KEY = 'toolbar-pinned';
   const NARROW = window.matchMedia('(max-width: 767px)');
@@ -81,24 +83,31 @@
 
   /* ---------------------------------------------------------------- palette */
   function applyPalette(name) {
-    if (!name || name === DEFAULT_PALETTE) document.documentElement.removeAttribute('data-palette');
+    if (!name || DEFAULT_PALETTES.includes(name)) document.documentElement.removeAttribute('data-palette');
     else document.documentElement.setAttribute('data-palette', name);
   }
 
+  // Nothing saved yet: the first button of each picker (the default) is pressed.
   function markPalette(name) {
-    document.querySelectorAll('.palette-picker [data-palette]').forEach((btn) => {
-      btn.setAttribute('aria-pressed', btn.dataset.palette === name ? 'true' : 'false');
+    document.querySelectorAll('.palette-picker').forEach((picker) => {
+      const buttons = [...picker.querySelectorAll('[data-palette]')];
+      const known = buttons.some((btn) => btn.dataset.palette === name);
+      buttons.forEach((btn, i) => {
+        btn.setAttribute('aria-pressed', (known ? btn.dataset.palette === name : i === 0) ? 'true' : 'false');
+      });
     });
   }
 
   function setPalette(name) {
-    name = name || DEFAULT_PALETTE;
+    name = name || DEFAULT_PALETTES[0];
     applyPalette(name);
     write(PALETTE_KEY, name);
     markPalette(name);
   }
 
-  applyPalette(read(PALETTE_KEY));
+  // Only a saved choice overrides a data-palette the app put on <html>.
+  const savedPalette = read(PALETTE_KEY);
+  if (savedPalette) applyPalette(savedPalette);
 
   /* ---------------------------------------------------------------- sidebar */
   function setupSidebar(toggle) {
@@ -207,7 +216,7 @@
     document.querySelectorAll('.theme-toggle [data-theme]').forEach((btn) => {
       btn.addEventListener('click', () => setTheme(btn.dataset.theme));
     });
-    markPalette(read(PALETTE_KEY) || DEFAULT_PALETTE);
+    markPalette(read(PALETTE_KEY) || document.documentElement.getAttribute('data-palette'));
     document.querySelectorAll('.palette-picker [data-palette]').forEach((btn) => {
       btn.addEventListener('click', () => setPalette(btn.dataset.palette));
     });
