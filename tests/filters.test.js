@@ -68,7 +68,7 @@ export function register(test) {
     assert.equal(filters.facetPredicate(facets), null);
   });
 
-  test('computeVisibleConnections: Auswahl, Protokolle, Multicast, Nur Probleme und Facetten wirken zusammen', () => {
+  test('computeVisibleConnections: Auswahl, Protokolle, Multicast und Facetten wirken zusammen', () => {
     const { connections } = runWorker(FIXTURES.services());
     const all = new Set(connections.flatMap((c) => [c.a, c.b]));
     const groups = new Set(['TCP', 'UDP', 'ICMP', 'OTHER']);
@@ -80,6 +80,21 @@ export function register(test) {
     const oneDevice = new Set(['10.0.0.1', '10.0.0.20']);
     assert.deepStrictEqual(keysOf(dataModel.computeVisibleConnections(connections, oneDevice, groups, false)), ['10.0.0.1|10.0.0.20|TCP|443']);
     const predicate = filters.facetPredicate(facetsOf(['dnsProvider', 'Google Public DNS']));
-    assert.deepStrictEqual(keysOf(dataModel.computeVisibleConnections(connections, all, groups, false, false, predicate)), ['10.0.0.1|8.8.8.8|UDP|53']);
+    assert.deepStrictEqual(keysOf(dataModel.computeVisibleConnections(connections, all, groups, false, predicate)), ['10.0.0.1|8.8.8.8|UDP|53']);
+  });
+
+  test('Facette Problem „Auffällig“ entspricht dem früheren „Nur Probleme“: Verbindungen mit problems > 0', () => {
+    const { connections } = runWorker(FIXTURES.quality());
+    const all = new Set(connections.flatMap((c) => [c.a, c.b]));
+    const groups = new Set(['TCP', 'UDP', 'ICMP', 'OTHER']);
+    const expected = connections.filter((c) => c.problems > 0).map((c) => c.key).sort();
+    assert.ok(expected.length > 0 && expected.length < connections.length);
+    const facets = facetsOf(['problem', 'any']);
+    assert.deepStrictEqual(keysOf(dataModel.computeVisibleConnections(connections, all, groups, false, filters.facetPredicate(facets))).sort(), expected);
+    const options = filters.collectFacetOptions(connections).find((g) => g.dimension === 'problem').options;
+    assert.equal(options.find((o) => o.value === 'any').count, expected.length);
+    assert.equal(options.find((o) => o.value === 'any').label, 'Auffällig (beliebiges Problem)');
+    assert.equal(filters.isFacetActive(filters.facetsWithoutValue(facets, 'problem', 'any'), 'problem', 'any'), false);
+    assert.equal(filters.hasFacets(filters.facetsWithoutValue(facets, 'problem', 'any')), false);
   });
 }

@@ -189,15 +189,14 @@ export function protocolGroupOf(protocol) {
 /**
  * The connections (device pair + protocol + service port) that pass the sidebar
  * selection (both endpoints selected), the protocol chips, "Multicast/Broadcast
- * ausblenden", "Nur Probleme" and - via `extraPredicate`, built from the filter
- * chips in filters.js - any further criterion. Every view takes its data from
+ * ausblenden" and - via `extraPredicate`, built from the filter facets in
+ * filters.js (incl. "Auffällig") - any further criterion. Every view takes its data from
  * this one list (matrix and graph via derivePairs()), so they never disagree.
  */
-export function computeVisibleConnections(connections, selectedIds, activeGroups, hideMulticast, onlyProblems = false, extraPredicate = null) {
+export function computeVisibleConnections(connections, selectedIds, activeGroups, hideMulticast, extraPredicate = null) {
   return connections.filter((connection) => {
     if (!selectedIds.has(connection.a) || !selectedIds.has(connection.b)) return false;
     if (hideMulticast && connection.multicastOrBroadcast) return false;
-    if (onlyProblems && !(connection.problems > 0)) return false;
     if (!activeGroups.has(protocolGroupOf(connection.protocol))) return false;
     if (extraPredicate && !extraPredicate(connection)) return false;
     return true;

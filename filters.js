@@ -9,6 +9,7 @@
 import { dnsRcodeName, icmpTypeCodeLabel, portListLabel, protocolGroupOf } from './data-model.js?v=2.1.0';
 
 const PROBLEM_LABELS = {
+  any: 'Auffällig (beliebiges Problem)',
   retransmits: 'Retransmits',
   gaps: 'Lücken',
   resets: 'RST',
@@ -52,6 +53,8 @@ export const FACET_DIMENSIONS = [
     valuesOf: (c) => {
       const t = c.tcp;
       const values = [];
+      // "Auffällig": the connection counts as problematic (the same rule as the metric "Probleme").
+      if (c.problems > 0) values.push('any');
       if (t) {
         if (t.retransmissions) values.push('retransmits');
         if (t.lostSegments) values.push('gaps');
@@ -140,6 +143,16 @@ export function connectionMatchesFacets(connection, facets) {
     if (!have.some((value) => wanted.has(value))) return false;
   }
   return true;
+}
+
+/** A copy of the active facets without one value of a dimension (the dimension goes when it was the last one). */
+export function facetsWithoutValue(facets, dimension, value) {
+  const copy = new Map(facets);
+  const values = new Set(copy.get(dimension) || []);
+  values.delete(value);
+  if (values.size > 0) copy.set(dimension, values);
+  else copy.delete(dimension);
+  return copy;
 }
 
 /** A copy of the active facets without one dimension - "everything except this card's own filter". */

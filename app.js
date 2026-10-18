@@ -27,6 +27,7 @@ import {
   facetEntries,
   facetPredicate,
   facetsWithout,
+  facetsWithoutValue,
   hasFacets,
   isFacetActive,
   toggleFacet,
@@ -62,7 +63,6 @@ const state = {
   search: '',
   activeGroups: new Set(Object.keys(PROTOCOL_GROUPS)),
   hideMulticast: false,
-  onlyProblems: false,
   facets: createFacetState(), // extra filters from the chip bar, see filters.js
   facetOptions: [], // what the capture offers per facet dimension (for the "+ Filter" menu)
   // Statistics for the current filters come from the worker (it keeps the capture): the answers
@@ -541,12 +541,11 @@ el.selectAll.addEventListener('change', () => {
   renderActiveView();
 });
 
-/** Filter bar chips (protocols, "Nur Probleme", multicast/broadcast) follow `state`. */
+/** Filter bar chips (protocols, multicast/broadcast) follow `state`; the "Auffällige Verbindungen" shortcut follows the facets (renderFacetBar). */
 function syncFilterControls() {
   for (const chip of el.protocolFilters.querySelectorAll('.chip')) {
     chip.setAttribute('aria-pressed', String(state.activeGroups.has(chip.dataset.protocol)));
   }
-  el.toggleOnlyProblems.setAttribute('aria-pressed', String(state.onlyProblems));
   el.toggleHideBroadcast.setAttribute('aria-pressed', String(state.hideMulticast));
   el.btnResetFilters.hidden = !filtersDeviateFromDefault();
 }
@@ -556,12 +555,6 @@ function toggleProtocolGroup(group) {
   else state.activeGroups.add(group);
   syncFilterControls();
   renderPortList();
-  renderActiveView();
-}
-
-function setOnlyProblems(value) {
-  state.onlyProblems = value;
-  syncFilterControls();
   renderActiveView();
 }
 
@@ -576,7 +569,8 @@ el.toggleHideBroadcast.addEventListener('click', () => {
   renderActiveView();
 });
 
-el.toggleOnlyProblems.addEventListener('click', () => setOnlyProblems(!state.onlyProblems));
+// Shortcut for the facet Problem: Auffällig (the same filter as in the "+ Filter" menu).
+el.toggleOnlyProblems.addEventListener('click', () => toggleFacetValue('problem', 'any'));
 
 // --- Extra filters (facets) ---------------------------------------------------
 //
@@ -589,7 +583,7 @@ el.toggleOnlyProblems.addEventListener('click', () => setOnlyProblems(!state.onl
 const FACET_MENU_MAX_OPTIONS = 40;
 
 function filtersDeviateFromDefault() {
-  return state.activeGroups.size !== Object.keys(PROTOCOL_GROUPS).length || state.onlyProblems || state.hideMulticast || hasFacets(state.facets);
+  return state.activeGroups.size !== Object.keys(PROTOCOL_GROUPS).length || state.hideMulticast || hasFacets(state.facets);
 }
 
 function renderFacetBar() {
@@ -611,6 +605,7 @@ function renderFacetBar() {
     el.facetChips.append(chip);
   }
   el.facetNone.hidden = entries.length > 0;
+  el.toggleOnlyProblems.setAttribute('aria-pressed', String(isFacetActive(state.facets, 'problem', 'any')));
   el.btnResetFilters.hidden = !filtersDeviateFromDefault();
   refreshFacetMenu();
 }
@@ -674,7 +669,6 @@ function toggleFacetValue(dimension, value) {
 
 function resetFilters() {
   state.activeGroups = new Set(Object.keys(PROTOCOL_GROUPS));
-  state.onlyProblems = false;
   state.hideMulticast = false;
   state.facets = createFacetState();
   syncFilterControls();
@@ -863,7 +857,7 @@ function getVisibleDevicesAndPairs() {
   const familyDevices = state.devices.filter((d) => state.selectedIds.has(d.id) && addressFamilyOf(d) === state.addressFamily);
   const familyIds = new Set(familyDevices.map((d) => d.id));
   const devices = [...familyDevices].sort(compareDevicesByAddress);
-  const connections = computeVisibleConnections(state.connections, familyIds, state.activeGroups, state.hideMulticast, state.onlyProblems, facetPredicate(state.facets));
+  const connections = computeVisibleConnections(state.connections, familyIds, state.activeGroups, state.hideMulticast, facetPredicate(state.facets));
   return { devices, pairs: derivePairs(connections), familyIds };
 }
 
@@ -874,8 +868,8 @@ function getVisibleDevicesAndPairs() {
  * start time first, so the Gantt chart reads top-to-bottom by when each
  * connection began).
  */
-function getVisibleConnections(familyIds, order, onlyProblems = state.onlyProblems) {
-  const filtered = computeVisibleConnections(state.connections, familyIds, state.activeGroups, state.hideMulticast, onlyProblems, facetPredicate(state.facets));
+function getVisibleConnections(familyIds, order, facets = state.facets) {
+  const filtered = computeVisibleConnections(state.connections, familyIds, state.activeGroups, state.hideMulticast, facetPredicate(facets));
   if (order === 'timeline') {
     return filtered.sort((a, b) => a.firstSeen - b.firstSeen);
   }
@@ -895,7 +889,7 @@ const SCOPE_LOADING_DELAY_MS = 150;
 
 /** The connections that pass the selection and all filters - the scope of the statistics and of the PCAP export. */
 function getScopeConnections(facets = state.facets) {
-  return computeVisibleConnections(state.connections, state.selectedIds, state.activeGroups, state.hideMulticast, state.onlyProblems, facetPredicate(facets));
+  return computeVisibleConnections(state.connections, state.selectedIds, state.activeGroups, state.hideMulticast, facetPredicate(facets));
 }
 
 // Dimensions whose statistics card lists the values of that dimension. While such a filter is
@@ -1055,7 +1049,7 @@ function renderActiveView() {
     const shown = getVisibleConnections(familyIds, 'packets');
     renderConnectionsTable(el.connectionsTable, {
       connections: shown,
-      totalCount: state.onlyProblems ? getVisibleConnections(familyIds, 'packets', false).length : shown.length,
+      totalCount: isFacetActive(state.facets, 'problem', 'any') ? getVisibleConnections(familyIds, 'packets', facetsWithoutValue(state.facets, 'problem', 'any')).length : shown.length,
       deviceIndex: state.deviceIndex,
       idOf: connectionId,
       expandedIds: state.expandedConnectionIds,
