@@ -1,6 +1,6 @@
 /* ==========================================================================
    Design System — Components
-   Version: 3.5.1
+   Version: 3.5.2
    Stand: 21.10.2026
 
    Material Design 3 inspired components using semantic tokens from
@@ -332,8 +332,10 @@ code, pre {
 .app-menu-row-label { min-width: 4.5em; }
 
 /* Design-system version, small and quiet at the very bottom of the menu,
-   right-aligned under the light/dark switch. Text from --ds-version. */
-.app-menu::after {
+   right-aligned under the light/dark switch. Text from --ds-version. Only in
+   the menu that holds the switch, so further .app-menu popovers (export,
+   filter …) stay without it. */
+.app-menu:has(.theme-toggle)::after {
   content: var(--ds-version);
   padding: 0 12px 6px;
   text-align: right;

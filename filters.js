@@ -6,7 +6,7 @@
 // values of ONE dimension combine with OR, different dimensions with AND.
 // thought up by human, created by ai
 
-import { dnsRcodeName, icmpTypeCodeLabel, portListLabel, protocolGroupOf } from './data-model.js?v=2.1.4';
+import { dnsRcodeName, icmpTypeCodeLabel, portListLabel, protocolGroupOf } from './data-model.js?v=2.1.5';
 
 const PROBLEM_LABELS = {
   any: 'Auffällig (beliebiges Problem)',
