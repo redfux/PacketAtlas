@@ -1,7 +1,7 @@
 /* ==========================================================================
    Design System — Components
-   Version: 3.4.2
-   Stand: 17.10.2026
+   Version: 3.5.0
+   Stand: 21.10.2026
 
    Material Design 3 inspired components using semantic tokens from
    design-tokens.css. Never reference palette values directly — always
@@ -1509,6 +1509,19 @@ footer .ai-label-dark { display: none; }
 
 footer .footer-divider {
   color: var(--md-outline-variant);
+}
+
+/* Design-system version, always last in the footer: a divider (::before) and
+   the version (::after). order moves the divider from the front to the end. */
+footer::before,
+footer::after { order: 1; }
+footer::before {
+  content: "\00B7";
+  color: var(--md-outline-variant);
+}
+footer::after {
+  content: var(--footer-ds-version);
+  opacity: 0.8;
 }
 
 /* ============================================================= a11y */

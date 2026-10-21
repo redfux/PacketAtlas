@@ -5,6 +5,12 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [2.1.2] – 2026-10-21
+
+### Changed
+
+- Design System von 3.4.2 auf 3.5.0 nachgezogen (Theme Neutral): Der Footer zeigt am Ende automatisch „Design System 3.5.0“ (reines CSS, kein Markup nötig). Sonst ändert sich für PacketAtlas nichts; die Bechtle-AI-Labels (nur Theme Bechtle) nutzt PacketAtlas nicht.
+
 ## [2.1.1] – 2026-10-18
 
 ### Changed

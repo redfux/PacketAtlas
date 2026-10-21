@@ -1,7 +1,7 @@
 /* ==========================================================================
    Design System — Behaviour
-   Version: 3.4.2
-   Stand: 17.10.2026
+   Version: 3.5.0
+   Stand: 21.10.2026
 
    Optional companion to the CSS. Load js/design-system.js in <head> as a
    classic script (no defer, no module) so the saved theme is applied before

@@ -1,7 +1,7 @@
 /* ==========================================================================
    Design System — Theme "Neutral" (tokens)
-   Version: 3.4.2
-   Stand: 17.10.2026
+   Version: 3.5.0
+   Stand: 21.10.2026
 
    Theme file: design tokens (CSS custom properties) only. Brand-free: no
    logos, no brand names, a steel-blue palette of its own. The components
@@ -104,6 +104,9 @@
   --content-max-width: 1100px;
   --appbar-height: 56px;
   --footer-height: auto;
+  /* Shown at the end of every footer (design-components.css). Keep in step
+     with the version above; check-themes.sh compares it across themes. */
+  --footer-ds-version: "Design System 3.5.0";
   --sidebar-width: 220px;
   --sidebar-rail: 36px;
   --md-scrim: rgba(0,0,0,.32);
