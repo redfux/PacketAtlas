@@ -3,7 +3,7 @@
 // and provides d3-force, d3-drag and d3-zoom.
 // thought up by human, created by ai
 
-import { metricValue, deviceLabel } from './data-model.js?v=2.1.2';
+import { metricValue, deviceLabel } from './data-model.js?v=2.1.4';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 

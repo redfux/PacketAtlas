@@ -434,6 +434,8 @@
 /* Compact buttons so the filter bar stays low (same sizing the design system gives .filter-bar > button.text). */
 .pa-facet-group > button { min-height: 28px; padding: 0 10px; font-size: var(--fs-xs); }
 .pa-facet-menu { min-width: 280px; max-width: 360px; }
+/* The design system prints its version at the bottom of every .app-menu; only the main menu should show it. */
+.pa-facet-menu::after, .pa-export-menu::after { content: none; }
 .pa-facet-menu .app-menu-head { padding: 8px 16px; font-size: var(--fs-xs); font-weight: 600; color: var(--md-on-surface-variant); text-transform: uppercase; letter-spacing: 0.04em; background: var(--md-surface-2); position: sticky; top: 0; z-index: 1; }
 .pa-facet-item { justify-content: space-between; }
 .pa-facet-item > span:first-child { flex: 1; overflow: hidden; text-overflow: ellipsis; }

@@ -20,7 +20,7 @@ import {
   pairKey,
   portListLabel,
   relatedDeviceIds,
-} from './data-model.js?v=2.1.2';
+} from './data-model.js?v=2.1.4';
 import {
   collectFacetOptions,
   createFacetState,
@@ -31,15 +31,15 @@ import {
   hasFacets,
   isFacetActive,
   toggleFacet,
-} from './filters.js?v=2.1.2';
-import { renderMatrix } from './matrix-view.js?v=2.1.2';
-import { renderGraph, updateForces } from './graph-view.js?v=2.1.2';
-import { renderConnections } from './connections-view.js?v=2.1.2';
-import { renderConnectionsTable } from './connections-table-view.js?v=2.1.2';
-import { renderTimeline } from './timeline-view.js?v=2.1.2';
-import { renderStats } from './stats-view.js?v=2.1.2';
-import { exportActiveViewAsImage } from './export-image.js?v=2.1.2';
-import { exportToExcel, exportSelectionToExcel } from './export-excel.js?v=2.1.2';
+} from './filters.js?v=2.1.4';
+import { renderMatrix } from './matrix-view.js?v=2.1.4';
+import { renderGraph, updateForces } from './graph-view.js?v=2.1.4';
+import { renderConnections } from './connections-view.js?v=2.1.4';
+import { renderConnectionsTable } from './connections-table-view.js?v=2.1.4';
+import { renderTimeline } from './timeline-view.js?v=2.1.4';
+import { renderStats } from './stats-view.js?v=2.1.4';
+import { exportActiveViewAsImage } from './export-image.js?v=2.1.4';
+import { exportToExcel, exportSelectionToExcel } from './export-excel.js?v=2.1.4';
 
 const LARGE_SELECTION_THRESHOLD = 50;
 const MAX_CONNECTIONS_RENDER = 400;
@@ -51,7 +51,7 @@ const MAX_TIMELINE_RENDER = 300;
 // browser. Appending the version as a query string changes the request URL
 // whenever the app updates, forcing a fresh fetch instead of silently
 // running old worker code after an update.
-const APP_VERSION = '2.1.2';
+const APP_VERSION = '2.1.4';
 
 const state = {
   devices: [],

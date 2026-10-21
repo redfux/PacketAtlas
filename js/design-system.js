@@ -1,6 +1,6 @@
 /* ==========================================================================
    Design System — Behaviour
-   Version: 3.5.0
+   Version: 3.5.1
    Stand: 21.10.2026
 
    Optional companion to the CSS. Load js/design-system.js in <head> as a

@@ -1,6 +1,6 @@
 /* ==========================================================================
    Design System — Components
-   Version: 3.5.0
+   Version: 3.5.1
    Stand: 21.10.2026
 
    Material Design 3 inspired components using semantic tokens from
@@ -330,6 +330,17 @@ code, pre {
   color: var(--md-on-surface-variant);
 }
 .app-menu-row-label { min-width: 4.5em; }
+
+/* Design-system version, small and quiet at the very bottom of the menu,
+   right-aligned under the light/dark switch. Text from --ds-version. */
+.app-menu::after {
+  content: var(--ds-version);
+  padding: 0 12px 6px;
+  text-align: right;
+  font-size: var(--fs-2xs);
+  color: var(--md-on-surface-variant);
+  opacity: 0.6;
+}
 
 /* =============================================================== sidebar */
 /* Page frame with a sidebar on the left: open --sidebar-width, collapsed a
@@ -1509,19 +1520,6 @@ footer .ai-label-dark { display: none; }
 
 footer .footer-divider {
   color: var(--md-outline-variant);
-}
-
-/* Design-system version, always last in the footer: a divider (::before) and
-   the version (::after). order moves the divider from the front to the end. */
-footer::before,
-footer::after { order: 1; }
-footer::before {
-  content: "\00B7";
-  color: var(--md-outline-variant);
-}
-footer::after {
-  content: var(--footer-ds-version);
-  opacity: 0.8;
 }
 
 /* ============================================================= a11y */

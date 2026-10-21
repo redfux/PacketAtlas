@@ -5,6 +5,12 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [2.1.4] – 2026-10-21
+
+### Changed
+
+- Design System von 3.5.0 auf 3.5.1 nachgezogen (Theme Neutral): Die Version des Design Systems steht jetzt klein unten im App-Menü statt im Footer (die 2.1.2-Anzeige im Footer entfällt). Da das Design System sie in jedem `.app-menu` ausgibt, blendet `css/app.css` sie im Export- und im „+ Filter“-Menü wieder aus.
+
 ## [2.1.2] – 2026-10-21
 
 ### Changed
