@@ -1,7 +1,7 @@
 /* ==========================================================================
    Design System — Components
-   Version: 3.5.2
-   Stand: 21.10.2026
+   Version: 26.11-build.11
+   Stand: 17.11.2026
 
    Material Design 3 inspired components using semantic tokens from
    design-tokens.css. Never reference palette values directly — always
@@ -346,7 +346,8 @@ code, pre {
 
 /* =============================================================== sidebar */
 /* Page frame with a sidebar on the left: open --sidebar-width, collapsed a
-   narrow rail (--sidebar-rail) that only holds the toggle. */
+   narrow rail (--sidebar-rail) with the toggle and, if the entries have
+   icons, the icons. */
 .app-shell {
   display: flex;
   align-items: stretch;
@@ -426,11 +427,26 @@ code, pre {
 :root[data-theme="dark"] .app-menu-item.active,
 :root[data-theme="dark"] .app-menu-item[aria-current]:not([aria-current="false"]) { border-left-color: var(--md-primary); }
 
-/* Collapsed: only the rail with the toggle. Everything else is hidden with
-   visibility, which also takes it out of the tab order and the
-   accessibility tree — invisible links must not be reachable by keyboard. */
+/* Collapsed: the rail with the toggle. Entries with an icon (svg.i as a
+   direct child) stay as icons only, centred under the toggle; the label is
+   shrunk to nothing but stays the link's accessible name, and the script
+   puts it into a tooltip. Everything else is hidden with visibility, which
+   also takes it out of the tab order and the accessibility tree —
+   invisible links must not be reachable by keyboard. */
 .sidebar.collapsed { width: var(--sidebar-rail); }
+/* A scrollbar would eat half the rail and cut the icons: hide it, the rail
+   still scrolls with the wheel or by touch. */
+.sidebar.collapsed { scrollbar-width: none; }
+.sidebar.collapsed::-webkit-scrollbar { display: none; }
 .sidebar.collapsed > :not(.sidebar-toggle) { visibility: hidden; }
+.sidebar.collapsed > .sidebar-link:has(> svg.i) {
+  visibility: visible;
+  gap: 0;
+  /* 20px icon centred on the 24px toggle (6px in): 3px bar + 5px. */
+  padding-left: 5px;
+  padding-right: 0;
+  font-size: 0;
+}
 
 /* Narrow screens: the rail stays, the open sidebar lies over the content
    (the rail's space is kept by the shell's padding) with a scrim behind it. */
@@ -1536,6 +1552,98 @@ footer .footer-divider {
   white-space: nowrap;
   border: 0;
 }
+
+/* =========================================================== list picker */
+/* Selection with search: a trigger opens a panel with a search field, a
+   count line with the bulk buttons and the list (checkboxes for several,
+   radios for one). The search is a .search-field
+   (clear button "×" wired by design-system.js). js/design-pick.js
+   (DesignSystem.createPick) builds markup and behaviour; the binding rules
+   are in the README ("Auswahlliste mit Suche"):
+   - "Alle auswählen" (multi only; with search text "Alle Treffer auswählen")
+     and "Auswahl entfernen" - each shown only while it does something;
+   - several chosen: they stand on top when the list is built (opening,
+     every search input, bulk button) - never re-sorted on a single tick -
+     and the last of them among the hits carries .pinned-last (divider line);
+   - with search text one hit carries .is-hit (outlined) - the one Enter in
+     the search field takes: several - the first hit not chosen yet (ticked,
+     never unticked; none if all hits are chosen), one - the first hit. */
+.pick-bar { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; }
+.pick { position: relative; min-width: 240px; max-width: 420px; flex: 1 1 240px; }
+.pick-label {
+  display: block; font-size: var(--fs-xs);
+  color: var(--md-on-surface-variant); margin-bottom: 4px;
+}
+/* The trigger is a <button>: undo the green :where(button) look. */
+.pick-trigger {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%; min-height: 40px; padding: 8px 12px;
+  background: var(--md-surface-1); color: var(--md-on-surface);
+  border: 1px solid var(--md-outline); border-radius: var(--radius-s); box-shadow: none;
+  font-weight: 400; white-space: nowrap; line-height: 1.3;
+}
+.pick-trigger:hover:not(:disabled) {
+  background: var(--md-surface-1); filter: none; border-color: var(--md-on-surface-variant);
+}
+.pick-trigger:active:not(:disabled) { filter: none; }
+.pick-trigger:disabled { color: var(--md-on-surface-variant); }
+.pick-trigger > span { overflow: hidden; text-overflow: ellipsis; text-align: left; }
+/* Chevron (ic-chevron-right as .caret): down when closed, up when open */
+.pick-trigger .caret { transform: rotate(90deg); }
+.pick-trigger[aria-expanded="true"] .caret { transform: rotate(-90deg); }
+
+.pick-panel {
+  position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 4px);
+  display: flex; flex-direction: column; gap: 6px; padding: 8px;
+  background: var(--md-surface-1); border: 1px solid var(--md-outline-variant);
+  border-radius: var(--radius-m); box-shadow: var(--elev-2);
+}
+.pick-panel[hidden] { display: none; }
+.pick-panel input[type="search"] { width: 100%; max-width: none; }
+/* Search with its own clear button (.search-field, wired by design-system.js) */
+.pick-panel .search-field { flex: none; min-width: 0; }
+/* Inside a dialog the panel opens in the flow - floating, the dialog edge
+   would cut it off. */
+dialog .pick-panel { position: static; box-shadow: none; margin-top: 4px; }
+dialog .pick-bar { align-items: flex-start; }
+
+/* Count line ("3 von 31 · 2 gewählt") with the bulk buttons on the right;
+   in a narrow panel both wrap as a whole, never mid-text. */
+.pick-meta {
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+  gap: 2px 8px; padding: 0 4px; font-size: var(--fs-xs); color: var(--md-on-surface-variant);
+}
+.pick-meta > span:first-child { white-space: nowrap; }
+.pick-bulk { display: inline-flex; gap: 4px; margin-left: auto; }
+.pick-bulk button { min-height: 0; padding: 2px 6px; font-size: var(--fs-xs); white-space: nowrap; }
+
+.pick-list { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow-y: auto; }
+.pick-list li label {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+  border-radius: var(--radius-xs); font-size: var(--fs-sm); cursor: pointer;
+}
+.pick-list li label:hover, .pick-list li label:focus-within { background: var(--md-surface-2); }
+.pick-list li.active label { background: var(--md-surface-3); }
+.pick-list input { accent-color: var(--md-primary-strong); }
+/* With search text the first hit is outlined: Enter in the search field
+   ticks exactly this one */
+.pick-list li.is-hit label { box-shadow: inset 0 0 0 1px var(--md-outline); }
+/* Chosen entries on top: a fine line below the last of them */
+.pick-list li.pinned-last { border-bottom: 1px solid var(--md-outline-variant); padding-bottom: 4px; margin-bottom: 4px; }
+/* One line per entry, the list never scrolls sideways. The name (first span)
+   comes first and wraps only if it is longer than the row; the secondary
+   text on the right (ID, types) takes what is left, in one line, cut with
+   "…" (full text as title), down to 2ch so the "…" still shows that
+   something is cut. Words of the name break only if one alone is too long. */
+.pick-list li label > span:first-of-type { flex: 0 1 auto; min-width: 0; overflow-wrap: break-word; }
+.pick-sub {
+  flex: 1 1 0; min-width: 2ch; margin-left: auto; text-align: right;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--mono); font-size: 11px; color: var(--md-on-surface-variant);
+}
+/* Short tag right after the name (e.g. "Template"): a small .pill */
+.pick-list .pick-tag { flex: none; padding: 0 7px; font-size: var(--fs-2xs); line-height: 1.6; }
+.pick-list .none { padding: 8px; font-size: var(--fs-sm); color: var(--md-on-surface-variant); }
 
 /* ============================================ responsive utilities */
 @media (max-width: 767px) {

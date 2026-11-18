@@ -5,6 +5,12 @@ Alle nennenswerten Änderungen an PacketAtlas werden in dieser Datei dokumentier
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
+## [2.1.6] – 2026-11-18
+
+### Changed
+
+- Design System von 3.5.2 auf 26.11-build.11 nachgezogen (Theme Neutral; neue Versionierung `<JJ>.<MM>-build.<N>`). Für PacketAtlas ändert sich nichts Sichtbares: Suchfeld mit „×“ und Escape, Menü mit Versionsanzeige und Palettenwahl funktionieren wie zuvor. Neu mitkopiert werden `js/design-pick.js` (Auswahlliste), `js/file-hint.js` (Hinweis bei Doppelklick) und `docs/design-system-kurzreferenz.md`; PacketAtlas bindet die beiden Skripte nicht ein.
+
 ## [2.1.5] – 2026-10-21
 
 ### Changed

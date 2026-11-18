@@ -1,7 +1,7 @@
 /* ==========================================================================
    Design System — Behaviour
-   Version: 3.5.2
-   Stand: 21.10.2026
+   Version: 26.11-build.11
+   Stand: 17.11.2026
 
    Optional companion to the CSS. Load js/design-system.js in <head> as a
    classic script (no defer, no module) so the saved theme is applied before
@@ -15,15 +15,20 @@
      .palette-picker [data-palette] button. An app may preset its own
      default with data-palette on <html>; it holds until the user chooses.
    - Sidebar: .sidebar-toggle[aria-controls] collapses/expands its .sidebar,
-     keeps aria-expanded, label and icon in step, remembers the state on
+     keeps aria-expanded, label and icon in step, gives icon-only entries
+     their label as tooltip while collapsed, remembers the state on
      wide screens. On narrow screens it starts collapsed and closes on
      Escape or a click outside.
    - Toolbar pin: .toolbar-pin pins its .toolbar under the appbar; one
      remembered state for all pages of the app.
    - Search field: .search-field shows its .clear-btn only while there is
      text; click or Escape clear the field, fire an input event (so the
-     project's own filter runs) and keep the focus in the field.
+     project's own filter runs) and keep the focus in the field. Wired by
+     event delegation, so fields an app adds later (e.g. in a .pick-panel)
+     work as well. After setting a value from code, call
+     DesignSystem.syncSearch() so the clear button follows.
    - The .app-menu needs no script: it is a popover (popovertarget).
+   - The list picker (.pick) has its own script: js/design-pick.js.
 
    Works under file:// and with a CSP of script-src 'self'.
    thought up by human, coded by ai
@@ -33,7 +38,7 @@
 
   const THEME_KEY = 'theme';
   const PALETTE_KEY = 'palette';
-  // The first palette of a theme needs no attribute: 'steel' (Neutral), 'default' (Bechtle).
+  // The first palette of a theme needs no attribute: 'steel' (Neutral), 'default' (brand theme).
   const DEFAULT_PALETTES = ['steel', 'default'];
   const SIDEBAR_KEY = 'sidebar-collapsed';
   const TOOLBAR_KEY = 'toolbar-pinned';
@@ -121,6 +126,17 @@
       toggle.setAttribute('aria-label', collapsed ? 'Seitenleiste ausklappen' : 'Seitenleiste einklappen');
       toggle.title = toggle.getAttribute('aria-label');
       setIcon(icon, collapsed ? 'ic-sidebar-open' : 'ic-sidebar-close');
+      // Collapsed, entries with an icon show only the icon: their label
+      // becomes the tooltip. Titles set by the app itself stay untouched.
+      sidebar.querySelectorAll('.sidebar-link').forEach((a) => {
+        if (collapsed && !a.title) {
+          a.title = a.textContent.trim().replace(/\s+/g, ' ');
+          a.dataset.dsTitle = '';
+        } else if (!collapsed && 'dsTitle' in a.dataset) {
+          a.removeAttribute('title');
+          delete a.dataset.dsTitle;
+        }
+      });
     }
 
     // Narrow screens always start collapsed; the saved state is for wide ones.
@@ -187,28 +203,51 @@
   }
 
   /* ----------------------------------------------------------- search field */
-  function setupSearchField(field) {
+  // Delegated on the document: also covers fields an app builds later.
+  function searchFieldOf(el) {
+    return el && el.closest ? el.closest('.search-field') : null;
+  }
+  function syncSearchField(field) {
     const input = field.querySelector('input');
     const clear = field.querySelector('.clear-btn');
-    if (!input || !clear) return;
-
-    const sync = () => { clear.hidden = input.value === ''; };
-    // No-op when already empty, so a project's own clear handler and this
-    // one can coexist without filtering twice.
-    function reset() {
-      if (input.value === '') return;
-      input.value = '';
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      sync();
-    }
-
-    input.addEventListener('input', sync);
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && input.value !== '') { e.preventDefault(); reset(); }
-    });
-    clear.addEventListener('click', () => { reset(); input.focus(); });
-    sync();
+    if (input && clear) clear.hidden = input.value === '';
   }
+  // No-op when already empty, so a project's own clear handler and this
+  // one can coexist without filtering twice.
+  function resetSearchField(field) {
+    const input = field.querySelector('input');
+    if (!input || input.value === '') return;
+    input.value = '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    syncSearchField(field);
+  }
+  /** Re-sync the clear buttons (after an app set a value from code). */
+  function syncSearch(root) {
+    (root || document).querySelectorAll('.search-field').forEach(syncSearchField);
+  }
+
+  document.addEventListener('input', (e) => {
+    const field = searchFieldOf(e.target);
+    if (field) syncSearchField(field);
+  });
+  // Capture phase: Escape first empties a filled field (preventDefault), so
+  // an app's own Escape handler (close a panel, a dialog) only acts on the
+  // next press - it can check e.defaultPrevented.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const field = searchFieldOf(e.target);
+    if (!field || e.target !== field.querySelector('input') || e.target.value === '') return;
+    e.preventDefault();
+    resetSearchField(field);
+  }, true);
+  document.addEventListener('click', (e) => {
+    const clear = e.target.closest ? e.target.closest('.search-field .clear-btn') : null;
+    if (!clear) return;
+    const field = searchFieldOf(clear);
+    resetSearchField(field);
+    const input = field.querySelector('input');
+    if (input) input.focus();
+  });
 
   /* ------------------------------------------------------------------- init */
   function init() {
@@ -222,12 +261,13 @@
     });
     document.querySelectorAll('.sidebar-toggle[aria-controls]').forEach(setupSidebar);
     document.querySelectorAll('.toolbar-pin').forEach(setupToolbarPin);
-    document.querySelectorAll('.search-field').forEach(setupSearchField);
+    syncSearch();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 
   // Small API for apps that switch theme or palette from their own code.
-  window.DesignSystem = { setTheme, setPalette };
+  // Adds to the namespace, so js/design-pick.js may load before or after.
+  window.DesignSystem = Object.assign(window.DesignSystem || {}, { setTheme, setPalette, syncSearch });
 })();
